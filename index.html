@@ -1082,7 +1082,7 @@ const SUPA_URL = 'https://ujejajzguhvgspejhvdn.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqZWphanpndWh2Z3NwZWpodmRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNzUzNzcsImV4cCI6MjA4ODY1MTM3N30.yi-jWzow8iX_9rSe8uY6E7nAi0Sgp6tyP20qeZWk9dc';
 const SUPA_HDR = {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'};
 
-async function supaFetch(url, opts={}, timeoutMs=8000){
+async function supaFetch(url, opts={}, timeoutMs=15000){
   const ctrl = new AbortController();
   const timer = setTimeout(()=>ctrl.abort(), timeoutMs);
   try{
@@ -1178,33 +1178,42 @@ async function saveSnapshot(){
   console.log(`[snapshot] ✓ verificado, ${verify[0].data.total} chunks en Supabase`);
 }
 
+function _setLoadingMsg(msg){
+  const rd = document.getElementById('report-date');
+  if(rd) rd.textContent = msg;
+  const gw = document.getElementById('gerente-wait');
+  if(gw && gw.style.display!=='none'){
+    const el = gw.querySelector('div:nth-child(2)');
+    if(el) el.textContent = msg;
+  }
+}
+
 async function loadSnapshot(){
   try{
-    // Read metadata first
+    _setLoadingMsg('⏳ Conectando a Supabase…');
     const meta = await supaGet('dashboard_snapshot','id=eq.main_meta');
     if(!meta || !meta[0]?.data?.total){
-      console.log('[snapshot] no hay metadata, intentando legacy...');
-      const legacy = await supaGet('dashboard_snapshot','id=eq.main');
-      if(!legacy||!legacy[0]?.data) return false;
-      return applySnapshotData(legacy[0].data);
-    }
-    const total = meta[0].data.total;
-    console.log(`[snapshot] cargando ${total} chunk(s)...`);
-
-    // Load all chunks in parallel
-    const chunkIds = Array.from({length:total},(_,i)=>`main_${i}`).join(',');
-    const rows = await supaGet('dashboard_snapshot',`id=in.(${chunkIds})&order=id.asc`);
-    if(!rows || rows.length !== total){
-      console.error(`[snapshot] esperaba ${total} chunks, recibió ${rows?.length}`);
+      console.log('[snapshot] sin metadata en Supabase');
       return false;
     }
+    const total = meta[0].data.total;
+    console.log(`[snapshot] metadata OK, total chunks: ${total}`);
 
-    // Sort and reassemble
-    const sorted = rows.sort((a,b)=>(a.data.index||0)-(b.data.index||0));
-    const str = sorted.map(r=>r.data.chunk||'').join('');
-    if(!str) return false;
+    const chunks = [];
+    for(let i=0; i<total; i++){
+      _setLoadingMsg(`⏳ Cargando datos… ${i+1}/${total}`);
+      const row = await supaGet('dashboard_snapshot', `id=eq.main_${i}`);
+      if(!row || !row[0]?.data?.chunk){
+        console.error(`[snapshot] chunk ${i} missing or empty`);
+        return false;
+      }
+      chunks.push(row[0].data.chunk);
+      console.log(`[snapshot] chunk ${i+1}/${total} OK (${row[0].data.chunk.length} chars)`);
+    }
 
-    console.log(`[snapshot] ✓ ${str.length} chars reconstituidos`);
+    _setLoadingMsg('⏳ Procesando datos…');
+    const str = chunks.join('');
+    console.log(`[snapshot] ✓ total ${str.length} chars, parseando...`);
     const d = JSON.parse(str);
     return applySnapshotData(d);
   } catch(e){
