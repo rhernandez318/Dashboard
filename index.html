@@ -1424,6 +1424,8 @@ async function doLogout(){
   // Clear in-memory data so next login always fetches from Supabase
   window._bdd=null; window._inv=null; window._ant=null;
   window._bal=null; window._bdd25=null; window._ppto=null;
+  _invComments={}; _invCommentsLoaded=false;
+  _refComments={}; _refCommentsLoaded=false;
   document.body.classList.remove('role-admin','role-gerente');
   document.getElementById('user-badge').style.display='none';
   const hdrBtn2=document.getElementById('btn-usuarios-hdr'); if(hdrBtn2) hdrBtn2.style.display='none';
@@ -2982,11 +2984,14 @@ function parseFcDaimler(data, tasaAnual, diasMes){
 // ═══════════════════════════════════════════════════════════════
 let _invComments = {};  // {vin: {comment, ts}}
 
+let _invCommentsLoaded = false;
 async function loadInvComments(){
+  if(_invCommentsLoaded) return;  // ya cargados — usar cache en memoria
   try{
     const rows = await supaGet('dashboard_comments','key_type=eq.inventario');
     _invComments = {};
     (rows||[]).forEach(r=>{ _invComments[r.key_value]={comment:r.comment,ts:r.updated_at}; });
+    _invCommentsLoaded = true;
   } catch(e){ _invComments={}; }
 }
 async function saveInvComment(vin, comment){
@@ -3005,11 +3010,14 @@ async function pruneInvComments(activeVins){
 
 let _refComments = {};  // {ref: {comment, ts}}
 
+let _refCommentsLoaded = false;
 async function loadRefComments(){
+  if(_refCommentsLoaded) return;  // ya cargados — usar cache en memoria
   try{
     const rows = await supaGet('dashboard_comments','key_type=eq.cartera');
     _refComments = {};
     (rows||[]).forEach(r=>{ _refComments[r.key_value]={comment:r.comment,ts:r.updated_at}; });
+    _refCommentsLoaded = true;
   } catch(e){ _refComments={}; }
 }
 async function saveRefComment(ref, comment){
