@@ -1230,13 +1230,18 @@ async function loadSnapshot(){
 function applySnapshotData(d){
   if(!d) return false;
   window._inv   = d.inv   || null;
-  window._ant   = d.ant   || null;
+  // Restore Date objects in ant (fechaDoc serializes as string)
+  window._ant   = (d.ant||null)?.map(r=>({
+    ...r,
+    fechaDoc: r.fechaDoc ? new Date(r.fechaDoc) : null
+  })) || null;
   window._bdd   = d.bdd   || null;
   window._bal   = d.bal   || null;
   window._bdd25 = d.bdd25 || null;
   window._ppto  = d.ppto  || null;
   const ok = !!(window._bdd && window._ant && window._inv);
-  console.log('[snapshot] applySnapshotData →', ok ? '✓ OK' : '✗ faltan datos clave');
+  console.log('[snapshot] applySnapshotData →', ok ? '✓ OK' : '✗ faltan datos',
+    'inv:', window._inv?.length, 'ant:', window._ant?.length, 'bdd:', window._bdd?.cuentas?.length);
   return ok;
 }
 
@@ -1294,33 +1299,44 @@ async function applySession(user){
   if(user.role==='gerente'){
     showGerenteWait('⏳ Cargando datos…');
     let ok = false;
-    try{ ok = await loadSnapshot(); } catch(e){ console.error(e); }
+    try{ ok = await loadSnapshot(); } catch(e){ console.error('[loadSnapshot]',e); }
     if(ok){
       _setLoadingMsg('⏳ Construyendo dashboard…');
       await new Promise(r=>setTimeout(r,50));
-      buildStatic(); refreshAll();
-      document.getElementById('upload-section').style.display='none';
-      document.getElementById('dashboard').style.display='block';
-      document.getElementById('soc-bar').style.display='flex';
-      const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
-      document.getElementById('report-date').textContent='Datos del administrador';
+      try{
+        buildStatic(); refreshAll();
+        document.getElementById('upload-section').style.display='none';
+        document.getElementById('dashboard').style.display='block';
+        document.getElementById('soc-bar').style.display='flex';
+        const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
+        document.getElementById('report-date').textContent='Datos del administrador';
+      } catch(e){
+        showGerenteWait('❌ Error al construir: '+e.message);
+        console.error('[buildStatic/refreshAll]',e);
+      }
     } else {
-      showGerenteWait('⏳ Esperando datos del Administrador');
+      showGerenteWait('Sin datos — el administrador debe generar el dashboard primero');
     }
   } else {
     const rd=document.getElementById('report-date');
     rd.textContent='⏳ Cargando último reporte…';
     let ok = false;
-    try{ ok = await loadSnapshot(); } catch(e){ console.error('[loadSnapshot]',e); }
+    try{ ok = await loadSnapshot(); } catch(e){ console.error('[loadSnapshot]',e); rd.textContent='Error: '+e.message; }
     if(ok){
       rd.textContent='⏳ Construyendo dashboard…';
       await new Promise(r=>setTimeout(r,50));
-      buildStatic(); refreshAll();
-      document.getElementById('upload-section').style.display='none';
-      document.getElementById('dashboard').style.display='block';
-      document.getElementById('soc-bar').style.display='flex';
-      document.getElementById('btn-reload').style.display='inline-block';
-      rd.textContent='Último reporte publicado ✓';
+      try{
+        buildStatic(); refreshAll();
+        document.getElementById('upload-section').style.display='none';
+        document.getElementById('dashboard').style.display='block';
+        document.getElementById('soc-bar').style.display='flex';
+        document.getElementById('btn-reload').style.display='inline-block';
+        rd.textContent='Último reporte ✓';
+      } catch(e){
+        rd.textContent='❌ Error: '+e.message;
+        console.error('[buildStatic/refreshAll]',e);
+        document.getElementById('upload-section').style.display='flex';
+      }
     } else {
       rd.textContent='Sin datos';
       document.getElementById('upload-section').style.display='flex';
