@@ -1214,7 +1214,12 @@ async function loadSnapshot(){
     _setLoadingMsg('⏳ Procesando datos…');
     const str = chunks.join('');
     console.log(`[snapshot] ✓ total ${str.length} chars, parseando...`);
-    const d = JSON.parse(str);
+    // Yield to browser so the loading message renders before heavy parse
+    await new Promise(r=>setTimeout(r,30));
+    let d;
+    try{ d = JSON.parse(str); }
+    catch(e){ console.error('[snapshot] JSON.parse error:', e); return false; }
+    console.log('[snapshot] parse OK, aplicando datos...');
     return applySnapshotData(d);
   } catch(e){
     console.error('[snapshot] error al cargar:', e);
@@ -1291,6 +1296,8 @@ async function applySession(user){
     let ok = false;
     try{ ok = await loadSnapshot(); } catch(e){ console.error(e); }
     if(ok){
+      _setLoadingMsg('⏳ Construyendo dashboard…');
+      await new Promise(r=>setTimeout(r,50));
       buildStatic(); refreshAll();
       document.getElementById('upload-section').style.display='none';
       document.getElementById('dashboard').style.display='block';
@@ -1301,12 +1308,13 @@ async function applySession(user){
       showGerenteWait('⏳ Esperando datos del Administrador');
     }
   } else {
-    // Admin: always try Supabase first, with visible progress
     const rd=document.getElementById('report-date');
     rd.textContent='⏳ Cargando último reporte…';
     let ok = false;
     try{ ok = await loadSnapshot(); } catch(e){ console.error('[loadSnapshot]',e); }
     if(ok){
+      rd.textContent='⏳ Construyendo dashboard…';
+      await new Promise(r=>setTimeout(r,50));
       buildStatic(); refreshAll();
       document.getElementById('upload-section').style.display='none';
       document.getElementById('dashboard').style.display='block';
