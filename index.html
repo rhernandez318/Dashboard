@@ -1217,42 +1217,32 @@ async function applySession(user){
   if(hdrBtn) hdrBtn.style.display = user.role==='admin' ? 'inline-block' : 'none';
   document.getElementById('login-screen').style.display='none';
   if(user.role==='gerente'){
-    if(window._bdd){
+    showGerenteWait('⏳ Cargando datos…');
+    const ok = await loadSnapshot();
+    if(ok){
+      buildStatic(); refreshAll();
       document.getElementById('upload-section').style.display='none';
       document.getElementById('dashboard').style.display='block';
       document.getElementById('soc-bar').style.display='flex';
+      const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
+      document.getElementById('report-date').textContent='Datos del administrador';
     } else {
-      showGerenteWait('⏳ Cargando datos…');
-      const ok = await loadSnapshot();
-      if(ok){
-        buildStatic(); refreshAll();
-        document.getElementById('upload-section').style.display='none';
-        document.getElementById('dashboard').style.display='block';
-        document.getElementById('soc-bar').style.display='flex';
-        const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
-        document.getElementById('report-date').textContent='Datos del administrador';
-      } else {
-        showGerenteWait('⏳ Esperando datos del Administrador');
-      }
+      showGerenteWait('⏳ Esperando datos del Administrador');
     }
   } else {
-    // Admin: try loading existing snapshot first
-    if(!window._bdd){
-      const rd = document.getElementById('report-date');
-      rd.textContent = '⏳ Verificando datos…';
-      const ok = await loadSnapshot();
-      if(ok){
-        buildStatic(); refreshAll();
-        document.getElementById('upload-section').style.display='none';
-        document.getElementById('dashboard').style.display='block';
-        document.getElementById('soc-bar').style.display='flex';
-        document.getElementById('btn-reload').style.display='inline-block';
-        rd.textContent='Último reporte publicado ✓';
-      } else {
-        rd.textContent='Sin datos';
-        document.getElementById('upload-section').style.display='flex';
-      }
+    // Admin: always try Supabase first
+    const rd=document.getElementById('report-date');
+    rd.textContent='⏳ Cargando último reporte…';
+    const ok = await loadSnapshot();
+    if(ok){
+      buildStatic(); refreshAll();
+      document.getElementById('upload-section').style.display='none';
+      document.getElementById('dashboard').style.display='block';
+      document.getElementById('soc-bar').style.display='flex';
+      document.getElementById('btn-reload').style.display='inline-block';
+      rd.textContent='Último reporte publicado ✓';
     } else {
+      rd.textContent='Sin datos';
       document.getElementById('upload-section').style.display='flex';
     }
   }
@@ -1270,11 +1260,13 @@ function showGerenteWait(msg='⏳ Esperando datos del Administrador'){
   w.style.display='flex';
 }
 async function doLogout(){
-  _currentUser=null; await clearSession();
+  _currentUser=null; clearSession();
+  // Clear in-memory data so next login always fetches from Supabase
+  window._bdd=null; window._inv=null; window._ant=null;
+  window._bal=null; window._bdd25=null; window._ppto=null;
   document.body.classList.remove('role-admin','role-gerente');
   document.getElementById('user-badge').style.display='none';
   const hdrBtn2=document.getElementById('btn-usuarios-hdr'); if(hdrBtn2) hdrBtn2.style.display='none';
-  // Close panel if open
   document.getElementById('usuarios-panel').style.display='none';
   document.getElementById('usuarios-backdrop').style.display='none';
   document.getElementById('login-screen').style.display='flex';
