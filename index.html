@@ -1094,20 +1094,14 @@ async function supaGet(table, query=''){
   } catch(e){ console.error('[supaGet]',table,e.message); return []; }
 }
 async function supaUpsert(table, body){
-  // For composite PKs (like dashboard_comments), on_conflict must be explicit
-  const conflictMap = {
-    'dashboard_comments': 'key_type,key_value',
-    'dashboard_snapshot':  'id',
-    'dashboard_users':     'username',
-  };
-  const conflict = conflictMap[table] ? `?on_conflict=${conflictMap[table]}` : '';
-  const r = await supaFetch(`${SUPA_URL}/rest/v1/${table}${conflict}`, {
-    method:'POST', headers:{...SUPA_HDR,'Prefer':'resolution=merge-duplicates,return=minimal'},
+  const r = await supaFetch(`${SUPA_URL}/rest/v1/${table}`, {
+    method:'POST',
+    headers:{...SUPA_HDR,'Prefer':'resolution=merge-duplicates,return=minimal'},
     body: JSON.stringify(body)
   });
   if(!r.ok){
     const t=await r.text();
-    console.error('[supaUpsert]',table,'status:',r.status,'body:',t);
+    console.error('[supaUpsert]',table,'status:',r.status,t);
     throw new Error(`Supabase ${r.status}: ${t}`);
   }
 }
@@ -1125,18 +1119,27 @@ async function supaDel(table, query){
     await supaFetch(`${SUPA_URL}/rest/v1/${table}?${query}`, {method:'DELETE', headers:SUPA_HDR});
   } catch(e){ console.warn('[supaDel]',e.message); }
 }
-
-// ── SNAPSHOT ────────────────────────────────────────────────────
-const CHUNK_SIZE = 350000; // chars per chunk, safe under Supabase 2MB limit
-
-async function supaUpsertChecked(table, body){
-  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
-    method:'POST',
-    headers:{...SUPA_HDR,'Prefer':'resolution=merge-duplicates,return=representation'},
-    body: JSON.stringify(body)
-  });
-  if(!r.ok){ const t=await r.text(); throw new Error(`Supabase ${r.status}: ${t}`); }
-  return r.json();
+// Guardar comentario: DELETE + INSERT (más confiable que upsert con PK compuesta)
+async function saveComment(keyType, keyValue, comment){
+  const encoded = encodeURIComponent(keyValue);
+  const url = `${SUPA_URL}/rest/v1/dashboard_comments?key_type=eq.${keyType}&key_value=eq.${encoded}`;
+  try{
+    // Siempre borra primero
+    await supaFetch(url, {method:'DELETE', headers:SUPA_HDR});
+    if(comment.trim()){
+      // Luego inserta
+      const r = await supaFetch(`${SUPA_URL}/rest/v1/dashboard_comments`, {
+        method:'POST',
+        headers:{...SUPA_HDR,'Prefer':'return=minimal'},
+        body: JSON.stringify({key_type:keyType, key_value:keyValue,
+          comment:comment.trim(), updated_at:new Date().toISOString()})
+      });
+      if(!r.ok){ const t=await r.text(); throw new Error(`INSERT ${r.status}: ${t}`); }
+    }
+    console.log(`[comentario ${keyType}] ✓`, keyValue);
+  } catch(e){
+    console.error(`[comentario ${keyType}] ✗`, e.message, '| key:', keyValue);
+  }
 }
 
 async function saveSnapshot(){
@@ -2987,16 +2990,9 @@ async function loadInvComments(){
   } catch(e){ _invComments={}; }
 }
 async function saveInvComment(vin, comment){
-  try{
-    if(comment.trim()){
-      _invComments[vin]={comment:comment.trim(),ts:Date.now()};
-      await supaUpsert('dashboard_comments',{key_type:'inventario',key_value:vin,comment:comment.trim(),updated_at:new Date().toISOString()});
-    } else {
-      delete _invComments[vin];
-      await supaDel('dashboard_comments','key_type=eq.inventario&key_value=eq.'+encodeURIComponent(vin));
-    }
-    console.log('[comentario inventario] guardado:', vin);
-  } catch(e){ console.error('[comentario inventario] error:', e.message, 'VIN:', vin); }
+  if(comment.trim()) _invComments[vin]={comment:comment.trim(),ts:Date.now()};
+  else delete _invComments[vin];
+  await saveComment('inventario', vin, comment);
 }
 async function pruneInvComments(activeVins){
   const toDelete=Object.keys(_invComments).filter(v=>!activeVins.has(v));
@@ -3017,16 +3013,9 @@ async function loadRefComments(){
   } catch(e){ _refComments={}; }
 }
 async function saveRefComment(ref, comment){
-  try{
-    if(comment.trim()){
-      _refComments[ref]={comment:comment.trim(),ts:Date.now()};
-      await supaUpsert('dashboard_comments',{key_type:'cartera',key_value:ref,comment:comment.trim(),updated_at:new Date().toISOString()});
-    } else {
-      delete _refComments[ref];
-      await supaDel('dashboard_comments','key_type=eq.cartera&key_value=eq.'+encodeURIComponent(ref));
-    }
-    console.log('[comentario cartera] guardado:', ref);
-  } catch(e){ console.error('[comentario cartera] error:', e.message, 'REF:', ref); }
+  if(comment.trim()) _refComments[ref]={comment:comment.trim(),ts:Date.now()};
+  else delete _refComments[ref];
+  await saveComment('cartera', ref, comment);
 }
 async function pruneRefComments(activeRefs){
   const toDelete=Object.keys(_refComments).filter(r=>!activeRefs.has(r));
