@@ -1,0 +1,3316 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Ejecutivo — Seguimiento Mensual</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--hh:56px;--tnav-h:44px;--sb-h:38px;--bg:#0a0e1a;--surface:#111827;--surface2:#1a2235;--border:#1e2d45;--accent:#00d4aa;--accent2:#3b82f6;--accent3:#f59e0b;--text:#e2e8f0;--text-muted:#64748b;--text-dim:#94a3b8;--green:#10b981;--red:#ef4444;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;font-size:14px;}
+header{background:linear-gradient(135deg,#0a0e1a,#111827);border-bottom:1px solid var(--border);padding:13px 26px;height:var(--hh);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.hbrand{display:flex;align-items:center;gap:10px;}
+.hicon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;}
+header h1{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:#fff;}
+header h1 span{color:var(--accent);}
+.hright{display:flex;align-items:center;gap:9px;}
+#report-date{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-muted);background:var(--surface2);padding:4px 9px;border-radius:5px;border:1px solid var(--border);}
+#filter-bar{display:none;align-items:center;gap:7px;flex-wrap:wrap;background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.3);border-radius:8px;padding:6px 12px;animation:slideIn .18s ease;}
+@keyframes slideIn{from{opacity:0;transform:translateX(5px)}to{opacity:1;transform:translateX(0)}}
+.fchip{display:flex;align-items:center;gap:5px;}
+.fchip-val{font-size:11px;font-weight:700;color:var(--accent);padding:2px 7px;background:rgba(0,212,170,.12);border-radius:4px;}
+.fchip-val.bucket{color:#a78bfa;background:rgba(139,92,246,.15);}
+.fchip-x{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;line-height:1;padding:0 2px;transition:color .12s;}
+.fchip-x:hover{color:#ef4444;}
+.fsep{color:var(--border);font-size:13px;}
+/* Login */
+#login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - var(--hh));padding:40px 26px;gap:20px;}
+.lcard{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px 40px;width:100%;max-width:400px;display:flex;flex-direction:column;gap:16px;}
+.ltitle{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:#fff;text-align:center;}
+.ltitle span{color:var(--accent);}
+.lfield{display:flex;flex-direction:column;gap:5px;}
+.lfield label{font-size:11px;color:var(--text-dim);font-weight:500;}
+.lfield input{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:13px;padding:9px 13px;border-radius:8px;font-family:'Inter',sans-serif;outline:none;transition:border-color .15s;}
+.lfield input:focus{border-color:var(--accent);}
+.lbtn{background:linear-gradient(135deg,var(--accent),#00a88a);color:#000;font-weight:700;font-size:13px;padding:11px;border:none;border-radius:9px;cursor:pointer;font-family:'Inter',sans-serif;margin-top:4px;transition:opacity .15s;}
+.lbtn:hover{opacity:.88;}
+.lerr{font-size:11px;color:#ef4444;text-align:center;min-height:16px;}
+/* User management */
+#tab-usuarios{padding:24px 26px;}
+.umgmt-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:900px;}
+#tbl-usuarios{font-size:12px;}
+#tbl-usuarios th{background:var(--surface2);}
+.role-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;}
+.role-admin{background:rgba(239,68,68,.15);color:#ef4444;}
+.role-gerente{background:rgba(59,130,246,.15);color:#60a5fa;}
+/* User badge in header */
+#user-badge{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:11px;}
+#user-badge .uname{font-weight:600;color:#fff;}
+#user-badge .urole{color:var(--text-muted);}
+/* Hide upload for gerente */
+body.role-gerente #upload-section,
+body.role-gerente #btn-reload,
+body.role-gerente #btn-process{display:none!important;}
+
+/* Upload */
+#upload-section{padding:40px 26px;display:flex;flex-direction:column;align-items:center;gap:24px;}
+.utitle{font-family:'Playfair Display',serif;font-size:24px;font-weight:700;color:#fff;text-align:center;}
+.utitle span{color:var(--accent);}
+.usub{color:var(--text-muted);font-size:12px;text-align:center;margin-top:-16px;}
+.ugrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;width:100%;max-width:1000px;}
+.ucard{background:var(--surface);border:2px dashed var(--border);border-radius:12px;padding:22px 16px;text-align:center;cursor:pointer;transition:all .18s;position:relative;overflow:hidden;}
+.ucard:hover{border-color:var(--accent);background:rgba(0,212,170,.04);transform:translateY(-2px);}
+.ucard.loaded{border-color:var(--green);border-style:solid;background:rgba(16,185,129,.04);}
+.ucard input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;}
+.ucard .ico{font-size:28px;margin-bottom:8px;display:block;}
+.ucard h3{font-size:12px;font-weight:600;color:#fff;margin-bottom:4px;}
+.ucard p{font-size:10px;color:var(--text-muted);line-height:1.4;}
+.ust{font-size:10px;margin-top:7px;padding:3px 8px;border-radius:20px;background:var(--surface2);color:var(--text-muted);display:inline-block;}
+.ucard.loaded .ust{background:rgba(16,185,129,.15);color:var(--green);}
+.ucard.optional{border-color:rgba(59,130,246,.3);}
+.ucard.optional:hover{border-color:var(--accent2);}
+.ucard.optional .ust{color:var(--accent2);}
+.uopt-label{font-size:9px;color:var(--accent2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+.bprocess{background:linear-gradient(135deg,var(--accent),#00a88a);color:#000;font-weight:700;font-size:13px;padding:11px 38px;border:none;border-radius:10px;cursor:pointer;transition:all .18s;opacity:.4;pointer-events:none;font-family:'Inter',sans-serif;}
+.bprocess.ready{opacity:1;pointer-events:auto;box-shadow:0 0 24px rgba(0,212,170,.2);}
+.bprocess.ready:hover{transform:translateY(-2px);}
+/* Dashboard */
+#dashboard{display:none;padding:0 0 44px;}
+.tnav{
+  display:flex;gap:2px;padding:10px 26px 0;
+  border-bottom:1px solid var(--border);margin-bottom:20px;
+  position:sticky;top:var(--hh);z-index:90;
+  height:var(--tnav-h);
+  background:var(--bg);
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
+}
+.tbtn{padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-muted);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;margin-bottom:-1px;font-family:'Inter',sans-serif;}
+.tbtn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tbtn:hover:not(.active){color:var(--text-dim);}
+.tcontent{display:none;padding:0 26px;}
+.tcontent.active{display:block;padding-top:12px;}
+/* KPIs */
+.kgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;margin-bottom:20px;}
+.kcard{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:16px 17px;position:relative;overflow:hidden;transition:transform .15s;}
+.kcard:hover{transform:translateY(-2px);}
+.kcard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.kcard.cg::before{background:var(--green);}
+.kcard.cb::before{background:var(--accent2);}
+.kcard.ct::before{background:var(--accent);}
+.kcard.ca::before{background:var(--accent3);}
+.kcard.cr::before{background:var(--red);}
+.kcard.cp::before{background:#8b5cf6;}
+.klabel{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;font-weight:500;}
+.kval{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:600;color:#fff;letter-spacing:-.3px;}
+.ksub{font-size:10px;color:var(--text-muted);margin-top:2px;}
+/* Charts */
+.crow{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:18px;}
+.ccard{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:17px;}
+.ccard h4{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:11px;font-weight:600;}
+.cwrap{position:relative;height:210px;}
+.ccard canvas{cursor:pointer;}
+/* Tables */
+.tcard{background:var(--surface);border:1px solid var(--border);border-radius:11px;overflow:hidden;margin-bottom:18px;}
+.thead2{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.thead2 h4{font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px;}
+.tscroll{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+thead th{padding:8px 12px;background:var(--surface2);font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600;text-align:left;white-space:nowrap;}
+thead th:not(:first-child){text-align:right;}
+tbody tr{border-bottom:1px solid rgba(30,45,69,.45);transition:background .1s;}
+tbody tr:hover{background:rgba(255,255,255,.02);}
+tbody tr.srow{cursor:pointer;}
+tbody tr.srow:hover{background:rgba(0,212,170,.04);}
+tbody tr.srow.arow{background:rgba(0,212,170,.08);border-left:3px solid var(--accent);}
+tbody td{padding:8px 12px;font-size:11px;color:var(--text-dim);white-space:nowrap;}
+tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10.5px;}
+.tdn{color:var(--text);font-weight:500;}
+/* Section header */
+.shdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;}
+#tab-financiero>.shdr{position:sticky;top:calc(var(--hh) + var(--tnav-h) + var(--sb-h));z-index:70;background:var(--bg);padding:10px 26px;margin:0 -26px 11px;border-bottom:1px solid var(--border);}
+.stitle{font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:#fff;}
+.stitle small{color:var(--accent);font-size:10px;font-family:'Inter',sans-serif;font-weight:400;margin-left:6px;}
+/* Aging bars */
+.abrow{display:flex;align-items:center;gap:9px;margin-bottom:7px;cursor:pointer;border-radius:5px;padding:3px 5px;margin:0 -5px 4px;transition:background .12s;}
+.abrow:hover{background:rgba(255,255,255,.03);}
+.abrow.abactive{background:rgba(139,92,246,.09);outline:1px solid rgba(139,92,246,.35);}
+.soc-bar{display:flex;gap:6px;align-items:center;padding:6px 18px;background:var(--bg);border-bottom:1px solid var(--border);position:sticky;top:calc(var(--hh) + var(--tnav-h));z-index:80;height:var(--sb-h);}
+.soc-bar label{font-size:10px;color:var(--text-dim);font-family:'Inter',sans-serif;white-space:nowrap;margin-right:2px;}
+.ipp-btn{display:flex;align-items:center;gap:4px;background:rgba(100,116,139,.1);border:1px solid rgba(100,116,139,.3);color:var(--text-dim);font-size:10px;font-weight:600;padding:5px 10px;border-radius:6px;white-space:nowrap;font-family:'Inter',sans-serif;transition:all .15s;cursor:pointer;}
+.ipp-btn:hover{border-color:rgba(245,158,11,.4);color:#f59e0b;}
+.ipp-btn.loaded{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.4);color:#f59e0b;}
+.ipp-st{font-size:9px;opacity:.6;}
+.socbtn{padding:4px 13px;border-radius:20px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:#94a3b8;font-size:10px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:all .15s;white-space:nowrap;}
+.socbtn:hover{background:rgba(255,255,255,.09);}
+.socbtn.soc-zap.active{background:rgba(59,130,246,.2);border-color:rgba(59,130,246,.6);color:#93c5fd;}
+.socbtn.soc-forz.active{background:rgba(0,212,170,.2);border-color:rgba(0,212,170,.6);color:#00d4aa;}
+.socbtn.soc-nor.active{background:rgba(245,158,11,.2);border-color:rgba(245,158,11,.6);color:#fcd34d;}
+.socbtn.soc-all.active{background:rgba(139,92,246,.2);border-color:rgba(139,92,246,.5);color:#c4b5fd;}
+
+.ablabel{font-size:10px;color:var(--text-dim);min-width:80px;}
+.abtrack{flex:1;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.abfill{height:100%;border-radius:3px;transition:width .5s ease;}
+.abval{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-dim);min-width:72px;text-align:right;}
+/* Pills & badges */
+.pill{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;}
+.pg{background:rgba(16,185,129,.15);color:var(--green);}
+.pr{background:rgba(239,68,68,.15);color:var(--red);}
+.pa{background:rgba(245,158,11,.15);color:var(--accent3);}
+.pb{background:rgba(59,130,246,.15);color:var(--accent2);}
+.pp{background:rgba(139,92,246,.15);color:#a78bfa;}
+.sbadge{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;cursor:pointer;transition:filter .12s;}
+.sbadge:hover{filter:brightness(1.3);}
+.sT{background:rgba(59,130,246,.15);color:#60a5fa;}
+.sP{background:rgba(0,212,170,.15);color:var(--accent);}
+.sC{background:rgba(245,158,11,.15);color:var(--accent3);}
+.sSR{background:rgba(139,92,246,.15);color:#a78bfa;}
+.sR{background:rgba(239,68,68,.15);color:#fca5a5;}
+.sTL{background:rgba(16,185,129,.15);color:var(--green);}
+.sSN{background:rgba(234,179,8,.12);color:#fde047;}
+.sFL{background:rgba(236,72,153,.15);color:#f472b6;}
+.sDEF{background:rgba(100,116,139,.15);color:var(--text-muted);}
+/* Period toggle */
+.ptoggle{display:flex;gap:4px;background:var(--surface2);padding:3px;border-radius:6px;border:1px solid var(--border);}
+.pbtn{padding:4px 12px;border:none;border-radius:5px;background:none;color:var(--text-muted);font-size:11px;font-weight:600;cursor:pointer;transition:all .14s;font-family:'Inter',sans-serif;}
+.pbtn.active{background:var(--accent2);color:#fff;}
+/* Grid layouts */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:18px;}
+.mt4{margin-top:14px;}
+.hint{font-size:9px;color:rgba(0,212,170,.65);margin-left:5px;font-style:italic;}
+/* ── RAZONES FINANCIERAS ── */
+.ratio-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:20px;}
+.ratio-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:18px 20px;position:relative;overflow:hidden;}
+.ratio-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;}
+.ratio-card.good::before{background:var(--green);}
+.ratio-card.warn::before{background:var(--accent3);}
+.ratio-card.alert::before{background:var(--red);}
+.ratio-card.info::before{background:var(--accent2);}
+.ratio-card.neutral::before{background:#8b5cf6;}
+.ratio-name{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px;font-weight:500;}
+.ratio-acronym{font-size:9px;color:var(--accent2);font-weight:700;background:rgba(59,130,246,.1);padding:1px 5px;border-radius:3px;display:inline-block;margin-bottom:6px;}
+.ratio-val{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:700;color:#fff;letter-spacing:-1px;line-height:1;}
+.ratio-unit{font-size:12px;color:var(--text-dim);font-weight:400;margin-left:2px;}
+.ratio-bench{display:flex;align-items:center;gap:6px;margin-top:8px;}
+.ratio-bench-bar{flex:1;height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;}
+.ratio-bench-fill{height:100%;border-radius:3px;}
+.ratio-bench-label{font-size:9px;color:var(--text-muted);white-space:nowrap;}
+.ratio-desc{font-size:10px;color:var(--text-muted);margin-top:6px;line-height:1.4;}
+.ratio-status{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin-top:6px;}
+.ratio-status.good{background:rgba(16,185,129,.15);color:var(--green);}
+.ratio-status.warn{background:rgba(245,158,11,.15);color:var(--accent3);}
+.ratio-status.alert{background:rgba(239,68,68,.15);color:var(--red);}
+.ratio-status.info{background:rgba(59,130,246,.15);color:var(--accent2);}
+/* CCE Flow diagram */
+.cce-flow{display:flex;align-items:center;gap:0;margin-bottom:20px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:20px 24px;overflow-x:auto;}
+.cce-box{text-align:center;min-width:120px;}
+.cce-val{font-family:'IBM Plex Mono',monospace;font-size:22px;font-weight:700;color:#fff;}
+.cce-label{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;margin-top:3px;}
+.cce-sub{font-size:9px;color:var(--text-dim);margin-top:1px;}
+.cce-op{font-size:22px;color:var(--border);margin:0 8px;font-weight:300;padding-top:2px;}
+.cce-result{background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.25);border-radius:8px;padding:12px 20px;text-align:center;min-width:140px;}
+.cce-result .cce-val{color:var(--accent);}
+/* Table highlight */
+.row-slow{background:rgba(239,68,68,.04)!important;}
+.row-warn{background:rgba(245,158,11,.04)!important;}
+/* Separator */
+.divider{height:1px;background:var(--border);margin:6px 0 18px;}
+/* Loading */
+#loading{display:none;position:fixed;inset:0;background:rgba(10,14,26,.9);z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:16px;}
+.spin{width:42px;height:42px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .75s linear infinite;}
+@keyframes sp{to{transform:rotate(360deg)}}
+#loading p{color:var(--text-dim);font-size:12px;}
+@media(max-width:900px){.g2,.g3,.ugrid{grid-template-columns:1fr}.crow{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spin"></div><p>Procesando reportes...</p></div>
+
+<header>
+  <div class="hbrand">
+    <div class="hicon">📊</div>
+    <h1>Dashboard <span>Ejecutivo</span></h1>
+  </div>
+  <div class="hright">
+    <div id="filter-bar">
+      <div class="fchip" id="chip-seg" style="display:none">
+        <span style="font-size:10px;color:var(--text-dim)">Segmento:</span>
+        <span class="fchip-val" id="filter-chip-seg"></span>
+        <button class="fchip-x" onclick="clearSegFilter()">✕</button>
+      </div>
+      <span class="fsep" id="chip-sep" style="display:none">·</span>
+      <div class="fchip" id="chip-bkt" style="display:none">
+        <span style="font-size:10px;color:var(--text-dim)">Vencimiento:</span>
+        <span class="fchip-val bucket" id="filter-chip-bkt"></span>
+        <button class="fchip-x" onclick="clearBktFilter()">✕</button>
+      </div>
+    </div>
+    <div id="user-badge" style="display:none">
+      <span>👤</span>
+      <span class="uname" id="badge-name"></span>
+      <span class="urole" id="badge-role"></span>
+      <button onclick="doLogout()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;margin-left:4px;padding:0 2px;transition:color .12s" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-muted)'">✕</button>
+    </div>
+    <button id="btn-usuarios-hdr" onclick="toggleUsuariosPanel()" style="display:none;background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">👥 Usuarios</button>
+    <div id="report-date">Sin datos</div>
+    <button id="btn-reload" onclick="nuevaCarga()" style="display:none;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#60a5fa;font-size:10px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s;white-space:nowrap;" onmouseover="this.style.background='rgba(59,130,246,.25)'" onmouseout="this.style.background='rgba(59,130,246,.12)'">↑ Nueva Carga</button>
+  </div>
+</header>
+
+<!-- USUARIOS PANEL (floating, admin only) -->
+<div id="usuarios-panel" style="display:none;position:fixed;top:64px;right:16px;z-index:200;width:640px;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface2)">
+    <h4 style="font-size:14px;font-weight:700;color:#fff">👥 Gestión de Usuarios</h4>
+    <button onclick="toggleUsuariosPanel()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-muted)'">✕</button>
+  </div>
+  <!-- Add user form -->
+  <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,212,170,.03)">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end">
+      <div class="lfield"><label>Usuario</label><input id="nu-user" type="text" placeholder="nombre de usuario"></div>
+      <div class="lfield"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="contraseña"></div>
+      <div class="lfield"><label>Rol</label>
+        <select id="nu-role" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:13px;padding:9px 13px;border-radius:8px;font-family:'Inter',sans-serif">
+          <option value="gerente">Gerente</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <button onclick="addUser()" style="background:linear-gradient(135deg,var(--accent),#00a88a);color:#000;font-weight:700;font-size:12px;padding:9px 18px;border:none;border-radius:8px;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif">+ Agregar</button>
+    </div>
+    <div class="lerr" id="nu-err" style="text-align:left;margin-top:6px"></div>
+  </div>
+  <!-- Users table -->
+  <div style="max-height:320px;overflow-y:auto;padding:0 0 8px">
+    <table id="tbl-usuarios" style="font-size:12px;width:100%">
+      <thead><tr><th>#</th><th>Usuario</th><th>Rol</th><th>Creado por</th><th>Acciones</th></tr></thead>
+      <tbody id="tbody-usuarios"></tbody>
+    </table>
+  </div>
+</div>
+<!-- Backdrop -->
+<div id="usuarios-backdrop" onclick="toggleUsuariosPanel()" style="display:none;position:fixed;inset:0;z-index:199;background:rgba(0,0,0,.3)"></div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="lcard">
+    <div class="ltitle">Dashboard <span>Ejecutivo</span></div>
+    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:-8px">Ingresa tus credenciales para continuar</p>
+    <div class="lfield">
+      <label>Usuario</label>
+      <input id="l-user" type="text" placeholder="Nombre de usuario" onkeydown="if(event.key==='Enter')loginSubmit()">
+    </div>
+    <div class="lfield">
+      <label>Contraseña</label>
+      <input id="l-pass" type="password" placeholder="Contraseña" onkeydown="if(event.key==='Enter')loginSubmit()">
+    </div>
+    <div class="lerr" id="l-err"></div>
+    <button class="lbtn" onclick="loginSubmit()">Iniciar sesión</button>
+  </div>
+</div>
+
+<!-- UPLOAD -->
+<div id="upload-section">
+  <h2 class="utitle">Carga de Reportes <span>Mensuales</span></h2>
+  <p class="usub">Sube los 4 archivos para generar el dashboard completo con razones financieras</p>
+  <div class="ugrid">
+    <div class="ucard" id="card-inv"><input type="file" accept=".xlsx,.xls" onchange="handleFile('inventario',this)"><span class="ico">🏭</span><h3>Inventario</h3><p>Unidades disponibles con antigüedad y costos</p><div class="ust" id="status-inv">Esperando…</div></div>
+    <div class="ucard" id="card-ant"><input type="file" accept=".xlsx,.xls" onchange="handleFile('antiguedad',this)"><span class="ico">📋</span><h3>Antigüedad Cartera</h3><p>Clientes por segmento con fechas de vencimiento</p><div class="ust" id="status-ant">Esperando…</div></div>
+    <div class="ucard" id="card-bdd"><input type="file" accept=".xlsx,.xls" onchange="handleFile('bdd',this)"><span class="ico">💰</span><h3>BDD Resultados</h3><p>P&L con cuentas, montos y segmentos</p><div class="ust" id="status-bdd">Esperando…</div></div>
+    <div class="ucard optional" id="card-bal"><input type="file" accept=".xlsx,.xls" onchange="handleFile('balance',this)"><span class="ico">⚖️</span><div class="uopt-label">Opcional</div><h3>BDD Balance</h3><p>Balance general con cuentas de activo y pasivo</p><div class="ust" id="status-bal">Opcional — mejora razones</div></div>
+    <div class="ucard optional" id="card-bdd25"><input type="file" accept=".xlsx,.xls" onchange="handleFile('bdd25',this)"><span class="ico">📅</span><div class="uopt-label">Opcional</div><h3>BDD 2025</h3><p>Resultados año anterior para comparativo</p><div class="ust" id="status-bdd25">Opcional — habilita vs 2025</div></div>
+    <div class="ucard optional" id="card-ppto"><input type="file" accept=".xlsx,.xls" onchange="handleFile('ppto',this)"><span class="ico">🎯</span><div class="uopt-label">Opcional</div><h3>Presupuesto 2026</h3><p>Plan mensual para comparativo vs real</p><div class="ust" id="status-ppto">Opcional — habilita vs Ppto</div></div>
+  </div>
+  <button class="bprocess" id="btn-process" onclick="procesarDatos()">⚡ Generar Dashboard</button>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <div class="tnav">
+    <button class="tbtn active" onclick="showTab('resumen',this)">📈 Resumen</button>
+    <button class="tbtn" onclick="showTab('razones',this)">⚖️ Razones Financieras</button>
+    <button class="tbtn" onclick="showTab('financiero',this)">💰 Resultados</button>
+    <button class="tbtn" onclick="showTab('cartera',this)">📋 Cartera</button>
+    <button class="tbtn" id="tab-btn-usuarios" onclick="showTab('usuarios',this)" style="display:none">👥 Usuarios</button>
+    <button class="tbtn" onclick="showTab('inventario',this)">🏭 Inventario</button>
+    <button class="tbtn" onclick="showTab('forecast',this)" style="color:#f59e0b;border-bottom-color:transparent">🔮 Forecast</button>
+  </div>
+
+  <!-- SOCIETY FILTER BAR -->
+  <div class="soc-bar" id="soc-bar" style="display:none">
+    <label>Sociedad:</label>
+    <button class="socbtn soc-all active" id="soc-btn-all"  onclick="setSoc(null,this)">🏢 Todas</button>
+    <button class="socbtn soc-zap"        id="soc-btn-zap"  onclick="setSoc('ZAPATA CAMIONES',this)">Zapata Camiones</button>
+    <button class="socbtn soc-forz"       id="soc-btn-forz" onclick="setSoc('FORZA ZAPATA',this)">Forza Zapata</button>
+    <button class="socbtn soc-nor"        id="soc-btn-nor"  onclick="setSoc('NORTRACK DE MEXICO',this)">Nortrack de México</button>
+  </div>
+
+  <!-- RESUMEN -->
+  <div class="tcontent active" id="tab-resumen">
+    <div class="kgrid" id="kpi-main"></div>
+    <div class="crow">
+      <div class="ccard"><h4>Ingresos por Línea (MXN M)</h4><div class="cwrap"><canvas id="ch-ing"></canvas></div></div>
+      <div class="ccard"><h4>Cartera — Antigüedad<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-aging-r"></canvas></div></div>
+      <div class="ccard"><h4>Inventario por Segmento<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-inv-s"></canvas></div></div>
+    </div>
+    <div class="g2">
+      <div class="tcard"><div class="thead2"><h4>🏆 Top 10 Clientes por Cartera</h4></div><div class="tscroll"><table id="tbl-top"><thead><tr><th>Cliente</th><th>Saldo</th><th>Segmento</th><th>Estatus</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="ccard"><h4>Cartera por Segmento<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-cart-s"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- RAZONES FINANCIERAS -->
+  <div class="tcontent" id="tab-razones">
+    <div class="shdr"><div class="stitle">Razones Financieras <small>Calculadas al período acumulado</small></div></div>
+
+    <!-- CCE FLOW -->
+    <div class="cce-flow" id="cce-flow"></div>
+
+    <!-- RAZONES GRID -->
+    <div class="ratio-grid" id="ratio-grid"></div>
+
+    <div class="divider"></div>
+    <div class="shdr"><div class="stitle" style="font-size:14px;">Indicadores de Riesgo <small>Inventario & Cartera</small></div></div>
+
+    <div class="g2">
+      <div class="tcard">
+        <div class="thead2"><h4>⚠️ Inventario en Riesgo (antigüedad &gt;180 días)</h4></div>
+        <div class="tscroll"><table id="tbl-inv-risk">
+          <thead><tr><th>Segmento</th><th>Unidades</th><th>Valor en Riesgo</th><th>Días Máx</th><th>% del Seg.</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+      <div class="tcard">
+        <div class="thead2"><h4>⚠️ Cartera Crítica (&gt;90 días vencida)</h4></div>
+        <div class="tscroll"><table id="tbl-cart-risk">
+          <thead><tr><th>Cliente</th><th>Segmento</th><th>Monto Crítico</th><th>Días Máx</th></tr></thead>
+          <tbody></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <div class="tcard mt4">
+      <div class="thead2"><h4>📊 Rentabilidad por Segmento<small style="color:var(--accent);font-size:9px;margin-left:8px;">· Ingresos, Costo y Margen Bruto</small></h4></div>
+      <div class="tscroll"><table id="tbl-rent-seg">
+        <thead><tr><th>Segmento</th><th>Ingresos</th><th>Unidades</th><th>Precio Prom/Und</th><th>Cartera</th><th>% Cartera/Ingresos</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- FINANCIERO -->
+  <div class="tcontent" id="tab-financiero">
+    <div class="shdr" style="flex-wrap:wrap;gap:8px">
+      <div class="stitle">Resultados Financieros <small>BDD 2026</small></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="ptoggle" id="ptoggle-wrap"></div>
+        <div style="display:flex;gap:3px;background:rgba(255,255,255,.04);border-radius:8px;padding:3px">
+          <button id="edo-btn-mes"  class="pbtn active" onclick="setEdoMode('mes',this)"  style="font-size:10px;padding:4px 11px">Mes</button>
+          <button id="edo-btn-acum" class="pbtn"        onclick="setEdoMode('acum',this)" style="font-size:10px;padding:4px 11px">Acumulado</button>
+        </div>
+        <select id="edo-seg-select" onchange="setEdoSeg(this.value)"
+          style="background:#1e293b;color:#94a3b8;border:1px solid var(--border);border-radius:7px;
+                 padding:4px 10px;font-size:10px;font-family:'Inter',sans-serif;cursor:pointer;
+                 height:28px;min-width:140px;">
+          <option value="">🏢 Todos los segmentos</option>
+        </select>
+      </div>
+    </div>
+    <div class="kgrid" id="kpi-fin"></div>
+    <div class="crow">
+      <div class="ccard"><h4>Ingresos por Línea</h4><div class="cwrap"><canvas id="ch-ing2"></canvas></div></div>
+      <div class="ccard"><h4>Estructura de Costos</h4><div class="cwrap"><canvas id="ch-cost"></canvas></div></div>
+    </div>
+    <div class="tcard"><div class="thead2"><h4 id="edo-title">📊 Estado de Resultados</h4></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="tcard mt4" id="wrap-indicadores"><div class="thead2"><h4 id="ind-title">📊 Indicadores por Unidad<span class="hint" id="ind-seg-hint"></span></h4></div><div class="tscroll"><table id="tbl-indicadores"><thead><tr></tr></thead><tbody></tbody></table></div></div>
+    <div class="tcard mt4" id="wrap-margen-seg">
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h4>📊 Margen por Segmento<span class="hint" id="margen-seg-hint"></span></h4>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span style="font-size:10px;color:var(--text-dim);font-family:'Inter',sans-serif">Vista:</span>
+          <button id="ms-btn-real" class="pbtn active" onclick="setMargenSegView('real',this)">Real</button>
+          <button id="ms-btn-ppto" class="pbtn" onclick="setMargenSegView('ppto',this)">vs Presupuesto</button>
+          <button id="ms-btn-aa"   class="pbtn" onclick="setMargenSegView('aa',this)">vs Año Ant.</button>
+        </div>
+      </div>
+      <div class="tscroll"><table id="tbl-margen-seg">
+        <thead><tr></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- CARTERA -->
+  <div class="tcontent" id="tab-cartera">
+    <div class="shdr"><div class="stitle">Cartera de Clientes <small>Al <span id="fecha-analisis"></span></small></div></div>
+    <div class="kgrid" id="kpi-cart"></div>
+    <div class="tcard" style="margin-bottom:18px;"><div class="thead2"><h4>📅 Antigüedad Recalculada por Vencimiento Neto<span class="hint">· toca fila para filtrar</span></h4></div><div style="padding:14px 17px;" id="aging-bars"></div></div>
+    <div class="crow">
+      <div class="ccard"><h4>Por Vencer vs Vencida<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-venc-d"></canvas></div></div>
+      <div class="ccard"><h4>Vencida por Bucket<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-buck-b"></canvas></div></div>
+    </div>
+    <div class="g2">
+      <div class="tcard"><div class="thead2"><h4>🏢 Cartera por Segmento<span class="hint">· toca para filtrar</span></h4></div><div class="tscroll"><table id="tbl-cart-s"><thead><tr><th>Segmento</th><th>Saldo</th><th>Por Vencer</th><th>Vencida</th><th>% Venc.</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="tcard"><div class="thead2"><h4>⚠️ Top Clientes Vencidos</h4></div><div class="tscroll"><table id="tbl-cli-v"><thead><tr><th>Cliente</th><th>Saldo</th><th>Vencido</th><th>Días</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+    <!-- Seguimiento de cartera por referencia -->
+    <div class="tcard mt4" style="margin-top:22px">
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h4>🗂️ Seguimiento por Referencia <span class="hint">· comentarios persistentes</span></h4>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input id="seg-ref-filter" placeholder="Buscar referencia o cliente…"
+            oninput="filterRefTable()"
+            style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:5px 10px;border-radius:6px;width:220px;font-family:'Inter',sans-serif">
+          <span id="seg-ref-status" style="font-size:10px;color:var(--text-muted)"></span>
+        </div>
+      </div>
+      <div class="tscroll">
+        <table id="tbl-seg-ref" style="font-size:12px">
+          <thead><tr>
+            <th>Referencia</th>
+            <th>Cliente</th>
+            <th>Segmento</th>
+            <th style="text-align:right">Saldo</th>
+            <th style="text-align:right">Antigüedad</th>
+            <th>Fecha Doc.</th>
+            <th style="min-width:240px">Comentario <span style="font-weight:400;color:var(--text-muted)">(se guarda automáticamente)</span></th>
+          </tr></thead>
+          <tbody id="tbody-seg-ref"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- INVENTARIO -->
+  <div class="tcontent" id="tab-inventario">
+    <div class="shdr"><div class="stitle">Inventario <small>Disponible para venta</small></div></div>
+    <div class="kgrid" id="kpi-inv"></div>
+    <div class="crow">
+      <div class="ccard"><h4>Valor por Segmento<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-inv-v"></canvas></div></div>
+      <div class="ccard"><h4>Distribución de Antigüedad (días)</h4><div class="cwrap"><canvas id="ch-inv-a"></canvas></div></div>
+    </div>
+    <div class="tcard"><div class="thead2"><h4>📦 Detalle por Segmento<span class="hint">· toca fila para filtrar</span></h4></div><div class="tscroll"><table id="tbl-inv-s"><thead><tr><th>Segmento</th><th>Unidades</th><th>Valor</th><th>$/Und</th><th>Días Prom</th><th>Días Máx</th><th>Alerta</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="tcard mt4"><div class="thead2"><h4>📅 Antigüedad por Rango</h4></div><div style="padding:14px 17px;" id="inv-aging-bars"></div></div>
+    <div class="tcard mt4">
+      <div class="thead2"><h4>🔑 Unidades más vencidas<span class="hint" id="inv-uni-hint"> · top 25</span></h4></div>
+      <div class="tscroll"><table id="tbl-inv-uni">
+        <thead><tr>
+          <th>#</th><th>Segmento</th><th>Modelo</th><th>Año</th>
+          <th>VIN</th><th>Lote</th>
+          <th>Valor</th><th>Días Inv.</th><th>Alerta</th>
+          <th style="min-width:220px">Comentario <span style="font-weight:400;color:var(--text-muted)">(auto-guardado)</span></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <!-- USUARIOS (admin only) -->
+  <div class="tcontent" id="tab-usuarios" style="padding:24px 26px">
+    <div class="tcard" style="max-width:860px">
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h4>👥 Gestión de Usuarios</h4>
+        <button onclick="showAddUser()" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:11px;font-weight:600;padding:5px 14px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif">+ Nuevo Usuario</button>
+      </div>
+      <!-- Add user form (hidden by default) -->
+      <div id="add-user-form" style="display:none;padding:16px 20px;border-top:1px solid var(--border);background:rgba(0,212,170,.03)">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;max-width:700px">
+          <div class="lfield"><label>Nombre de usuario</label><input id="nu-user" type="text" placeholder="usuario"></div>
+          <div class="lfield"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="contraseña"></div>
+          <div class="lfield"><label>Rol</label>
+            <select id="nu-role" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:13px;padding:9px 13px;border-radius:8px;font-family:'Inter',sans-serif">
+              <option value="gerente">Gerente</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <button onclick="addUser()" style="background:linear-gradient(135deg,var(--accent),#00a88a);color:#000;font-weight:700;font-size:12px;padding:9px 18px;border:none;border-radius:8px;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif">Agregar</button>
+        </div>
+        <div class="lerr" id="nu-err" style="text-align:left;margin-top:6px"></div>
+      </div>
+      <div class="tscroll" style="padding:0 0 4px">
+        <table id="tbl-usuarios" style="font-size:12px">
+          <thead><tr><th>#</th><th>Usuario</th><th>Rol</th><th>Creado por</th><th>Acción</th></tr></thead>
+          <tbody id="tbody-usuarios"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORECAST -->
+  <div class="tcontent" id="tab-forecast">
+    <div class="shdr" style="flex-wrap:wrap;gap:8px;position:sticky;top:calc(var(--hh) + var(--tnav-h) + var(--sb-h));z-index:70;background:var(--bg);padding:10px 26px;margin:0 -26px 11px;border-bottom:1px solid var(--border)">
+      <div class="stitle" style="color:#f59e0b">🔮 Simulador Forecast <small style="color:var(--text-muted)">Estimado de Resultados</small></div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <!-- Mes -->
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-dim);font-family:'Inter',sans-serif">Mes:</span>
+          <select id="fc-mes" onchange="runForecast()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 8px;border-radius:6px;font-family:'Inter',sans-serif;cursor:pointer">
+            <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+            <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+            <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+            <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+          </select>
+        </div>
+        <!-- Tasa IPP -->
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-dim);font-family:'Inter',sans-serif">Tasa IPP (anual %):</span>
+          <input id="fc-tasa" type="number" value="12.5" min="0" max="50" step="0.1" onchange="runForecast()"
+            style="width:70px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 8px;border-radius:6px;font-family:'IBM Plex Mono',monospace;text-align:right">
+          <span style="font-size:10px;color:var(--text-dim)">%</span>
+        </div>
+        <!-- Segmento filter -->
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:var(--text-dim);font-family:'Inter',sans-serif">Segmento:</span>
+          <select id="fc-seg-select" onchange="setFcSeg(this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 8px;border-radius:6px;font-family:'Inter',sans-serif;cursor:pointer">
+            <option value="">Todos</option>
+            <option value="TRACTO">Tracto</option>
+            <option value="PASAJE">Pasaje</option>
+            <option value="CARGA">Carga</option>
+            <option value="SEMIREMOLQUES">Semiremolques</option>
+            <option value="FL360">FL360</option>
+            <option value="VEHICULOS SEMINUEVOS">Veh. Seminuevos</option>
+            <option value="REFACCIONES">Refacciones</option>
+            <option value="TALLER">Taller</option>
+          </select>
+        </div>
+        <!-- Calcular -->
+        <button onclick="runForecast(true)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:6px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🚀 Calcular Forecast</button>
+        <!-- Upload ventas -->
+        <label style="position:relative;overflow:hidden;cursor:pointer">
+          <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('ventas',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
+          <span id="fc-btn-ventas" style="display:flex;align-items:center;gap:5px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#f59e0b;font-size:10px;font-weight:600;padding:5px 12px;border-radius:6px;white-space:nowrap">
+            📂 Ventas Estimadas <span id="fc-st-ventas" style="opacity:.6">— sin cargar</span>
+          </span>
+        </label>
+        <!-- IPP files -->
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <label style="position:relative;overflow:hidden;cursor:pointer">
+            <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('banorte',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
+            <span class="ipp-btn" id="fc-btn-banorte">🏦 Banorte <span id="fc-st-banorte" class="ipp-st">—</span></span>
+          </label>
+          <label style="position:relative;overflow:hidden;cursor:pointer">
+            <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('santander',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
+            <span class="ipp-btn" id="fc-btn-santander">🏦 Santander <span id="fc-st-santander" class="ipp-st">—</span></span>
+          </label>
+          <label style="position:relative;overflow:hidden;cursor:pointer">
+            <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('bbva',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
+            <span class="ipp-btn" id="fc-btn-bbva">🏦 BBVA <span id="fc-st-bbva" class="ipp-st">—</span></span>
+          </label>
+          <label style="position:relative;overflow:hidden;cursor:pointer">
+            <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('daimler',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
+            <span class="ipp-btn" id="fc-btn-daimler">🏦 Daimler <span id="fc-st-daimler" class="ipp-st">—</span></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="fc-status" style="margin:8px 0 4px;font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--text-dim);min-height:18px"></div>
+    <!-- KPI cards -->
+    <div class="kgrid" id="fc-kpi" style="margin-top:4px"></div>
+
+    <!-- P&L Table -->
+    <div class="tcard mt4">
+      <div class="thead2"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4></div>
+      <div class="tscroll"><table id="tbl-fc-edo">
+        <thead><tr>
+          <th>Concepto</th><th style="text-align:right">Forecast</th>
+          <th style="text-align:right">Presupuesto</th><th style="text-align:right">Var $ vs Ppto</th><th style="text-align:right">Var %</th>
+        </tr></thead>
+        <tbody><tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:32px">Carga el archivo de Ventas Estimadas para generar el forecast</td></tr></tbody>
+      </table></div>
+    </div>
+
+    <!-- Margen por segmento forecast -->
+    <div class="tcard mt4">
+      <div class="thead2"><h4>📊 Margen por Segmento — Forecast</h4></div>
+      <div class="tscroll"><table id="tbl-fc-seg">
+        <thead><tr><th>Segmento</th><th>Unidades</th><th>Ingresos</th><th>Costo</th><th>Ut. Bruta</th><th>% Mg.B</th><th>Gastos Vta</th><th>IPP est.</th><th>MC estimada</th><th>% MC</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+
+    <!-- IPP detail -->
+    <div class="tcard mt4" id="fc-ipp-wrap" style="display:none">
+      <div class="thead2"><h4>🚗 Detalle IPP — Intereses Plan Piso</h4></div>
+      <div class="tscroll"><table id="tbl-fc-ipp">
+        <thead><tr><th>Banco</th><th style="text-align:right">Saldo Financiado</th><th style="text-align:right">Intereses del Mes</th><th style="text-align:right">Unidades</th><th style="text-align:right">IPP/Und</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+const F={inventario:null,antiguedad:null,bdd:null,balance:null,bdd25:null,ppto:null};
+const CH={};
+const TODAY=new Date(2026,2,4);
+let activeSeg=null, activeBucket=null, activeSoc=null, currentPer=1, edoMode='mes', activeEdoSeg=null, margenSegView='real', activeFcSeg=null;
+const DIAS_PERIODO=59; // Jan(31)+Feb(28)
+
+const SCMAP={'TRACTO':'#3b82f6','PASAJE':'#00d4aa','CARGA':'#f59e0b','SEMIREMOLQUES':'#8b5cf6','SEMIRREMOLQUES':'#8b5cf6','REFACCIONES':'#ef4444','TALLER':'#10b981','VEHICULOS SEMINUEVOS':'#eab308','FL360':'#ec4899','VANES':'#06b6d4','ADMINISTRACIÓN':'#64748b','COLLISION CENTER Y HYP':'#f97316'};
+const PAL=['#3b82f6','#00d4aa','#f59e0b','#ef4444','#8b5cf6','#10b981','#eab308','#ec4899','#06b6d4','#f97316'];
+function sc(s,op=1){const h=SCMAP[s]||PAL[0];if(op===1)return h;const r=parseInt(h.slice(1,3),16),g=parseInt(h.slice(3,5),16),b=parseInt(h.slice(5,7),16);return`rgba(${r},${g},${b},${op})`;}
+
+function sb(s,clickable=false){
+  const map={'TRACTO':'sT','PASAJE':'sP','CARGA':'sC','SEMIREMOLQUES':'sSR','SEMIRREMOLQUES':'sSR','REFACCIONES':'sR','TALLER':'sTL','VEHICULOS SEMINUEVOS':'sSN','FL360':'sFL'};
+  const oc=clickable?`onclick="applyFilter('${s.replace(/'/g,"\\'")}')"` :'';
+  return `<span class="sbadge ${map[s]||'sDEF'}" ${oc}>${s}</span>`;
+}
+
+// ═══════════════════════════════════════════
+// UPLOAD
+// ═══════════════════════════════════════════
+function handleFile(type,input){
+  const file=input.files[0];if(!file)return;
+  const cid={'inventario':'inv','antiguedad':'ant','bdd':'bdd','balance':'bal','bdd25':'bdd25','ppto':'ppto'}[type];
+  const reader=new FileReader();
+  reader.onload=e=>{
+    F[type]=e.target.result;
+    document.getElementById('card-'+cid).classList.add('loaded');
+    document.getElementById('status-'+cid).textContent='✓ '+file.name;
+    if(F.inventario&&F.antiguedad&&F.bdd) document.getElementById('btn-process').classList.add('ready');
+    // Refresh EDO comparisons if dashboard already loaded
+    if(document.getElementById('dashboard').style.display!=='none'){
+      if(type==='bdd25'&&window._bdd){window._bdd25=parseBDD(F.bdd25);buildEdo(currentPer);}
+      if(type==='ppto'&&window._bdd){window._ppto=parsePpto(F.ppto);buildEdo(currentPer);if(FC.ventas)runForecast();}
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════
+// PARSE HELPERS
+// ═══════════════════════════════════════════
+function normKey(s){return(s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
+function findCol(keys,target){return keys.find(k=>normKey(k)===normKey(target))||target;}
+function pd(v){
+  if(!v&&v!==0)return null;
+  if(v instanceof Date)return isNaN(v)?null:v;
+  if(typeof v==='number'){const d=new Date(Math.round((v-25569)*86400*1000));return isNaN(d)?null:d;}
+  if(typeof v==='string'){let d=new Date(v);if(!isNaN(d))return d;const p=v.split('/');if(p.length===3){d=new Date(+p[2],+p[1]-1,+p[0]);return isNaN(d)?null:d;}}
+  return null;
+}
+function bkt(d){if(d<=0)return'Por Vencer';if(d<=30)return'1-30 días';if(d<=60)return'31-60 días';if(d<=90)return'61-90 días';if(d<=120)return'91-120 días';return'+120 días';}
+function gb(arr,key){return arr.reduce((a,i)=>{const k=i[key];if(!a[k])a[k]=[];a[k].push(i);return a;},{});}
+function sb2(arr,key){return arr.reduce((s,r)=>s+(+r[key]||0),0);}
+function fmtM(n){const a=Math.abs(n);if(a>=1e9)return'$'+(n/1e9).toFixed(1)+'B';if(a>=1e6)return'$'+(n/1e6).toFixed(1)+'M';if(a>=1e3)return'$'+(n/1e3).toFixed(0)+'K';return'$'+n.toFixed(0);}
+function fmtC(n){return'$'+Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0});}
+// P&L format: positive=green, negative=red+(parentheses)
+function fmtPL(n){
+  const abs='$'+Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0});
+  if(n<0) return`<span style="color:#ef4444">(${abs})</span>`;
+  if(n>0) return`<span style="color:#00d4aa">${abs}</span>`;
+  return`<span style="color:#64748b">${abs}</span>`;
+}
+function pct(a,b){if(!b)return'—';return((a/b)*100).toFixed(1)+'%';}
+function varP(a,b){if(!b)return null;return((a-b)/Math.abs(b))*100;}
+function dch(id){if(CH[id]){CH[id].destroy();delete CH[id];}}
+
+// ═══════════════════════════════════════════
+// PARSE FILES
+// ═══════════════════════════════════════════
+function parseInv(data){
+  const wb=XLSX.read(data,{type:'array'});
+  const sn=wb.SheetNames.find(s=>s.toLowerCase().includes('invent')&&!s.startsWith('_'));
+  return XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:null}).map(r=>({
+    segmento:(r['Desc. Segmento']||'').trim(),
+    lote:(r['Lote']||'').trim(),
+    anio:+r['Año Modelo']||0,
+    modelo:(r['Modelo']||'').trim(),
+    sucursal:+r['Cod. Sucursal']||0,
+    sociedad:div2soc(+r['Cod. Sucursal']||0),
+    serial:(r['Serial de Motor']||'').trim(),
+    vin:(r['VIN']||'').trim(),
+    unidades:+r['Inventario']||0,
+    valor:+r['Valor Inventario']||0,
+    antiguedad:+r['Antigüedad Inventario']||0,
+    bucket:bkt(+r['Antigüedad Inventario']||0),
+  })).filter(r=>r.segmento);
+}
+
+function parseAnt(data){
+  const wb=XLSX.read(data,{type:'array',cellDates:false});
+  const sh=wb.Sheets[wb.SheetNames.find(s=>!s.startsWith('_'))];
+  const rawRows=XLSX.utils.sheet_to_json(sh,{defval:null});
+  const keys=rawRows.length?Object.keys(rawRows[0]):[];
+  const cVenc=findCol(keys,'Vencimiento neto');
+  const cSaldo=findCol(keys,'Saldo');
+  const cCliente=findCol(keys,'Nombre de Deudor');
+  const cSeg=findCol(keys,'Descripción del Segmento');
+  const cDivAnt=findCol(keys,'División');
+  const cRef=findCol(keys,'Referencia');
+  const cFechaDoc=findCol(keys,'Fecha de documento');
+  const cDiasVenc=findCol(keys,'Días Vencidos');
+  return rawRows.map(r=>{
+    const vd=pd(r[cVenc]);
+    const dv=vd?Math.floor((TODAY-vd)/86400000):0;
+    const saldo=+(r[cSaldo]||0);
+    const ref=String(r[cRef]||'').trim();
+    const fdRaw=r[cFechaDoc];
+    let fechaDoc=null;
+    if(fdRaw instanceof Date)fechaDoc=fdRaw;
+    else if(typeof fdRaw==='number')fechaDoc=new Date(Math.round((fdRaw-25569)*86400000));
+    else if(fdRaw)fechaDoc=new Date(fdRaw);
+    return{cliente:(r[cCliente]||'').trim(),segmento:(r[cSeg]||'').trim(),saldo,diasVenc:dv,
+      porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),sociedad:div2soc(r[cDivAnt]),
+      ref,fechaDoc};
+  }).filter(r=>r.saldo!==0);
+}
+
+function parseBDD(data){
+  // Hardcoded CeBe→Segmento map (SAP profit centers — stable config)
+  const CEBE_SEG={
+    '100010007':'OTROS GASTOS Y OTROS PRODUCTOS',
+    '100010009':'ADMINISTRACIÓN','100010010':'ADMINISTRACIÓN',
+    '100020002':'VEHICULOS SEMINUEVOS',
+    '100020007':'CARGA',
+    '100020008':'PASAJE',
+    '100020009':'VANES',
+    '100020010':'TRACTO',
+    '100020011':'FL360',
+    '100020012':'SEMIREMOLQUES',
+    '100020017':'REFACCIONES','100020020':'REFACCIONES',
+    '100020022':'REFACCIONES','100020025':'REFACCIONES','100020028':'REFACCIONES',
+    '100030001':'TALLER','100030026':'TALLER','100030033':'TALLER',
+    '100030002':'COLLISION CENTER Y HYP',
+  };
+  function cebe2seg(v){
+    const s=String(v||'').replace(/\.0$/,'').replace('#','').trim();
+    return CEBE_SEG[s]||null;
+  }
+
+  const wb=XLSX.read(data,{type:'array'});
+  const shBdd=wb.SheetNames.find(s=>s.includes('BDD'))||wb.SheetNames[0];
+  // header:1 (array mode) — avoids duplicate 'Cuenta de mayor' key collision
+  // Excel layout: 0=División, 1=CeBe, 2=Cuenta(text), 3=Cuenta(numCode), 4=Período, 5=Importe
+  const rawArr=XLSX.utils.sheet_to_json(wb.Sheets[shBdd],{header:1,defval:null});
+  if(rawArr.length<2)return{cuentas:[],unidades:[],bySegs:{}};
+  // normKey keeps spaces — match 'cuenta de mayor' (with spaces)
+  const hdrB=rawArr[0].map(h=>normKey(String(h||'')));
+  const allCtaIdx=hdrB.reduce((a,h,i)=>{if(h==='cuenta de mayor')a.push(i);return a;},[]);
+  const iDiv  =hdrB.findIndex(h=>h==='division'||h==='división');
+  const iCebe =hdrB.indexOf('cebe');
+  const iPer  =hdrB.findIndex(h=>h.replace(/\s/g,'').includes('periodocontable')||h.includes('período')||h.includes('periodo'));
+  const iImp  =hdrB.findIndex(h=>h.startsWith('impte'));
+  // First 'cuenta de mayor' = text name, second = SAP numeric code
+  // Fallback: scan for text col (non-numeric sample) vs numeric col
+  let iCtaTxt=allCtaIdx[0]??-1, iCtaNum=allCtaIdx[1]??-1;
+  if(iCtaTxt<0||iCtaNum<0){
+    // scan all cols to find the two cuenta de mayor columns by content
+    for(let i=0;i<rawArr[0].length;i++){
+      if(i===iDiv||i===iCebe||i===iPer||i===iImp)continue;
+      const sample=rawArr.slice(1,5).map(r=>r[i]).find(v=>v!=null);
+      if(sample==null)continue;
+      if(isNaN(+sample)&&String(sample).length>2&&iCtaTxt<0)iCtaTxt=i;
+      else if(!isNaN(+sample)&&String(sample).length>6&&iCtaNum<0&&i!==iCebe)iCtaNum=i;
+    }
+  }
+  console.log('[parseBDD idx] allCtaIdx:',allCtaIdx,'→ iCtaTxt=',iCtaTxt,'iCtaNum=',iCtaNum,'iPer=',iPer,'iImp=',iImp,'iCebe=',iCebe,'iDiv=',iDiv);
+
+  const cuentas=rawArr.slice(1).filter(r=>r[iCtaTxt]&&r[iPer]!=null)
+    .map(r=>{
+      const numStr=r[iCtaNum]!=null?String(Math.round(+r[iCtaNum])):'';
+      return{
+        cuenta:String(r[iCtaTxt]||'').trim(),
+        ctaTipo:numStr[0]||'',
+        periodo:Math.round(+(r[iPer]||0)),
+        importe:+(r[iImp]||0),
+        division:+(r[iDiv]||0),
+        seg:cebe2seg(r[iCebe]),
+      };
+    });
+  // DEBUG
+  console.log('[parseBDD] total rows:', cuentas.length);
+  console.log('[parseBDD] hdrB:', hdrB);
+  console.log('[parseBDD] allCtaIdx:', allCtaIdx, '→ iCtaTxt=',iCtaTxt,'iCtaNum=',iCtaNum,'iPer=',iPer,'iImp=',iImp,'iCebe=',iCebe);
+  console.log('[parseBDD] sample row[0]:', rawArr[1]);
+  console.log('[parseBDD] first cuentas:', cuentas.slice(0,3));
+  console.log('[parseBDD] tipos:', [...new Set(cuentas.map(r=>r.ctaTipo))]);
+  console.log('[parseBDD] segs:', [...new Set(cuentas.map(r=>r.seg).filter(Boolean))]);
+
+  // bySegs: ctaTipo 4/5/6 — no hardcoded account names
+  const bySegs={};
+  function ensure(s){if(!bySegs[s])bySegs[s]={rev:0,cost:0,gasto:0};}
+  cuentas.filter(r=>r.seg).forEach(r=>{
+    ensure(r.seg);
+    if(r.ctaTipo==='4') bySegs[r.seg].rev   += -r.importe;
+    if(r.ctaTipo==='5') bySegs[r.seg].cost  +=  r.importe;
+    if(r.ctaTipo==='6') bySegs[r.seg].gasto +=  r.importe;
+  });
+
+  // Units sheet
+  const rawU=XLSX.utils.sheet_to_json(wb.Sheets['unidades'],{defval:null,header:1});
+  const unidades=[];
+  for(let i=1;i<rawU.length;i++){
+    const row=rawU[i];if(!row[0]||String(row[0]).includes('Periodo'))continue;
+    unidades.push({periodo:+String(row[0]).split('.')[0],segmento:String(row[1]||'').trim(),
+      division:String(row[2]||'').trim(),unidades:+row[3]||0,ventasK:+row[4]||0});
+  }
+  return{cuentas,unidades,bySegs};
+}
+
+
+function parsePpto(data){
+  if(!data)return null;
+  // Presupuesto layout: Sociedad, Sociedad.1, División, División.1, CeBe, CeBe.1,
+  //   G/L Account (text), G/L Account.1 (numeric), Período contable, Importe plan
+  const CEBE_SEG={
+    '100010007':'OTROS GASTOS Y OTROS PRODUCTOS',
+    '100010009':'ADMINISTRACIÓN','100010010':'ADMINISTRACIÓN',
+    '100020002':'VEHICULOS SEMINUEVOS','100020007':'CARGA','100020008':'PASAJE',
+    '100020009':'VANES','100020010':'TRACTO','100020011':'FL360','100020012':'SEMIREMOLQUES',
+    '100020017':'REFACCIONES','100020020':'REFACCIONES','100020022':'REFACCIONES',
+    '100020025':'REFACCIONES','100020028':'REFACCIONES',
+    '100030001':'TALLER','100030026':'TALLER','100030033':'TALLER',
+    '100030002':'COLLISION CENTER Y HYP',
+  };
+  function cebe2seg(v){const s=String(v||'').replace(/\.0$/,'').trim();return CEBE_SEG[s]||null;}
+  const wb=XLSX.read(data,{type:'array'});
+  const shName=wb.SheetNames.find(s=>!s.startsWith('_'))||wb.SheetNames[0];
+  const rawArr=XLSX.utils.sheet_to_json(wb.Sheets[shName],{header:1,defval:null});
+  if(rawArr.length<2)return null;
+  const hdr=rawArr[0].map(h=>normKey(String(h||'')));
+  // Find column indices — layout is pairs: (text, num) for each dimension
+  // G/L Account (text) and G/L Account.1 (numeric) — find by content
+  const iDiv  =hdr.findIndex(h=>h==='division'||h.startsWith('divis'));
+  const iCebe =hdr.findIndex((h,i)=>h==='cebe'&&i>0);
+  const iPer  =hdr.findIndex(h=>h.includes('periodo'));
+  const iImp  =hdr.findIndex(h=>h.includes('importe')||h.includes('plan'));
+  // Cantidad planificada — last numeric column after iImp
+  const iCant =hdr.findIndex((h,i)=>i>iImp&&(h.includes('cantidad')||h.includes('cant')));
+  // G/L Account text vs numeric: scan starting at iCebe+2 to skip the
+  // paired CeBe-text column (e.g. "CARGA") that sits right after iCebe
+  let iCtaTxt=-1, iCtaNum=-1;
+  for(let i=iCebe+2;i<hdr.length;i++){
+    if(i===iPer||i===iImp||i===iCant)continue;
+    const sample=rawArr.slice(1,5).map(r=>r[i]).find(v=>v!=null);
+    if(sample==null)continue;
+    if(isNaN(+sample)&&String(sample).length>2&&iCtaTxt<0)iCtaTxt=i;
+    else if(!isNaN(+sample)&&String(sample).length>6&&iCtaNum<0)iCtaNum=i;
+  }
+  console.log('[parsePpto cols] iDiv='+iDiv+' iCebe='+iCebe+' iCtaTxt='+iCtaTxt+' iCtaNum='+iCtaNum+' iPer='+iPer+' iImp='+iImp+' iCant='+iCant);
+  const cuentas=rawArr.slice(1).filter(r=>r[iCtaTxt]&&r[iPer]!=null).map(r=>{
+    const numStr=r[iCtaNum]!=null?String(Math.round(+r[iCtaNum])):'';
+    return{
+      cuenta:String(r[iCtaTxt]||'').trim(),
+      ctaTipo:numStr[0]||'',
+      periodo:+r[iPer]||0,
+      importe:+(r[iImp]||0),
+      cantidad:iCant>=0?(+(r[iCant]||0)):0,
+      division:+(r[iDiv]||0),
+      seg:cebe2seg(r[iCebe]),
+    };
+  });
+
+  // Build unidades array from rows with ctaTipo='4' and non-zero cantidad
+  // (units on revenue rows; use Math.abs since SAP signs revenue negative)
+  const unidades=[];
+  const seenPP=new Set(); // deduplicate by seg+periodo (revenue rows can duplicate across accounts)
+  cuentas.filter(r=>r.ctaTipo==='4'&&r.cantidad!==0&&r.seg).forEach(r=>{
+    const key=r.seg+'|'+r.periodo;
+    if(!seenPP.has(key)){
+      seenPP.add(key);
+      unidades.push({segmento:r.seg, periodo:r.periodo, unidades:Math.abs(r.cantidad), division:r.division});
+    } else {
+      // Accumulate if multiple revenue accounts have units (e.g. Refacciones, Taller)
+      const ex=unidades.find(u=>u.segmento===r.seg&&u.periodo===r.periodo);
+      if(ex) ex.unidades+=Math.abs(r.cantidad);
+    }
+  });
+
+  return{cuentas, unidades};
+}
+
+function parseBalance(data){
+  if(!data)return null;
+  const wb=XLSX.read(data,{type:'array'});
+  const shName=wb.SheetNames.find(s=>s.includes('BDD')||s.includes('Balance'));
+  // header:1 to handle duplicate 'Cuenta de mayor' column names in Excel
+  const rawArr=XLSX.utils.sheet_to_json(wb.Sheets[shName],{header:1,defval:null});
+  if(rawArr.length<2)return null;
+  const hdr=rawArr[0].map(h=>normKey(String(h||'')));
+  const allCtaIdx=hdr.reduce((a,h,i)=>{if(h==='cuenta de mayor')a.push(i);return a;},[]);
+  const iDiv2 =hdr.findIndex(h=>h==='division'||h.includes('divisi'));
+  const iCebe2=hdr.indexOf('cebe');
+  const iPer  =hdr.findIndex(h=>h.replace(/\s/g,'').includes('periodocontable')||h.includes('período')||h.includes('periodo'));
+  const iImp  =hdr.findIndex(h=>h.startsWith('impte'));
+  let iCtaTxt=allCtaIdx[0]??-1, iCtaNum=allCtaIdx[1]??-1;
+  if(iCtaTxt<0||iCtaNum<0){
+    for(let i=0;i<rawArr[0].length;i++){
+      if(i===iDiv2||i===iCebe2||i===iPer||i===iImp)continue;
+      const sample=rawArr.slice(1,5).map(r=>r[i]).find(v=>v!=null);
+      if(sample==null)continue;
+      if(isNaN(+sample)&&String(sample).length>2&&iCtaTxt<0)iCtaTxt=i;
+      else if(!isNaN(+sample)&&String(sample).length>6&&iCtaNum<0&&i!==iCebe2)iCtaNum=i;
+    }
+  }
+  // Segment column: rightmost non-numeric text column after col 5
+  const iSeg=hdr.reduceRight((found,h,i)=>{
+    if(found>=0||i<=5||!h)return found;
+    const sample=rawArr.slice(1).map(r=>r[i]).find(v=>v&&isNaN(+v)&&String(v).length>2);
+    return sample?i:-1;
+  },-1);
+  const rows=rawArr.slice(1).filter(r=>r[iCtaTxt]&&r[iPer]!=null).map(r=>{
+    const numStr=r[iCtaNum]!=null?String(Math.round(+r[iCtaNum])):'';
+    return{
+      cuenta:String(r[iCtaTxt]||'').trim(),
+      ctaTipo:numStr[0]||'',
+      periodo:Math.round(+(r[iPer]||0)),
+      importe:+(r[iImp]||0),
+      seg:iSeg>=0?String(r[iSeg]||'').trim():'',
+    };
+  });
+
+  // Accounts that are balance-sheet / clearing / IVA / financing — NOT opex
+  const BAL_EXCL=new Set([
+    'IVA Acreditado 16%','IVA Acred Dif 16%','IVA Trasladado  16%','IVA Trasl Dif 16%',
+    'IVA X cob (Fiscal)','Iva X pagar (Fiscal)','IVA Acreditado 8%','IVA Acreditado Dif8%',
+    'Clientes Nacionales','Ant de Clientes Nac','Anticipo Deudors Div',
+    'Proveedores Nacional','Prov Operat y Adtiva','Prov Nacional(ICIAS)',
+    'CXC Entre Divisiones','CXC  Empresas Grupo','CXP entre Divisiones',
+    'Cta comp sdo cero','Cajas Uno','Banco virtual',
+    'Obligacion Fin BBVA','Obligacion Fin Banor','Obligacion Fin Sant','Oblig Fin Planta',
+    'DXP Tercer CP Bancos','Pasivo Arrend L.P.',
+    'Inventarios Nuevos','Inventario Semi-Nvos','Inv. Refacciones',
+    'Mercancias Transito','Comp (EM-RF) Refacc','Comp (EM-RF) TOT',
+    'ISR Ret por Salarios','ISR por Pagar',
+    'Aportes IMSS X pagar','Aportes INFONA X pag','Aportes SAR X pagar','Aportes Fonacot',
+    'Retención ISR Prov','Retención IVA Prov','Retención RESICO',' Retención RESICO',
+    'Prov Contable ISR',
+    'Compens.impuesto rep','Dif Cam Doc x P','Diferencia Cam Prove','Dif Cam Pro ICIA','Dif Camb Clientes',
+    'Intereses Cobrados','Ganancia por Diferen','Pérdida por Dif en C','Pérdida por Diferenc',
+    'Diferencia Cobranza','Ingresos por Rec Gto','IMPTO SOBRE LA RENTA','ISR Bancos',
+    'Recursos Enviados','Otros Gastos Prepaga','Acreedores de Ret','Acreedores Diversos',
+    'Ingresos Extraordina','Gastos Extraordinar',
+    // Revenue, COGS & Plan Piso (already captured separately in P&L)
+    'Vtas de Veh Nuevos','Vtas de Veh SemiNu','Venta de Refacciones','Venta Ref Taller',
+    'Ventas Int Refacc','Ventas Mano de Obra','Vtas Mano Obra Man.','Ventas MO por Gtia',
+    'Ventas Interna TOT','Ventas Interna MO','Ventas de Servicios','Venta Manual',
+    'Ventas Ref Garantia','Ventas TOT Garantia',
+    'Costo Veh Nuevos','Costo manual NV US','Costo Veh Semi','Costo de Refacciones',
+    'Consumo Refacciones','Costo Mano de Obra','Costo TOT',
+    'Interese Plan Piso N','Interese Plan Piso U',  // Plan Piso shown separately — exclude from opex
+  ]);
+  function isBankCode(n){return/^\d{4}/.test(n.trim());}
+  // Filtered opex rows (real P&L operating items)
+  const opexRows=rows.filter(r=>!BAL_EXCL.has(r.cuenta)&&!isBankCode(r.cuenta));
+
+  // Other income / expense accounts
+  const OTROS_ING=['Intereses Cobrados','Ganancia por Diferen','Ingresos por Rec Gto','Ingresos Extraordina'];
+  const OTROS_GTO=['Pérdida por Dif en C','Pérdida por Diferenc','Comisiones Bancarias','ISR Bancos'];
+  const ISR_ACC=['IMPTO SOBRE LA RENTA'];
+
+  const sumBy=(cuenta,pers)=>rows.filter(r=>r.cuenta===cuenta&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+  const sumOpex=(seg,pers)=>opexRows.filter(r=>r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+  const sumOtros=(accs,pers)=>rows.filter(r=>accs.includes(r.cuenta)&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+  // Revenue by segment using ctaTipo='4'
+  const sumRevSeg=(seg,pers)=>-rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+
+  // balSum: sum any account list for any period(s) — used for P3 rev/cost
+  const balSum=(accs,pers)=>rows.filter(r=>accs.includes(r.cuenta)&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+  // maxPer: highest period with revenue data in Balance
+  const maxBalPer=Math.max(0,...rows.filter(r=>r.ctaTipo==='4').map(r=>r.periodo));
+  return{rows,sumBy,sumOpex,sumOtros,sumRevSeg,balSum,maxBalPer,OTROS_ING,OTROS_GTO,ISR_ACC};
+}
+
+// ═══════════════════════════════════════════
+// FILTER ENGINE
+// ═══════════════════════════════════════════
+function div2soc(div){
+  const s=String(div||'');
+  if(s.startsWith('41'))return'ZAPATA CAMIONES';
+  if(s.startsWith('43'))return'NORTRACK DE MEXICO';
+  if(s.startsWith('60'))return'FORZA ZAPATA';
+  return null;
+}
+function setSoc(soc,btn){
+  activeSoc=soc;
+  ['soc-btn-all','soc-btn-zap','soc-btn-forz','soc-btn-nor'].forEach(id=>{
+    document.getElementById(id)?.classList.remove('active');
+  });
+  btn.classList.add('active');
+  activeSeg=null; activeBucket=null; _syncFilterBar();
+  refreshAll();
+  if(window._bdd)buildStatic();
+  if(FC.ventas)runForecast();
+}
+function _syncFilterBar(){
+  const hs=!!activeSeg,hb=!!activeBucket;
+  document.getElementById('filter-bar').style.display=(hs||hb)?'flex':'none';
+  document.getElementById('chip-seg').style.display=hs?'flex':'none';
+  document.getElementById('chip-bkt').style.display=hb?'flex':'none';
+  document.getElementById('chip-sep').style.display=(hs&&hb)?'inline':'none';
+  if(hs)document.getElementById('filter-chip-seg').textContent=activeSeg;
+  if(hb)document.getElementById('filter-chip-bkt').textContent=activeBucket;
+}
+function applyFilter(seg){activeSeg=(activeSeg===seg)?null:seg;_syncFilterBar();refreshAll();}
+function applyBucketFilter(bkt){activeBucket=(activeBucket===bkt)?null:bkt;_syncFilterBar();refreshAll();}
+function clearSegFilter(){activeSeg=null;_syncFilterBar();refreshAll();}
+function clearBktFilter(){activeBucket=null;_syncFilterBar();refreshAll();}
+function clearFilter(){activeSeg=null;activeBucket=null;_syncFilterBar();refreshAll();}
+function fCx(){
+  let d=window._bdd?.cuentas||[];
+  if(activeSoc)d=d.filter(r=>div2soc(r.division)===activeSoc);
+  return d;
+}
+function fCx25(){
+  let d=window._bdd25?.cuentas||[];
+  if(activeSoc)d=d.filter(r=>div2soc(r.division)===activeSoc);
+  return d;
+}
+function fCxPpto(){
+  let d=window._ppto?.cuentas||[];
+  if(activeSoc)d=d.filter(r=>div2soc(r.division)===activeSoc);
+  return d;
+}
+function fAnt(){let d=window._ant;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
+function fInv(){let d=window._inv;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
+
+// ═══════════════════════════════════════════
+// AUTH & USER MANAGEMENT
+// ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// SUPABASE LAYER
+// ═══════════════════════════════════════════════════════════════
+const SUPA_URL = 'https://ujejajzguhvgspejhvdn.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqZWphanpndWh2Z3NwZWpodmRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMwNzUzNzcsImV4cCI6MjA4ODY1MTM3N30.yi-jWzow8iX_9rSe8uY6E7nAi0Sgp6tyP20qeZWk9dc';
+const SUPA_HDR = {'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'};
+
+async function supaGet(table, query=''){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}${query?'?'+query:''}`, {headers:SUPA_HDR});
+  return r.ok ? r.json() : [];
+}
+async function supaUpsert(table, body){
+  await fetch(`${SUPA_URL}/rest/v1/${table}`, {
+    method:'POST', headers:{...SUPA_HDR,'Prefer':'resolution=merge-duplicates,return=minimal'},
+    body: JSON.stringify(body)
+  });
+}
+async function supaDel(table, query){
+  await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`, {method:'DELETE', headers:SUPA_HDR});
+}
+
+// Compress/decompress JSON for large snapshot payloads
+async function compressData(obj){
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  const cs = new CompressionStream('gzip');
+  const writer = cs.writable.getWriter();
+  writer.write(bytes); writer.close();
+  const chunks = []; const reader = cs.readable.getReader();
+  while(true){ const {done,value}=await reader.read(); if(done)break; chunks.push(value); }
+  const all = new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
+  let off=0; for(const c of chunks){all.set(c,off);off+=c.length;}
+  // safe base64 for large arrays
+  let bin=''; const chunkSz=8192;
+  for(let i=0;i<all.length;i+=chunkSz) bin+=String.fromCharCode(...all.subarray(i,i+chunkSz));
+  return btoa(bin);
+}
+async function decompressData(b64){
+  const bin=atob(b64);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  const ds=new DecompressionStream('gzip');
+  const writer=ds.writable.getWriter();
+  writer.write(bytes); writer.close();
+  const chunks=[]; const reader=ds.readable.getReader();
+  while(true){const{done,value}=await reader.read();if(done)break;chunks.push(value);}
+  const all=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
+  let off=0; for(const c of chunks){all.set(c,off);off+=c.length;}
+  return JSON.parse(new TextDecoder().decode(all));
+}
+
+// ── SNAPSHOT ────────────────────────────────────────────────────
+async function saveSnapshot(){
+  try{
+    const payload = {
+      inv:   window._inv   || null,
+      ant:   window._ant   || null,
+      bdd:   window._bdd   || null,
+      bal:   window._bal   || null,
+      bdd25: window._bdd25 || null,
+      ppto:  window._ppto  || null,
+      savedAt: Date.now()
+    };
+    const compressed = await compressData(payload);
+    await supaUpsert('dashboard_snapshot',{id:'main',data:{z:compressed},updated_by:_currentUser?.username,updated_at:new Date().toISOString()});
+    console.log('[snapshot] guardado correctamente');
+  } catch(e){ console.error('[snapshot] error al guardar:', e); }
+}
+async function loadSnapshot(){
+  try{
+    const rows = await supaGet('dashboard_snapshot','id=eq.main');
+    if(!rows||!rows[0]?.data) return false;
+    const d = rows[0].data.z ? await decompressData(rows[0].data.z) : rows[0].data;
+    window._inv   = d.inv   || null;
+    window._ant   = d.ant   || null;
+    window._bdd   = d.bdd   || null;
+    window._bal   = d.bal   || null;
+    window._bdd25 = d.bdd25 || null;
+    window._ppto  = d.ppto  || null;
+    return !!(window._bdd && window._ant && window._inv);
+  } catch(e){ console.error('[snapshot] error al cargar:', e); return false; }
+}
+
+// ── AUTH / USERS ─────────────────────────────────────────────────
+const SESSION_KEY = 'dashboard-session';
+let _currentUser  = null;
+let _users        = [];
+
+async function hashPass(pass){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pass));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function loadUsers(){
+  try{
+    const rows = await supaGet('dashboard_users','order=created_at.asc');
+    _users = (rows||[]).map(u=>({username:u.username,passHash:u.pass_hash,role:u.role,createdBy:u.created_by}));
+  } catch(e){ _users=[]; }
+  if(!_users.find(u=>u.role==='admin')){
+    const h=await hashPass('admin123');
+    await supaUpsert('dashboard_users',{username:'admin',pass_hash:h,role:'admin',created_by:'sistema'});
+    _users=[{username:'admin',passHash:h,role:'admin',createdBy:'sistema'}];
+  }
+}
+async function saveUsers(){
+  // Users are saved individually on add/delete — this is a no-op kept for compatibility
+}
+function loadSession(){ try{ return JSON.parse(localStorage.getItem(SESSION_KEY)); }catch(e){return null;} }
+function saveSession(u){ localStorage.setItem(SESSION_KEY,JSON.stringify(u)); }
+function clearSession(){ localStorage.removeItem(SESSION_KEY); }
+
+async function loginSubmit(){
+  const username=document.getElementById('l-user').value.trim();
+  const pass=document.getElementById('l-pass').value;
+  const errEl=document.getElementById('l-err');
+  errEl.textContent='';
+  if(!username||!pass){ errEl.textContent='Completa todos los campos.'; return; }
+  const h=await hashPass(pass);
+  const user=_users.find(u=>u.username===username&&u.passHash===h);
+  if(!user){ errEl.textContent='Usuario o contraseña incorrectos.'; return; }
+  await applySession({username:user.username,role:user.role});
+}
+async function applySession(user){
+  _currentUser=user;
+  await saveSession(user);
+  document.body.classList.remove('role-admin','role-gerente');
+  document.body.classList.add('role-'+user.role);
+  document.getElementById('user-badge').style.display='flex';
+  document.getElementById('badge-name').textContent=user.username;
+  document.getElementById('badge-role').textContent=user.role==='admin'?'· Admin':'· Gerente';
+  const tabBtn=document.getElementById('tab-btn-usuarios');
+  if(tabBtn) tabBtn.style.display = user.role==='admin' ? 'inline-flex' : 'none';
+  const hdrBtn=document.getElementById('btn-usuarios-hdr');
+  if(hdrBtn) hdrBtn.style.display = user.role==='admin' ? 'inline-block' : 'none';
+  document.getElementById('login-screen').style.display='none';
+  if(user.role==='gerente'){
+    if(window._bdd){
+      document.getElementById('upload-section').style.display='none';
+      document.getElementById('dashboard').style.display='block';
+      document.getElementById('soc-bar').style.display='flex';
+    } else {
+      showGerenteWait('⏳ Cargando datos…');
+      const ok = await loadSnapshot();
+      if(ok){
+        buildStatic(); refreshAll();
+        document.getElementById('upload-section').style.display='none';
+        document.getElementById('dashboard').style.display='block';
+        document.getElementById('soc-bar').style.display='flex';
+        const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
+        document.getElementById('report-date').textContent='Datos del administrador';
+      } else {
+        showGerenteWait('⏳ Esperando datos del Administrador');
+      }
+    }
+  } else {
+    // Admin: try loading existing snapshot first
+    if(!window._bdd){
+      const rd = document.getElementById('report-date');
+      rd.textContent = '⏳ Verificando datos…';
+      const ok = await loadSnapshot();
+      if(ok){
+        buildStatic(); refreshAll();
+        document.getElementById('upload-section').style.display='none';
+        document.getElementById('dashboard').style.display='block';
+        document.getElementById('soc-bar').style.display='flex';
+        document.getElementById('btn-reload').style.display='inline-block';
+        rd.textContent='Último reporte publicado ✓';
+      } else {
+        rd.textContent='Sin datos';
+        document.getElementById('upload-section').style.display='flex';
+      }
+    } else {
+      document.getElementById('upload-section').style.display='flex';
+    }
+  }
+}
+function showGerenteWait(msg='⏳ Esperando datos del Administrador'){
+  let w=document.getElementById('gerente-wait');
+  if(!w){
+    w=document.createElement('div'); w.id='gerente-wait';
+    w.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - var(--hh));gap:14px;';
+    document.body.appendChild(w);
+  }
+  w.innerHTML='<div style="font-size:40px">⏳</div>'
+    +`<div style="font-family:'Playfair Display',serif;font-size:20px;color:#fff">${msg}</div>`
+    +'<div style="font-size:12px;color:var(--text-muted)">El administrador debe generar el dashboard primero.</div>';
+  w.style.display='flex';
+}
+async function doLogout(){
+  _currentUser=null; await clearSession();
+  document.body.classList.remove('role-admin','role-gerente');
+  document.getElementById('user-badge').style.display='none';
+  const hdrBtn2=document.getElementById('btn-usuarios-hdr'); if(hdrBtn2) hdrBtn2.style.display='none';
+  // Close panel if open
+  document.getElementById('usuarios-panel').style.display='none';
+  document.getElementById('usuarios-backdrop').style.display='none';
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('upload-section').style.display='none';
+  document.getElementById('dashboard').style.display='none';
+  document.getElementById('soc-bar').style.display='none';
+  const w=document.getElementById('gerente-wait'); if(w) w.style.display='none';
+  document.getElementById('l-user').value='';
+  document.getElementById('l-pass').value='';
+  document.getElementById('l-err').textContent='';
+}
+function toggleUsuariosPanel(){
+  const p = document.getElementById('usuarios-panel');
+  const b = document.getElementById('usuarios-backdrop');
+  const open = p.style.display === 'none';
+  p.style.display = open ? 'block' : 'none';
+  b.style.display = open ? 'block' : 'none';
+  if(open) renderUsersTable();
+}
+async function addUser(){
+  const username=document.getElementById('nu-user').value.trim();
+  const pass=document.getElementById('nu-pass').value;
+  const role=document.getElementById('nu-role').value;
+  const errEl=document.getElementById('nu-err');
+  errEl.textContent='';
+  if(!username||!pass){ errEl.textContent='Completa usuario y contraseña.'; return; }
+  if(_users.find(u=>u.username===username)){ errEl.textContent='Ese usuario ya existe.'; return; }
+  const h=await hashPass(pass);
+  await supaUpsert('dashboard_users',{username,pass_hash:h,role,created_by:_currentUser?.username||'admin'});
+  _users.push({username,passHash:h,role,createdBy:_currentUser?.username||'admin'});
+  document.getElementById('nu-user').value='';
+  document.getElementById('nu-pass').value='';
+  document.getElementById('add-user-form') && (document.getElementById('add-user-form').style.display='none');
+  renderUsersTable();
+}
+async function deleteUser(username){
+  if(username===_currentUser?.username){ alert('No puedes eliminar tu propio usuario.'); return; }
+  await supaDel('dashboard_users','username=eq.'+encodeURIComponent(username));
+  _users=_users.filter(u=>u.username!==username);
+  renderUsersTable();
+}
+async function changePass(username){
+  const np=prompt(`Nueva contraseña para "${username}":`);
+  if(!np||!np.trim()) return;
+  const h=await hashPass(np.trim());
+  await fetch(`${SUPA_URL}/rest/v1/dashboard_users?username=eq.${encodeURIComponent(username)}`,{
+    method:'PATCH', headers:{...SUPA_HDR,'Prefer':'return=minimal'}, body:JSON.stringify({pass_hash:h})
+  });
+  const u=_users.find(u=>u.username===username);
+  if(u){ u.passHash=h; }
+  alert('Contraseña actualizada.');
+}
+function renderUsersTable(){
+  const L={admin:'Administrador',gerente:'Gerente'};
+  document.getElementById('tbody-usuarios').innerHTML=_users.map((u,i)=>`
+    <tr>
+      <td style="color:var(--text-muted)">${i+1}</td>
+      <td style="font-weight:600">${u.username}</td>
+      <td><span class="role-badge role-${u.role}">${L[u.role]||u.role}</span></td>
+      <td style="color:var(--text-muted);font-size:11px">${u.createdBy||'—'}</td>
+      <td style="display:flex;gap:6px">
+        <button onclick="changePass('${u.username}')"
+          style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#60a5fa;font-size:10px;padding:3px 9px;border-radius:5px;cursor:pointer;font-family:'Inter',sans-serif">
+          🔑 Clave</button>
+        ${u.username===_currentUser?.username?'':
+        `<button onclick="deleteUser('${u.username}')"
+          style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#ef4444;font-size:10px;padding:3px 9px;border-radius:5px;cursor:pointer;font-family:'Inter',sans-serif">
+          🗑 Eliminar</button>`}
+      </td>
+    </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// MAIN PROCESS
+// ═══════════════════════════════════════════
+function procesarDatos(){
+  document.getElementById('loading').style.display='flex';
+  setTimeout(()=>{
+    try{
+      window._inv=parseInv(F.inventario);
+      window._ant=parseAnt(F.antiguedad);
+      window._bdd=parseBDD(F.bdd);
+      window._bal=F.balance?parseBalance(F.balance):null;
+      window._bdd25=F.bdd25?parseBDD(F.bdd25):null;
+      window._ppto=F.ppto?parsePpto(F.ppto):null;
+      buildStatic();
+      refreshAll();
+      document.getElementById('upload-section').style.display='none';
+      document.getElementById('dashboard').style.display='block';
+  document.getElementById('soc-bar').style.display='flex';
+      const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
+      document.getElementById('btn-reload').style.display='inline-block';
+      document.getElementById('report-date').textContent='Al '+TODAY.toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+      document.getElementById('fecha-analisis').textContent=TODAY.toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+      if(FC.ventas) runForecast();
+      // Guardar snapshot en Supabase para gerentes
+      const rd=document.getElementById('report-date');
+      const origTxt=rd.textContent;
+      rd.textContent='⏳ Publicando…';
+      saveSnapshot().then(()=>{ rd.textContent=origTxt+' ✓ Publicado'; })
+                    .catch(()=>{ rd.textContent=origTxt+' ⚠ Error al publicar'; });
+    }catch(e){alert('Error: '+e.message);console.error(e);}
+    finally{document.getElementById('loading').style.display='none';}
+  },80);
+}
+
+// ═══════════════════════════════════════════
+// BUILD STATIC (financiero + razones)
+// ═══════════════════════════════════════════
+function buildStatic(){
+  const cx=fCx();
+  const maxBddPer=Math.max(0,...(window._bdd?.cuentas||[]).map(r=>r.periodo));
+
+  // Core per-period sums using ctaTipo (no hardcoded account names)
+  function sumTipo(tipo,p,seg){
+    return cx.filter(r=>r.ctaTipo===tipo && (p===0||r.periodo===p) && (!seg||r.seg===seg))
+             .reduce((s,r)=>s+r.importe,0);
+  }
+  // Revenue is credit in SAP → negate
+  function rev(p,seg){  return -sumTipo('4',p,seg); }
+  function cst(p,seg){  return  sumTipo('5',p,seg); }
+  function gto(p,seg){  return  sumTipo('6',p,seg); }
+  function otros(p,seg){return  sumTipo('7',p,seg); } // financial items
+
+  // Detect available periods
+  const maxPer=window._bal ? Math.max(maxBddPer, window._bal.maxBalPer) : maxBddPer;
+  const PERS=Array.from({length:maxPer},(_,i)=>i+1);
+
+  // Build arrays per period — P3+ from Balance if available
+  function balTipo(tipo,p){
+    if(!window._bal)return 0;
+    return window._bal.rows
+      .filter(r=>r.ctaTipo===tipo && r.periodo===p)
+      .reduce((s,r)=>s+r.importe,0);
+  }
+  function getR(p){ return p<=maxBddPer ? rev(p) : -balTipo('4',p); }
+  function getC(p){ return p<=maxBddPer ? cst(p) :  balTipo('5',p); }
+  function getG(p,seg){ 
+    if(p<=maxBddPer) return gto(p,seg);
+    return window._bal ? window._bal.rows.filter(r=>r.ctaTipo==='6'&&r.periodo===p&&(!seg||r.seg===seg)).reduce((s,r)=>s+r.importe,0) : 0;
+  }
+  function getO(p){ return p<=maxBddPer ? -otros(p) : -balTipo('7',p); } // net otros ingresos
+
+  const ALL_SALES_SEGS=['TRACTO','PASAJE','CARGA','SEMIREMOLQUES','REFACCIONES',
+    'TALLER','VEHICULOS SEMINUEVOS','FL360','VANES','COLLISION CENTER Y HYP'];
+  const SALES_SEGS = ALL_SALES_SEGS; // buildStatic always pre-calculates all segments
+
+  const revP  = PERS.map(p=>getR(p));
+  const costP = PERS.map(p=>getC(p));
+  const gtoP  = PERS.map(p=>getG(p,null)); // all segments
+  const otrosP= PERS.map(p=>getO(p));
+
+  // gvBySeg: gastos (6) per sales segment per period
+  const gvBySeg={};
+  SALES_SEGS.forEach(s=>{
+    gvBySeg[s]={};
+    PERS.forEach(p=>{ gvBySeg[s]['p'+p]=getG(p,s); });
+  });
+
+  // Indirect expenses (ADMINISTRACIÓN segment, cuentas 6)
+  const giP=PERS.map(p=>getG(p,'ADMINISTRACIÓN'));
+
+  window._fin={
+    rev,cst,gto,getR,getC,getG,getO,
+    maxPer,PERS,revP,costP,gtoP,otrosP,gvBySeg,giP,
+    // backward compat
+    rev1:revP[0]||0, rev2:revP[1]||0,
+    cost1:costP[0]||0, cost2:costP[1]||0,
+    gi1:giP[0]||0, gi2:giP[1]||0,
+  };
+
+  buildPeriodButtons(maxPer);
+  buildEdoSegCombo();
+  buildEdo();
+  renderMargenSeg();
+  // buildIndicadores now called from renderMargenSeg
+  renderFinKPIs(currentPer);
+  buildFinCharts(currentPer);
+  renderRazones();
+}
+
+function buildPeriodButtons(maxPer){
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+    'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const wrap=document.getElementById('ptoggle-wrap')||document.querySelector('.ptoggle');
+  if(!wrap)return;
+  let html='';
+  for(let p=1;p<=maxPer;p++){
+    html+=`<button class="pbtn${p===currentPer?' active':''}" onclick="setPeriodo(${p},this)">${NAMES[p-1]}</button>`;
+  }
+  html+=`<button class="pbtn${currentPer===0?' active':''}" onclick="setPeriodo(0,this)">Acumulado</button>`;
+  wrap.innerHTML=html;
+  // Update Estado de Resultados table header
+  const thead=document.querySelector('#tbl-edo thead tr');
+  if(thead){
+    let ths='<th>Concepto</th>';
+    for(let p=1;p<=maxPer;p++) ths+=`<th>${NAMES[p-1]}</th>`;
+    ths+='<th>Acumulado</th><th>Var %</th>';
+    thead.innerHTML=ths;
+  }
+}
+
+// ═══════════════════════════════════════════
+// RAZONES FINANCIERAS
+// ═══════════════════════════════════════════
+function renderRazones(){
+  const f=window._fin;
+  const cx=fCx();
+  const rev1=f.revP[0]||0, rev2=f.revP[1]||0;
+  const cost1=f.costP[0]||0, cost2=f.costP[1]||0;
+  const revTotal=rev1+rev2;
+  const costTotal=cost1+cost2;
+  // Plan Piso: cuentas 6 que contienen 'Plan Piso' en el nombre
+  const pp1=cx.filter(r=>r.cuenta.includes('Plan Piso')&&r.periodo===1).reduce((s,r)=>s+r.importe,0);
+  const pp2=cx.filter(r=>r.cuenta.includes('Plan Piso')&&r.periodo===2).reduce((s,r)=>s+r.importe,0);
+  const ppTotal=pp1+pp2;
+  const gpTotal=revTotal-costTotal;
+  const margenBruto=gpTotal/revTotal;
+  const margenPP=(gpTotal-ppTotal)/revTotal;
+
+  const invTotal=sb2(window._inv,'valor');
+  const invUnidades=sb2(window._inv,'unidades');
+  const cartTotal=sb2(window._ant,'saldo');
+  const cartVencida=sb2(window._ant,'vencido');
+
+  // Days in period
+  const D=DIAS_PERIODO;
+
+  // DSO - Days Sales Outstanding (cartera / ventas diarias)
+  const dso=revTotal>0?(cartTotal/revTotal)*D:0;
+  // DII - Days Inventory Outstanding (inventario / costo diario)
+  const dii=costTotal>0?(invTotal/costTotal)*D:0;
+  // DPO - Days Payable Outstanding (from balance or estimate)
+  let dpo=0, provTotal=0;
+  if(window._bal){
+    const{sumBy}=window._bal;
+    // AP balance at end of Feb = P1+P2 cumulative (SAP: negative = credit = owed to supplier)
+    const provNac  = sumBy('Proveedores Nacional',[1,2]);   // refacciones / parts suppliers
+    const provOper = sumBy('Prov Operat y Adtiva',[1,2]);  // operational / service suppliers
+    provTotal = Math.abs(provNac) + Math.abs(provOper);
+    // Denominator: ONLY non-vehicle cost (refacciones + MO)
+    // Vehicles financed via Plan Piso — not traditional AP
+    const COST_REF_MO=['Costo de Refacciones','Consumo Refacciones','Costo Mano de Obra','Costo TOT'];
+    const costRefMO=cx.filter(r=>COST_REF_MO.includes(r.cuenta)&&[1,2].includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+    dpo=costRefMO>0?(provTotal/costRefMO)*D:0;
+  }
+  // CCE
+  const cce=dso+dii-dpo;
+  // Rotación inventario (annualized)
+  const rotInv=invTotal>0?(costTotal/invTotal)*(365/D):0;
+  // % cartera vencida
+  const pctVenc=cartTotal>0?(cartVencida/cartTotal)*100:0;
+  // Plan piso / margen bruto
+  const ppVsGB=gpTotal>0?(ppTotal/gpTotal)*100:0;
+  // Vehículos en riesgo (>180d)
+  const invRisk=window._inv.filter(r=>r.antiguedad>180);
+  const valorRisk=sb2(invRisk,'valor');
+  const pctRisk=invTotal>0?(valorRisk/invTotal)*100:0;
+  // Concentración top 5 clientes
+  const cliGroup=gb(window._ant,'cliente');
+  const top5=Object.entries(cliGroup).map(([n,rows])=>sb2(rows,'saldo')).sort((a,b)=>b-a).slice(0,5);
+  const concTop5=cartTotal>0?(top5.reduce((a,b)=>a+b,0)/cartTotal)*100:0;
+
+  window._razones={dso,dii,dpo,cce,rotInv,margenBruto,margenPP,pctVenc,ppVsGB,pctRisk,concTop5,revTotal,costTotal,gpTotal,ppTotal,invTotal,cartTotal,cartVencida,provTotal,invUnidades};
+
+  // ── CCE FLOW ──
+  document.getElementById('cce-flow').innerHTML=`
+    <div class="cce-box"><div class="cce-val" style="color:#3b82f6">${dso.toFixed(0)}</div><div class="cce-label">DSO</div><div class="cce-sub">Días de Cartera</div></div>
+    <div class="cce-op">+</div>
+    <div class="cce-box"><div class="cce-val" style="color:#f59e0b">${dii.toFixed(0)}</div><div class="cce-label">DII</div><div class="cce-sub">Días de Inventario</div></div>
+    <div class="cce-op">−</div>
+    <div class="cce-box"><div class="cce-val" style="color:#10b981">${dpo.toFixed(0)}</div><div class="cce-label">DPO</div><div class="cce-sub">Días de Proveedores</div></div>
+    <div class="cce-op">=</div>
+    <div class="cce-result">
+      <div class="cce-val">${cce.toFixed(0)}</div>
+      <div class="cce-label">CCE</div>
+      <div class="cce-sub">Ciclo de Conversión</div>
+    </div>
+    <div style="flex:1;padding:0 20px;min-width:200px;">
+      <div style="font-size:11px;color:var(--text-muted);line-height:1.7;">
+        <div>💡 <strong style="color:var(--text-dim)">CCE</strong> = días que el capital queda inmovilizado</div>
+        <div>🎯 Meta: <strong style="color:var(--accent)">minimizar</strong> mediante cobro rápido y rotación de inv.</div>
+        <div>📌 DPO = Prov. Nacional + Prov. Operat. al cierre Feb ÷ costo Ref+MO${window._bal?'':' · carga Balance para precisión'}</div>
+      </div>
+    </div>`;
+
+  // ── RATIO CARDS ──
+  const ratios=[
+    {name:'Días de Cartera',acronym:'DSO',val:dso.toFixed(1),unit:'días',
+     status:dso<45?'good':dso<60?'warn':'alert',
+     bench:{val:dso,max:120,color:'#3b82f6'},
+     desc:`Por cada día de ventas, tienes ${dso.toFixed(0)} días de cartera por cobrar. Meta sector: 30-45 días.`},
+    {name:'Días de Inventario',acronym:'DII',val:dii.toFixed(1),unit:'días',
+     status:dii<60?'good':dii<90?'warn':'alert',
+     bench:{val:dii,max:180,color:'#f59e0b'},
+     desc:`Tu inventario tarda ${dii.toFixed(0)} días en convertirse en ventas. Rotación: ${rotInv.toFixed(1)}x al año.`},
+    {name:'Días de Proveedores',acronym:'DPO',val:dpo.toFixed(1),unit:'días',
+     status:dpo>30?'good':dpo>15?'warn':'alert',
+     bench:{val:Math.min(dpo,90),max:90,color:'#10b981'},
+     desc:window._bal
+       ?`AP al cierre Feb: ${fmtM(provTotal)} (Prov. Nacional + Prov. Operat.) ÷ costo diario Ref+MO. Vehículos excluidos — financiados vía Plan Piso.`
+       :'Carga el archivo Balance para calcular con cuentas contables reales.'},
+    {name:'Ciclo Conv. Efectivo',acronym:'CCE',val:cce.toFixed(0),unit:'días',
+     status:cce<60?'good':cce<100?'warn':'alert',
+     bench:{val:Math.min(cce,200),max:200,color:'#00d4aa'},
+     desc:`Capital inmovilizado ${cce.toFixed(0)} días. Reducir DSO o DII o aumentar DPO mejora el flujo.`},
+    {name:'Margen Bruto',acronym:'MB',val:(margenBruto*100).toFixed(1),unit:'%',
+     status:margenBruto>0.12?'good':margenBruto>0.07?'warn':'alert',
+     bench:{val:margenBruto*100,max:30,color:'#00d4aa'},
+     desc:`Rentabilidad antes de gastos operativos. Industria automotriz típica: 8-15%.`},
+    {name:'Margen s/Plan Piso',acronym:'MSPP',val:(margenPP*100).toFixed(1),unit:'%',
+     status:margenPP>0.08?'good':margenPP>0.04?'warn':'alert',
+     bench:{val:Math.max(0,margenPP*100),max:20,color:'#a78bfa'},
+     desc:`Margen neto del costo financiero del inventario (Plan Piso = ${fmtM(ppTotal)}, ${ppVsGB.toFixed(0)}% del margen bruto).`},
+    {name:'Rotación Inventario',acronym:'RI',val:rotInv.toFixed(2),unit:'x año',
+     status:rotInv>8?'good':rotInv>5?'warn':'alert',
+     bench:{val:Math.min(rotInv,20),max:20,color:'#f59e0b'},
+     desc:`El inventario rota ${rotInv.toFixed(1)} veces al año. Mayor rotación = mejor uso del capital.`},
+    {name:'% Cartera Vencida',acronym:'CV',val:pctVenc.toFixed(1),unit:'%',
+     status:pctVenc<10?'good':pctVenc<25?'warn':'alert',
+     bench:{val:Math.min(pctVenc,100),max:100,color:'#ef4444'},
+     desc:`${fmtM(cartVencida)} de ${fmtM(cartTotal)} de cartera están vencidos. Cartera +120d: ${fmtM(sb2(window._ant.filter(r=>r.bucket==='+120 días'),'saldo'))}.`},
+    {name:'Plan Piso / Mg. Bruto',acronym:'PPGB',val:ppVsGB.toFixed(1),unit:'%',
+     status:ppVsGB<30?'good':ppVsGB<50?'warn':'alert',
+     bench:{val:Math.min(ppVsGB,100),max:100,color:'#f97316'},
+     desc:`El costo financiero del inventario (${fmtM(ppTotal)}) consume el ${ppVsGB.toFixed(0)}% de tu margen bruto.`},
+    {name:'Concentración Top 5',acronym:'CT5',val:concTop5.toFixed(1),unit:'%',
+     status:concTop5<50?'good':concTop5<70?'warn':'alert',
+     bench:{val:concTop5,max:100,color:'#8b5cf6'},
+     desc:`Los 5 mayores clientes concentran el ${concTop5.toFixed(0)}% de la cartera total. Riesgo de concentración.`},
+    {name:'Inventario en Riesgo',acronym:'IR',val:pctRisk.toFixed(1),unit:'%',
+     status:pctRisk<10?'good':pctRisk<25?'warn':'alert',
+     bench:{val:pctRisk,max:100,color:'#ef4444'},
+     desc:`${invRisk.length} unidades con más de 180 días (${fmtM(valorRisk)}), el ${pctRisk.toFixed(0)}% del valor total.`},
+  ];
+
+  document.getElementById('ratio-grid').innerHTML=ratios.map(r=>`
+    <div class="ratio-card ${r.status}">
+      <div class="ratio-name">${r.name}</div>
+      <div class="ratio-acronym">${r.acronym}</div>
+      <div style="display:flex;align-items:baseline;gap:4px;">
+        <div class="ratio-val">${r.val}</div>
+        <div class="ratio-unit">${r.unit}</div>
+      </div>
+      <div class="ratio-bench">
+        <div class="ratio-bench-bar"><div class="ratio-bench-fill" style="width:${Math.min(100,r.bench.val/r.bench.max*100)}%;background:${r.bench.color};"></div></div>
+        <div class="ratio-bench-label">/${r.bench.max}${r.unit.includes('días')||r.unit.includes('x')||r.unit.includes('%')?r.unit:''}</div>
+      </div>
+      <div class="ratio-desc">${r.desc}</div>
+      <div class="ratio-status ${r.status}">${r.status==='good'?'✓ En rango':r.status==='warn'?'⚠ Vigilar':'⚡ Atención'}</div>
+    </div>`).join('');
+
+  // ── RISK TABLES ──
+  // Inventario en riesgo
+  const invBySegRisk=gb(window._inv.filter(r=>r.antiguedad>180),'segmento');
+  const invBySegAll=gb(window._inv,'segmento');
+  document.querySelector('#tbl-inv-risk tbody').innerHTML=
+    Object.entries(invBySegRisk).sort((a,b)=>sb2(b[1],'valor')-sb2(a[1],'valor')).map(([s,rows])=>{
+      const valRisk=sb2(rows,'valor');
+      const valTotal=sb2(invBySegAll[s]||[],'valor');
+      const mx=Math.max(...rows.map(r=>r.antiguedad));
+      const pctS=valTotal>0?(valRisk/valTotal*100).toFixed(0)+'%':'—';
+      return`<tr class="row-slow"><td>${sb(s)}</td><td>${sb2(rows,'unidades')}</td><td>${fmtC(valRisk)}</td><td><span class="pill pr">${mx}d</span></td><td>${pctS}</td></tr>`;
+    }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Sin unidades en riesgo ✓</td></tr>';
+
+  // Cartera crítica >90d
+  const cliVenc=gb(window._ant.filter(r=>r.diasVenc>90),'cliente');
+  document.querySelector('#tbl-cart-risk tbody').innerHTML=
+    Object.entries(cliVenc).map(([n,rows])=>({nombre:n,monto:sb2(rows,'saldo'),maxD:Math.max(...rows.map(r=>r.diasVenc)),seg:rows[0]?.segmento||''}))
+    .sort((a,b)=>b.monto-a.monto).slice(0,15)
+    .map(c=>`<tr class="row-slow"><td class="tdn">${c.nombre.length>30?c.nombre.slice(0,30)+'…':c.nombre}</td><td>${sb(c.seg)}</td><td>${fmtC(c.monto)}</td><td><span class="pill pr">${c.maxD}d</span></td></tr>`).join('')
+    ||'<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px">Sin cartera crítica ✓</td></tr>';
+
+  // Rentabilidad por segmento (ingresos from BDD unidades vs cartera)
+  const uniData=window._bdd.unidades;
+  const uniByS={};
+  uniData.forEach(r=>{
+    if(!uniByS[r.segmento])uniByS[r.segmento]={ingresos:0,und:0};
+    uniByS[r.segmento].ingresos+=r.ventasK*1000;
+    uniByS[r.segmento].und+=r.unidades;
+  });
+  const antByS=gb(window._ant,'segmento');
+  document.querySelector('#tbl-rent-seg tbody').innerHTML=
+    Object.entries(uniByS).sort((a,b)=>b[1].ingresos-a[1].ingresos).map(([s,d])=>{
+      const cart=sb2(antByS[s]||[],'saldo');
+      const ppU=d.und>0?fmtC(d.ingresos/d.und):'—';
+      const pctC=d.ingresos>0?(cart/d.ingresos*100).toFixed(0)+'%':'—';
+      return`<tr><td>${sb(s,true)}</td><td>${fmtC(d.ingresos)}</td><td>${d.und}</td><td>${ppU}</td><td>${fmtC(cart)}</td><td>${pctC}</td></tr>`;
+    }).join('');
+}
+
+// ═══════════════════════════════════════════
+// REFRESH ALL
+// ═══════════════════════════════════════════
+function refreshAll(){
+  const ant=fAnt(),inv=fInv();
+  renderKPIMain(ant,inv);
+  renderResumenCharts(ant,inv);
+  renderTopClientes(ant);
+  renderCartKPIs(ant);
+  renderAgingBars(ant);
+  renderCartCharts(ant);
+  renderCartTables(ant);
+  buildRefTable();
+  renderInvKPIs(inv);
+  renderInvCharts(inv);
+  renderInvTable(inv);
+  renderInvAgingBars(inv);
+  renderInvUnidades(inv);
+}
+
+// ═══════════════════════════════════════════
+// KPI MAIN
+// ═══════════════════════════════════════════
+function renderKPIMain(ant,inv){
+  const f=window._fin;
+  const revAcum=(f?.revP||[]).reduce((s,v)=>s+v,0);
+  const costAcum=(f?.costP||[]).reduce((s,v)=>s+v,0);
+  const r=window._razones;
+  const tc=sb2(ant,'saldo'),tv=sb2(ant,'vencido'),tvi=sb2(inv,'valor'),tui=sb2(inv,'unidades');
+  const NAMES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const perLabel=f?NAMES.slice(0,f.maxPer).join('–')+' 2026':'Acum.';
+  document.getElementById('kpi-main').innerHTML=`
+    <div class="kcard ct"><div class="klabel">Ingresos Acum.</div><div class="kval">${fmtM(revAcum)}</div><div class="ksub">${perLabel}</div></div>
+    <div class="kcard cg"><div class="klabel">Margen Bruto</div><div class="kval">${revAcum?((revAcum-costAcum)/revAcum*100).toFixed(1)+'%':'—'}</div><div class="ksub">${fmtM(revAcum-costAcum)}</div></div>
+    <div class="kcard cb"><div class="klabel">Cartera Total</div><div class="kval">${fmtM(tc)}</div><div class="ksub">Vencida: ${pct(tv,tc)}</div></div>
+    <div class="kcard ca"><div class="klabel">Valor Inventario</div><div class="kval">${fmtM(tvi)}</div><div class="ksub">${tui} unidades</div></div>
+    <div class="kcard cr"><div class="klabel">Cartera Vencida</div><div class="kval">${fmtM(tv)}</div><div class="ksub">${pct(tv,tc)}</div></div>
+    <div class="kcard cp"><div class="klabel">CCE</div><div class="kval">${r?r.cce.toFixed(0):'—'}</div><div class="ksub">días de capital inmovilizado</div></div>
+  `;
+}
+
+// ═══════════════════════════════════════════
+// RESUMEN CHARTS
+// ═══════════════════════════════════════════
+function renderResumenCharts(ant,inv){
+  const cx=fCx();
+  const f=window._fin;
+  const PERS=f?.PERS||[1,2];
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Sep','Oct','Nov','Dic'];
+  const PALS=['rgba(59,130,246,.7)','rgba(0,212,170,.7)','rgba(245,158,11,.7)'];
+  const SEGS=['TRACTO','PASAJE','CARGA','SEMIREMOLQUES','REFACCIONES',
+    'TALLER','VEHICULOS SEMINUEVOS','FL360','VANES','COLLISION CENTER Y HYP'];
+  const SEG_SHORT=['Tracto','Pasaje','Carga','Semi','Refacc','Taller','Semi-Nvos','FL360','Vanes','CC/HYP'];
+  dch('ch-ing');
+  CH['ch-ing']=new Chart(document.getElementById('ch-ing'),{
+    type:'bar',data:{labels:SEG_SHORT,datasets:PERS.map((p,i)=>({
+      label:NAMES[p-1],borderRadius:4,backgroundColor:PALS[i]||PALS[0],
+      data:SEGS.map(s=>-cx.filter(r=>r.ctaTipo==='4'&&r.seg===s&&r.periodo===p).reduce((a,r)=>a+r.importe,0)/1e6)
+    }))},options:{...bOpts('M MXN'),plugins:{...bOpts('M MXN').plugins,legend:{display:true,labels:{color:'#94a3b8',font:{size:9}}}}}});
+
+  // Aging donut
+  const BK=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
+  const BC=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
+  const antBase=activeSeg?window._ant.filter(r=>r.segmento===activeSeg):window._ant;
+  const dBg=BK.map((b,i)=>activeBucket&&activeBucket!==b?BC[i]+'30':BC[i]);
+  dch('ch-aging-r');
+  const cdnutR=new Chart(document.getElementById('ch-aging-r'),{
+    type:'doughnut',data:{labels:BK,datasets:[{data:BK.map(b=>Math.max(0,sb2(antBase.filter(r=>r.bucket===b),'saldo'))),backgroundColor:dBg,borderWidth:0,borderRadius:3}]},options:dOpts()});
+  document.getElementById('ch-aging-r').onclick=e=>bucketChartClick(cdnutR,e,BK);
+  CH['ch-aging-r']=cdnutR;
+
+  // Inv by seg
+  const ibys=gb(inv,'segmento');
+  const snames=Object.keys(ibys).sort((a,b)=>sb2(ibys[b],'unidades')-sb2(ibys[a],'unidades'));
+  dch('ch-inv-s');
+  const c3=new Chart(document.getElementById('ch-inv-s'),{
+    type:'bar',data:{labels:snames,datasets:[{label:'Unidades',data:snames.map(s=>sb2(ibys[s],'unidades')),backgroundColor:snames.map(s=>activeSeg&&activeSeg!==s?sc(s,.15):sc(s,.82)),borderRadius:4}]},options:bOpts('Unidades',true)});
+  document.getElementById('ch-inv-s').onclick=e=>chartClick(c3,e,snames);
+  CH['ch-inv-s']=c3;
+
+  // Cartera donut
+  const abys=gb(ant.filter(r=>r.saldo>0),'segmento');
+  const anames=Object.keys(abys).sort((a,b)=>sb2(abys[b],'saldo')-sb2(abys[a],'saldo')).slice(0,9);
+  dch('ch-cart-s');
+  const c4=new Chart(document.getElementById('ch-cart-s'),{
+    type:'doughnut',data:{labels:anames,datasets:[{data:anames.map(s=>sb2(abys[s],'saldo')),backgroundColor:anames.map(s=>activeSeg&&activeSeg!==s?sc(s,.2):sc(s)),borderWidth:0,borderRadius:3}]},options:dOpts()});
+  document.getElementById('ch-cart-s').onclick=e=>chartClick(c4,e,anames);
+  CH['ch-cart-s']=c4;
+}
+
+function renderTopClientes(ant){
+  const top=Object.entries(gb(ant,'cliente')).map(([n,rows])=>({nombre:n,saldo:sb2(rows,'saldo'),vencida:sb2(rows,'vencido'),seg:rows[0]?.segmento||''})).sort((a,b)=>b.saldo-a.saldo).slice(0,10);
+  document.querySelector('#tbl-top tbody').innerHTML=top.map(c=>`
+    <tr><td class="tdn">${c.nombre.length>32?c.nombre.slice(0,32)+'…':c.nombre}</td><td>${fmtC(c.saldo)}</td>
+    <td>${sb(c.seg,true)}</td>
+    <td>${c.vencida>0?`<span class="pill pr">Venc. ${pct(c.vencida,c.saldo)}</span>`:`<span class="pill pg">Corriente</span>`}</td></tr>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// CARTERA
+// ═══════════════════════════════════════════
+function renderCartKPIs(ant){
+  const t=sb2(ant,'saldo'),v=sb2(ant,'vencido'),pv=sb2(ant,'porVencer');
+  const p120=sb2(ant.filter(r=>r.bucket==='+120 días'),'saldo');
+  document.getElementById('kpi-cart').innerHTML=`
+    <div class="kcard cb"><div class="klabel">Cartera Total</div><div class="kval">${fmtM(t)}</div></div>
+    <div class="kcard cg"><div class="klabel">Por Vencer</div><div class="kval">${fmtM(pv)}</div><div class="ksub">${pct(pv,t)}</div></div>
+    <div class="kcard cr"><div class="klabel">Vencida</div><div class="kval">${fmtM(v)}</div><div class="ksub">${pct(v,t)}</div></div>
+    <div class="kcard ca"><div class="klabel">Vencida +120 d</div><div class="kval">${fmtM(p120)}</div><div class="ksub">${pct(p120,t)}</div></div>
+    <div class="kcard ct"><div class="klabel">Nº Facturas</div><div class="kval">${ant.length.toLocaleString()}</div></div>
+  `;
+}
+
+function renderAgingBars(ant){
+  const BK=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
+  const BC=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
+  const antSeg=activeSeg?window._ant.filter(r=>r.segmento===activeSeg):window._ant;
+  const bv=BK.map(b=>sb2(antSeg.filter(r=>r.bucket===b),'saldo'));
+  const mx=Math.max(...bv,1);
+  document.getElementById('aging-bars').innerHTML=BK.map((b,i)=>{
+    const ia=activeBucket===b,dim=activeBucket&&!ia;
+    return`<div class="abrow${ia?' abactive':''}" onclick="applyBucketFilter('${b}')">
+      <div class="ablabel" style="color:${ia?BC[i]:'inherit'};font-weight:${ia?700:400}">${b}</div>
+      <div class="abtrack"><div class="abfill" style="width:${bv[i]/mx*100}%;background:${BC[i]};opacity:${dim?.22:1};"></div></div>
+      <div class="abval" style="color:${ia?BC[i]:'inherit'}">${fmtC(bv[i])}</div>
+    </div>`;}).join('');
+}
+
+function renderCartCharts(ant){
+  const antSeg=activeSeg?window._ant.filter(r=>r.segmento===activeSeg):window._ant;
+  const t=sb2(antSeg,'saldo'),v=sb2(antSeg,'vencido'),pv=sb2(antSeg,'porVencer');
+  const donutBg=activeBucket&&activeBucket!=='Por Vencer'?['rgba(16,185,129,.18)','#ef4444']:activeBucket==='Por Vencer'?['#10b981','rgba(239,68,68,.18)']:['#10b981','#ef4444'];
+  dch('ch-venc-d');
+  const cdnut=new Chart(document.getElementById('ch-venc-d'),{type:'doughnut',data:{labels:['Por Vencer','Vencida'],datasets:[{data:[pv,v],backgroundColor:donutBg,borderWidth:0,borderRadius:3}]},options:dOpts()});
+  document.getElementById('ch-venc-d').onclick=e=>{
+    const pts=cdnut.getElementsAtEventForMode(e,'nearest',{intersect:true},false);
+    if(!pts.length){clearBktFilter();return;}
+    if(pts[0].index===0)applyBucketFilter('Por Vencer');
+    else{if(activeBucket&&activeBucket!=='Por Vencer')clearBktFilter();else applyBucketFilter('1-30 días');}
+  };
+  CH['ch-venc-d']=cdnut;
+  const VBK=['1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
+  const VBC=['#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
+  dch('ch-buck-b');
+  const cbar=new Chart(document.getElementById('ch-buck-b'),{type:'bar',data:{labels:VBK,datasets:[{label:'Saldo',data:VBK.map(b=>sb2(antSeg.filter(r=>r.bucket===b),'saldo')),backgroundColor:VBK.map((b,i)=>activeBucket&&activeBucket!==b?VBC[i]+'35':VBC[i]),borderRadius:4}]},options:bOpts('MXN')});
+  document.getElementById('ch-buck-b').onclick=e=>bucketChartClick(cbar,e,VBK);
+  CH['ch-buck-b']=cbar;
+}
+
+function renderCartTables(ant){
+  const abys=gb(ant,'segmento');
+  const rows=Object.entries(abys).map(([s,r])=>({segmento:s,saldo:sb2(r,'saldo'),vencer:sb2(r,'porVencer'),vencida:sb2(r,'vencido')})).filter(r=>r.saldo>0).sort((a,b)=>b.saldo-a.saldo);
+  document.querySelector('#tbl-cart-s tbody').innerHTML=rows.map(r=>`
+    <tr class="srow${activeSeg===r.segmento?' arow':''}" onclick="applyFilter('${r.segmento.replace(/'/g,"\\'")}')">
+      <td>${sb(r.segmento)}</td><td>${fmtC(r.saldo)}</td><td>${fmtC(r.vencer)}</td><td>${fmtC(r.vencida)}</td>
+      <td>${r.vencida>0?`<span class="pill pr">${pct(r.vencida,r.saldo)}</span>`:`<span class="pill pg">0%</span>`}</td></tr>`).join('');
+  const hayVencidos=ant.some(r=>r.vencido>0);
+  // Si no hay vencidos (ej. filtro "Por Vencer"), mostrar los de mayor saldo ordenados por días restantes
+  const antBase=hayVencidos?ant.filter(r=>r.vencido>0):ant;
+  const cg=gb(antBase,'cliente');
+  const top=Object.entries(cg).map(([n,rows])=>({
+    nombre:n, saldo:sb2(rows,'saldo'), vencida:sb2(rows,'vencido'),
+    maxD:Math.max(...rows.map(r=>r.diasVenc)),
+  })).sort((a,b)=>hayVencidos?b.vencida-a.vencida:b.saldo-a.saldo).slice(0,15);
+  const colLabel=hayVencidos?'Vencido':'Saldo';
+  document.querySelector('#tbl-cli-v thead tr').innerHTML=`<th>Cliente</th><th>Saldo</th><th>${colLabel}</th><th>Días</th>`;
+  document.querySelector('#tbl-cli-v tbody').innerHTML=top.map(c=>`
+    <tr><td class="tdn">${c.nombre.length>32?c.nombre.slice(0,32)+'…':c.nombre}</td><td>${fmtC(c.saldo)}</td><td>${fmtC(hayVencidos?c.vencida:c.saldo)}</td>
+    <td><span class="pill ${c.maxD>120?'pr':c.maxD>60?'pa':c.maxD>0?'pb':'pg'}">${c.maxD>0?c.maxD+'d venc.':Math.abs(c.maxD)+'d x venc.'}</span></td></tr>`).join('');
+}
+
+// ═══════════════════════════════════════════
+// INVENTARIO
+// ═══════════════════════════════════════════
+function renderInvKPIs(inv){
+  const tu=sb2(inv,'unidades'),tv=sb2(inv,'valor');
+  const vl=inv.filter(r=>r.antiguedad>0);
+  const avg=vl.length?vl.reduce((s,r)=>s+r.antiguedad,0)/vl.length:0;
+  const mx=vl.length?Math.max(...vl.map(r=>r.antiguedad)):0;
+  document.getElementById('kpi-inv').innerHTML=`
+    <div class="kcard cb"><div class="klabel">Total Unidades</div><div class="kval">${tu}</div></div>
+    <div class="kcard ca"><div class="klabel">Valor Total</div><div class="kval">${fmtM(tv)}</div></div>
+    <div class="kcard ct"><div class="klabel">Antigüedad Promedio</div><div class="kval">${Math.round(avg)} d</div></div>
+    <div class="kcard cr"><div class="klabel">Antigüedad Máxima</div><div class="kval">${mx} d</div></div>
+    <div class="kcard cg"><div class="klabel">Segmentos</div><div class="kval">${Object.keys(gb(inv,'segmento')).length}</div></div>
+  `;
+}
+
+function renderInvCharts(inv){
+  const ibys=gb(inv,'segmento');
+  const sord=Object.keys(ibys).sort((a,b)=>sb2(ibys[b],'valor')-sb2(ibys[a],'valor'));
+  dch('ch-inv-v');
+  const cv=new Chart(document.getElementById('ch-inv-v'),{type:'bar',data:{labels:sord,datasets:[{label:'Valor ($M)',data:sord.map(s=>sb2(ibys[s],'valor')/1e6),backgroundColor:sord.map(s=>activeSeg&&activeSeg!==s?sc(s,.15):sc(s,.85)),borderRadius:4}]},options:bOpts('M MXN',true)});
+  document.getElementById('ch-inv-v').onclick=e=>chartClick(cv,e,sord);
+  CH['ch-inv-v']=cv;
+  // Use same bucket labels as bkt() so filter interaction works
+  const AB=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
+  const AC2=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
+  const AC=AB.map(b=>{
+    const dim=activeBucket&&activeBucket!==b;
+    return{count:inv.filter(r=>r.bucket===b).length, color:dim?AC2[AB.indexOf(b)]+'30':AC2[AB.indexOf(b)]};
+  });
+  dch('ch-inv-a');
+  const cInvA=new Chart(document.getElementById('ch-inv-a'),{type:'bar',
+    data:{labels:AB,datasets:[{label:'Unidades',data:AC.map(r=>r.count),backgroundColor:AC.map(r=>r.color),borderRadius:4}]},
+    options:bOpts('Unidades')});
+  document.getElementById('ch-inv-a').onclick=e=>bucketChartClick(cInvA,e,AB);
+  CH['ch-inv-a']=cInvA;
+}
+
+function renderInvTable(inv){
+  const ibys=gb(inv,'segmento');
+  const sord=Object.keys(ibys).sort((a,b)=>sb2(ibys[b],'valor')-sb2(ibys[a],'valor'));
+  document.querySelector('#tbl-inv-s tbody').innerHTML=sord.map(s=>{
+    const rows=ibys[s];
+    const u=sb2(rows,'unidades'),v=sb2(rows,'valor');
+    const ar=rows.filter(r=>r.antiguedad>0);
+    const avg=ar.length?ar.reduce((s,r)=>s+r.antiguedad,0)/ar.length:0;
+    const mx=ar.length?Math.max(...ar.map(r=>r.antiguedad)):0;
+    const al=mx>360?`<span class="pill pr">⚠ +360d</span>`:mx>180?`<span class="pill pa">${mx}d</span>`:mx>90?`<span class="pill pb">${mx}d</span>`:`<span class="pill pg">OK</span>`;
+    return`<tr class="srow${activeSeg===s?' arow':''}" onclick="applyFilter('${s.replace(/'/g,"\\'")}')">
+      <td>${sb(s)}</td><td>${u}</td><td>${fmtC(v)}</td><td>${fmtC(u?v/u:0)}</td>
+      <td>${Math.round(avg)}</td><td>${mx}</td><td>${al}</td></tr>`;}).join('');
+}
+
+async function renderInvUnidades(inv){
+  const BKT_COLOR={'Por Vencer':'#10b981','1-30 días':'#3b82f6','31-60 días':'#f59e0b',
+    '61-90 días':'#f97316','91-120 días':'#ef4444','+120 días':'#7c3aed'};
+  // Sort by antigüedad desc, take top 25
+  const rows=[...inv].sort((a,b)=>b.antiguedad-a.antiguedad).slice(0,25);
+  const hint=document.getElementById('inv-uni-hint');
+  if(hint){
+    const parts=[];
+    if(activeSeg)parts.push(activeSeg);
+    if(activeBucket)parts.push(activeBucket);
+    hint.textContent=` · top 25${parts.length?' | '+parts.join(' + '):''}`;
+  }
+  const alerta=d=>{
+    if(d>360)return'<span style="color:#7c3aed;font-weight:700">⚠ +360d</span>';
+    if(d>180)return'<span style="color:#ef4444;font-weight:700">⚠ +180d</span>';
+    if(d>120)return'<span style="color:#f97316">▲ +120d</span>';
+    if(d>90) return'<span style="color:#f59e0b">▲ +90d</span>';
+    return'<span style="color:#94a3b8">—</span>';
+  };
+  await loadInvComments();
+  const activeVins = new Set(rows.map(r=>r.vin).filter(Boolean));
+  await pruneInvComments(activeVins);
+
+  document.querySelector('#tbl-inv-uni tbody').innerHTML=rows.length
+    ?rows.map((r,i)=>{
+      const saved = (_invComments[r.vin]?.comment||'').replace(/"/g,'&quot;');
+      return `<tr>
+        <td style="color:var(--text-muted);font-size:11px">${i+1}</td>
+        <td>${sb(r.segmento,true)}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:12px">${r.modelo}</td>
+        <td style="text-align:center">${r.anio||'—'}</td>
+        <td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#94a3b8">${r.vin||'—'}</td>
+        <td style="font-size:11px;color:#94a3b8">${r.lote||'—'}</td>
+        <td>${fmtC(r.valor)}</td>
+        <td><span style="font-weight:700;color:${BKT_COLOR[r.bucket]||'#fff'}">${r.antiguedad}</span></td>
+        <td>${alerta(r.antiguedad)}</td>
+        <td><input type="text" value="${saved}"
+          placeholder="Agregar comentario…"
+          data-vin="${r.vin}"
+          onchange="saveInvComment(this.dataset.vin, this.value)"
+          style="width:100%;background:var(--surface2);border:1px solid var(--border);
+                 color:var(--text);font-size:11px;padding:4px 8px;border-radius:5px;
+                 font-family:'Inter',sans-serif;outline:none"
+          onfocus="this.style.borderColor='#f59e0b'"
+          onblur="this.style.borderColor='var(--border)'"></td>
+      </tr>`;
+    }).join('')
+    :'<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:20px">Sin unidades para el filtro seleccionado</td></tr>';
+}
+
+function renderInvAgingBars(inv){
+  const AB=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
+  const AC2=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
+  const AC=AB.map(b=>inv.filter(r=>r.bucket===b).length);
+  const mx=Math.max(...AC,1);
+  document.getElementById('inv-aging-bars').innerHTML=AB.map((b,i)=>{
+    const ia=activeBucket===b;
+    const dim=activeBucket&&!ia;
+    return`<div class="abrow${ia?' abactive':''}" onclick="applyBucketFilter('${b}')">
+      <div class="ablabel" style="${dim?'opacity:.4':''}">${b}</div>
+      <div class="abtrack"><div class="abfill" style="width:${AC[i]/mx*100}%;background:${AC2[i]}${dim?'40':''};"></div></div>
+      <div class="abval" style="${dim?'opacity:.4':''}">${AC[i]} und</div></div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// FINANCIERO STATIC
+// ═══════════════════════════════════════════
+function buildEdo(p){
+  const f=window._fin; if(!f)return;
+  p=p??currentPer;
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+    'Julio','Agosto','Sep','Oct','Nov','Dic'];
+
+  // Periods to sum: mes=just p, acum=1..p
+  const isAccum = edoMode==='acum';
+  const pers = (p===0||isAccum) ? Array.from({length:p===0?f.maxPer:p},(_,i)=>i+1) : [p];
+  const modeLabel = p===0 ? 'Acumulado' : (isAccum ? `Acum. Ene–${NAMES[p-1]}` : NAMES[p-1]);
+
+  // Update title
+  const title=document.getElementById('edo-title');
+  if(title)title.textContent=`📊 Estado de Resultados — ${modeLabel}`;
+
+  // ── Sum helpers ──────────────────────────────────────────
+  const edoSeg = activeEdoSeg || null; // segment filter local to P&L
+  // sumCx never overrides seg — it filters exactly as passed
+  function sumCx(dataset, tipo, seg){
+    return dataset.filter(r => pers.includes(r.periodo) && r.ctaTipo===tipo && (!seg||r.seg===seg))
+                  .reduce((a,r) => a+r.importe, 0);
+  }
+  const cx     = fCx();
+  const cx25   = window._bdd25 ? fCx25()   : null;
+  const cxPpto = window._ppto  ? fCxPpto() : null;
+  const hasPpto = !!cxPpto;
+  const has25   = !!cx25;
+
+  const ALL_SALES_SEGS=['TRACTO','PASAJE','CARGA','SEMIREMOLQUES','REFACCIONES',
+    'TALLER','VEHICULOS SEMINUEVOS','FL360','VANES','COLLISION CENTER Y HYP'];
+  // When edoSeg is a sales segment, only that row shows; ADMINISTRACIÓN filtered is handled separately
+  const DISPLAY_SEGS = (edoSeg && edoSeg!=='ADMINISTRACIÓN') ? [edoSeg] : ALL_SALES_SEGS;
+  const SEG_LABEL={'TRACTO':'Tracto','PASAJE':'Pasaje','CARGA':'Carga',
+    'SEMIREMOLQUES':'Semiremolques','REFACCIONES':'Refacciones','TALLER':'Taller',
+    'VEHICULOS SEMINUEVOS':'Veh. Seminuevos','FL360':'FL360','VANES':'Vanes',
+    'COLLISION CENTER Y HYP':'Collision/HYP'};
+
+  // edoSeg applies to tipos 4 and 5 (revenue/COGS belong to a sales segment)
+  // For tipo 6: gv uses DISPLAY_SEGS (sales segments); gi is always ADMINISTRACIÓN
+  // For tipo 7: no segment breakdown
+  const segFilter4 = edoSeg && edoSeg!=='ADMINISTRACIÓN' ? edoSeg : null;
+  const segFilter5 = segFilter4;
+
+  // Real values
+  const rev   = -sumCx(cx,'4', segFilter4);
+  const cost  =  sumCx(cx,'5', segFilter5);
+  const gp    = rev - cost;
+  const gv    =  DISPLAY_SEGS.reduce((s,seg)=>s+sumCx(cx,'6',seg), 0);
+  const gi    =  sumCx(cx,'6','ADMINISTRACIÓN'); // always total admin, unaffected by edoSeg
+  const utMC  = gp - gv;
+  const utOp  = utMC - gi;
+  const otros = -sumCx(cx,'7');
+  const uait  = utOp + otros;
+
+  // Presupuesto
+  const ppRev  = cxPpto ? -sumCx(cxPpto,'4', segFilter4) : null;
+  const ppCost = cxPpto ?  sumCx(cxPpto,'5', segFilter5) : null;
+  const ppGv   = cxPpto ?  DISPLAY_SEGS.reduce((s,seg)=>s+sumCx(cxPpto,'6',seg),0) : null;
+  const ppGi   = cxPpto ?  sumCx(cxPpto,'6','ADMINISTRACIÓN') : null;
+  const ppGp   = ppRev!=null ? ppRev-ppCost : null;
+  const ppMC   = ppGp!=null  ? ppGp-ppGv   : null;
+  const ppOp   = ppMC!=null  ? ppMC-ppGi   : null;
+  const ppOtros= cxPpto ? -sumCx(cxPpto,'7') : null;
+  const ppUait = ppOp!=null&&ppOtros!=null ? ppOp+ppOtros : null;
+
+  // Año anterior
+  const aaRev  = cx25 ? -sumCx(cx25,'4', segFilter4) : null;
+  const aaCost = cx25 ?  sumCx(cx25,'5', segFilter5) : null;
+  const aaGv   = cx25 ?  DISPLAY_SEGS.reduce((s,seg)=>s+sumCx(cx25,'6',seg),0) : null;
+  const aaGi   = cx25 ?  sumCx(cx25,'6','ADMINISTRACIÓN') : null;
+  const aaGp   = aaRev!=null ? aaRev-aaCost : null;
+  const aaMC   = aaGp!=null  ? aaGp-aaGv   : null;
+  const aaOp   = aaMC!=null  ? aaMC-aaGi   : null;
+  const aaOtros= cx25 ? -sumCx(cx25,'7') : null;
+  const aaUait = aaOp!=null&&aaOtros!=null ? aaOp+aaOtros : null;
+
+  // ── Render helpers ─────────────────────────────────────
+  function varCell(real,comp){
+    if(comp==null)return'<td style="color:#475569">—</td><td style="color:#475569">—</td>';
+    const diff=real-comp;
+    const pct=comp?((diff/Math.abs(comp))*100):null;
+    const color=diff>=0?'#00d4aa':'#ef4444';
+    const diffFmt=diff<0?`<span style="color:${color}">(${fmtC(Math.abs(diff))})</span>`:`<span style="color:${color}">${fmtC(diff)}</span>`;
+    const pctFmt=pct!=null?`<span class="pill ${diff>=0?'pg':'pr'}">${diff>0?'+':''}${pct.toFixed(1)}%</span>`:'—';
+    return`<td>${diffFmt}</td><td>${pctFmt}</td>`;
+  }
+  function compCell(v,isUtil=false){
+    if(v==null)return'<td style="color:#475569">—</td>';
+    if(isUtil)return`<td>${fmtPL(v)}</td>`;
+    return`<td style="color:#94a3b8">${fmtC(v)}</td>`;
+  }
+  function row(label,real,ppto,aa25,opts={}){
+    const isUtil=opts.isUtil||false;
+    const isUnits=opts.fmtOverride==='units';
+    const indent=opts.indent?'padding-left:22px;':'';
+    const bold=opts.bold?'font-weight:700;':'';
+    const bg=opts.bg||'';
+    const labelColor=opts.labelColor||'';
+    function fmtV(v){
+      if(v==null)return'—';
+      if(isUnits)return Math.round(v).toLocaleString('es-MX');
+      return isUtil?fmtPL(v):fmtC(v);
+    }
+    function varCellU(rv,cv){
+      if(cv==null)return'<td style="color:#475569">—</td><td style="color:#475569">—</td>';
+      const diff=rv-cv;
+      const pct=cv?((diff/Math.abs(cv))*100):null;
+      const col=diff>=0?'#00d4aa':'#ef4444';
+      const dFmt=isUnits
+        ?`<span style="color:${col}">${diff>=0?'+':''}${Math.round(diff).toLocaleString('es-MX')}</span>`
+        :(diff<0?`<span style="color:${col}">(${fmtC(Math.abs(diff))})</span>`:`<span style="color:${col}">${fmtC(diff)}</span>`);
+      const pFmt=pct!=null?`<span class="pill ${diff>=0?'pg':'pr'}">${diff>0?'+':''}${pct.toFixed(1)}%</span>`:'—';
+      return`<td>${dFmt}</td><td>${pFmt}</td>`;
+    }
+    function compCellU(v){
+      if(v==null)return'<td style="color:#475569">—</td>';
+      if(isUnits)return`<td style="color:#94a3b8">${Math.round(v).toLocaleString('es-MX')}</td>`;
+      return isUtil?`<td>${fmtPL(v)}</td>`:`<td style="color:#94a3b8">${fmtC(v)}</td>`;
+    }
+    return`<tr style="${bg}">
+      <td class="tdn" style="${indent}${bold}${labelColor?'color:'+labelColor+';':''}">${label}</td>
+      <td>${fmtV(real)}</td>
+      ${compCellU(ppto)}${varCellU(real,ppto)}
+      ${compCellU(aa25)}${varCellU(real,aa25)}</tr>`;
+  }
+  function subtotal(label,real,ppto,aa25){
+    const bg=real>=0?'background:rgba(0,212,170,.07);border-top:2px solid rgba(0,212,170,.2)':'background:rgba(239,68,68,.05);border-top:2px solid rgba(239,68,68,.2)';
+    const lc=real>=0?'#00d4aa':'#ef4444';
+    return row(label,real,ppto,aa25,{isUtil:true,bold:true,bg,labelColor:lc});
+  }
+  function subtotalExp(label,real,ppto,aa25,color='#f97316'){
+    const bg=`background:rgba(249,115,22,.05);border-top:1px solid rgba(249,115,22,.1)`;
+    return row(label,real,ppto,aa25,{bold:true,bg,labelColor:color});
+  }
+  function sep(label){
+    const ncols = 1+(cxPpto?3:3)+(cx25?3:3); // always 7 extra cols
+    return`<tr style="background:rgba(0,212,170,.03)"><td colspan="${ncols}" style="padding:4px 12px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`;
+  }
+  function pctRow(label,num,den,ppNum,ppDen,aaNum,aaDen){
+    function p(n,d){return d?((n/d)*100).toFixed(1)+'%':'—';}
+    return`<tr style="font-style:italic"><td style="padding-left:22px;font-size:10px;color:var(--text-muted)">${label}</td>
+      <td style="font-size:10px;color:var(--text-muted)">${p(num,den)}</td>
+      <td style="font-size:10px;color:var(--text-muted)">${ppNum!=null?p(ppNum,ppDen):'—'}</td>
+      <td colspan="2"></td>
+      <td style="font-size:10px;color:var(--text-muted)">${aaNum!=null?p(aaNum,aaDen):'—'}</td>
+      <td colspan="2"></td></tr>`;
+  }
+
+  // ── Build table ─────────────────────────────────────────
+  // Unidades row — pulled from unidades sheets, same period + segment filter
+  const allUnidades = window._bdd?.unidades||[];
+  function getUndEdo(src, seg){
+    if(!src) return null;
+    const v = src.filter(r=>pers.includes(r.periodo)&&(!seg||r.segmento===seg))
+                  .reduce((a,r)=>a+r.unidades,0);
+    return v||null;
+  }
+  const undReal = getUndEdo(allUnidades, segFilter4);
+  const undPpto = hasPpto ? getUndEdo(window._ppto?.unidades||[], segFilter4) : null;
+  const und25   = has25   ? getUndEdo(window._bdd25?.unidades||[], segFilter4) : null;
+
+  let html='';
+  html+=sep('📦 Volumen');
+  html+=row('Unidades vendidas', undReal, undPpto, und25, {bold:true, labelColor:'#94a3b8', fmtOverride:'units'});
+
+  html+=sep('💰 Ingresos (cuentas 4)');
+  html+=subtotal('TOTAL INGRESOS',rev,ppRev,aaRev);
+
+  html+=sep('📦 Costo de Ventas (cuentas 5)');
+  html+=subtotalExp('TOTAL COSTO DE VENTAS',cost,ppCost,aaCost,'#f97316');
+  html+=subtotal('★ UTILIDAD BRUTA',gp,ppGp,aaGp);
+  html+=pctRow('% Margen Bruto',gp,rev,ppGp,ppRev,aaGp,aaRev);
+
+  html+=sep('🏷️ Gastos de Venta por Segmento (cuentas 6)');
+  DISPLAY_SEGS.forEach(seg=>{
+    const gvSeg  = sumCx(cx,'6',seg);
+    const ppGvSeg= cxPpto ? sumCx(cxPpto,'6',seg) : null;
+    const aaGvSeg= cx25   ? sumCx(cx25,'6',seg)   : null;
+    if(gvSeg||ppGvSeg||aaGvSeg) html+=row('  '+SEG_LABEL[seg],gvSeg,ppGvSeg,aaGvSeg,{indent:true,labelColor:'#94a3b8'});
+  });
+  html+=subtotalExp(edoSeg&&edoSeg!=='ADMINISTRACIÓN'?`GASTOS DE VENTA — ${SEG_LABEL[edoSeg]||edoSeg}`:'TOTAL GASTOS DE VENTA',gv,ppGv,aaGv,'#f59e0b');
+  html+=subtotal('★ UTILIDAD CONTRIBUCIÓN',utMC,ppMC,aaMC);
+  html+=pctRow('% Margen Contribución',utMC,rev,ppMC,ppRev,aaMC,aaRev);
+
+  // Plan Piso — filter by edoSeg when active
+  function sumPP(dataset, seg){
+    return dataset.filter(r=>pers.includes(r.periodo)&&r.cuenta&&r.cuenta.includes('Plan Piso')&&(!seg||r.seg===seg))
+                  .reduce((a,r)=>a+r.importe,0);
+  }
+  const ppPiso    = sumPP(cx,    segFilter4);
+  const ppPisoPpto= cxPpto ? sumPP(cxPpto, segFilter4) : null;
+  const ppPiso25  = cx25   ? sumPP(cx25,   segFilter4) : null;
+  if(ppPiso||ppPisoPpto||ppPiso25){
+    html+=sep('🚗 Plan Piso (informativo)');
+    html+=subtotalExp('Intereses Plan Piso',ppPiso,ppPisoPpto,ppPiso25,'#f59e0b');
+  }
+
+  // When filtering a sales segment: hide Admin / Otros / Op / UAIT
+  if(!edoSeg || edoSeg==='ADMINISTRACIÓN'){
+    html+=sep('🏢 Gastos Indirectos — Administración (cuentas 6)');
+    html+=subtotalExp('Gastos Administración',gi,ppGi,aaGi,'#f59e0b');
+    html+=subtotal('★ UTILIDAD OPERACIÓN',utOp,ppOp,aaOp);
+    html+=pctRow('% Margen Operación',utOp,rev,ppOp,ppRev,aaOp,aaRev);
+
+    html+=sep('📊 Otros neto (cuentas 7)');
+    html+=row('  Otros Ingresos / (Gastos)',otros,ppOtros,aaOtros,{indent:true,isUtil:true});
+    html+=subtotal('★ UTILIDAD ANTES DE IMPUESTOS',uait,ppUait,aaUait);
+    html+=pctRow('% UAIT / Ingresos',uait,rev,ppUait,ppRev,aaUait,aaRev);
+  }
+
+  // Update table header
+  const thead=document.querySelector('#tbl-edo thead tr');
+  if(thead) thead.innerHTML=`<th>Concepto</th><th>${modeLabel} Real</th>`+
+    (cxPpto?`<th>Presupuesto</th><th>Var Ppto $</th><th>% Var</th>`:'<th colspan="3" style="color:#475569">Presupuesto — carga archivo</th>')+
+    (cx25?`<th>2025</th><th>Var AA $</th><th>% Var</th>`:'<th colspan="3" style="color:#475569">2025 — carga archivo</th>');
+
+  document.querySelector('#tbl-edo tbody').innerHTML=html;
+
+  // ── Indicadores por Unidad (same filters, same period scope) ──
+  buildIndicadores({
+    modeLabel, pers, edoSeg, segFilter4,
+    cx, cx25, cxPpto,
+    ppPiso, ppPisoPpto, ppPiso25,
+    hasPpto:!!cxPpto, has25:!!cx25,
+  });
+}
+
+function setMargenSegView(view,btn){
+  margenSegView=view;
+  ['real','ppto','aa'].forEach(v=>{
+    const b=document.getElementById('ms-btn-'+v);
+    if(b)b.classList.toggle('active',v===view);
+  });
+  renderMargenSeg();
+}
+
+function renderMargenSeg(){
+  const f=window._fin; if(!f||!window._bdd)return;
+  const cx=fCx();
+  const maxPer=f.maxPer||2;
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+    'Julio','Agosto','Sep','Oct','Nov','Dic'];
+
+  // Respect currentPer + edoMode — same logic as buildEdo
+  const isAccum = edoMode==='acum';
+  const pers = (currentPer===0||isAccum)
+    ? Array.from({length:currentPer===0?maxPer:currentPer},(_,i)=>i+1)
+    : [currentPer];
+  const modeLabel = currentPer===0 ? 'Acumulado'
+    : (isAccum ? `Acum. Ene–${NAMES[currentPer-1]}` : NAMES[currentPer-1]);
+
+  const SEG_LABEL={'TRACTO':'Tracto','PASAJE':'Pasaje','CARGA':'Carga',
+    'SEMIREMOLQUES':'Semiremolques','REFACCIONES':'Refacciones','TALLER':'Taller',
+    'VEHICULOS SEMINUEVOS':'Veh. Seminuevos','FL360':'FL360','VANES':'Vanes',
+    'COLLISION CENTER Y HYP':'Collision/HYP'};
+  const SHOW_SEGS=Object.keys(SEG_LABEL);
+
+  // Units filtered by period
+  const undBySeg={};
+  window._bdd.unidades.filter(r=>pers.includes(r.periodo)).forEach(r=>{
+    const s=r.segmento.trim();
+    undBySeg[s]=(undBySeg[s]||0)+r.unidades;
+  });
+
+  // Sum ctaTipo for a segment, filtered to active periods
+  function segSum(tipo, seg){
+    let v = cx.filter(r=>r.ctaTipo===tipo && r.seg===seg && pers.includes(r.periodo))
+               .reduce((s,r)=>s+r.importe,0);
+    if(window._bal && pers.includes(3) && !cx.some(r=>r.periodo===3)){
+      v += window._bal.rows.filter(r=>r.ctaTipo===tipo && r.seg===seg && r.periodo===3)
+                           .reduce((s,r)=>s+r.importe,0);
+    }
+    return v;
+  }
+
+  // Secondary dataset from view toggle
+  const showPpto = margenSegView==='ppto' && window._ppto;
+  const showAA   = margenSegView==='aa'   && window._bdd25;
+  const cx2      = showPpto ? fCxPpto() : showAA ? fCx25() : null;
+  const viewLabel= showPpto ? 'Ppto' : showAA ? '2025' : null;
+
+  // Units for secondary dataset
+  const undBySeg2={};
+  if(cx2){
+    const src2 = showPpto?(window._ppto?.unidades||[]):(window._bdd25?.unidades||[]);
+    src2.filter(r=>pers.includes(r.periodo)).forEach(r=>{
+      const s=r.segmento.trim();
+      undBySeg2[s]=(undBySeg2[s]||0)+r.unidades;
+    });
+  }
+
+  const hint=document.getElementById('margen-seg-hint');
+  if(hint)hint.textContent=` · ${modeLabel}${viewLabel?' · vs '+viewLabel:''} | 4/5/6`;
+
+  // Compute one row for any cx source
+  function calcRow(s, src, uMap){
+    if(!src) return null;
+    const rev  = -src.filter(r=>r.ctaTipo==='4'&&r.seg===s&&pers.includes(r.periodo)).reduce((a,r)=>a+r.importe,0);
+    const cost =  src.filter(r=>r.ctaTipo==='5'&&r.seg===s&&pers.includes(r.periodo)).reduce((a,r)=>a+r.importe,0);
+    const gv   =  src.filter(r=>r.ctaTipo==='6'&&r.seg===s&&pers.includes(r.periodo)).reduce((a,r)=>a+r.importe,0);
+    const pp   =  src.filter(r=>r.seg===s&&pers.includes(r.periodo)&&r.cuenta&&r.cuenta.includes('Plan Piso')).reduce((a,r)=>a+r.importe,0);
+    return{und:uMap[s]||0, rev, cost, ub:rev-cost, gv, pp, mc:rev-cost-gv};
+  }
+
+  const tableRows=SHOW_SEGS.map(s=>{
+    const r  = calcRow(s, cx,  undBySeg);
+    const r2 = cx2 ? calcRow(s, cx2, undBySeg2) : null;
+    return{s, ...r, r2};
+  }).filter(r=>(r.rev>0||r.und>0)||(r.r2&&(r.r2.rev>0||r.r2.und>0))).sort((a,b)=>b.rev-a.rev);
+
+  function totals(rows, key){
+    return rows.reduce((a,r)=>{
+      const d=r[key]; if(!d)return a;
+      return{und:a.und+d.und,rev:a.rev+d.rev,cost:a.cost+d.cost,
+             ub:a.ub+d.ub,gv:a.gv+d.gv,pp:a.pp+d.pp,mc:a.mc+d.mc};
+    },{und:0,rev:0,cost:0,ub:0,gv:0,pp:0,mc:0});
+  }
+  const realTot = tableRows.reduce((a,r)=>({und:a.und+r.und,rev:a.rev+r.rev,cost:a.cost+r.cost,ub:a.ub+r.ub,gv:a.gv+r.gv,pp:a.pp+r.pp,mc:a.mc+r.mc}),{und:0,rev:0,cost:0,ub:0,gv:0,pp:0,mc:0});
+  const compTot = cx2 ? totals(tableRows,'r2') : null;
+
+  // Formatters
+  function pf(n,d){return d?((n/d)*100).toFixed(1)+'%':'—';}
+  function colored(v){return`<span style="color:${v>=0?'var(--green)':'var(--red)'};font-weight:700">${fmtC(v)}</span>`;}
+  function pill(v,d){return`<span class="pill ${v>=0?'pg':'pr'}">${pf(v,d)}</span>`;}
+  function varTd(rv,cv){
+    if(cv==null||rv==null)return'<td style="color:#475569">—</td><td style="color:#475569">—</td>';
+    const diff=rv-cv, pct=cv?((diff/Math.abs(cv))*100):null;
+    const cl=diff>=0?'#00d4aa':'#ef4444';
+    const dF=diff<0?`<span style="color:${cl}">(${fmtC(Math.abs(diff))})</span>`:`<span style="color:${cl}">${fmtC(diff)}</span>`;
+    const pF=pct!=null?`<span class="pill ${diff>=0?'pg':'pr'}">${diff>0?'+':''}${pct.toFixed(1)}%</span>`:'—';
+    return`<td>${dF}</td><td>${pF}</td>`;
+  }
+  function undVarTd(rv,cv){
+    if(cv==null||rv==null)return'<td>—</td>';
+    const diff=rv-cv;
+    return`<td style="text-align:right;color:${diff>=0?'#00d4aa':'#ef4444'}">${diff>0?'+':''}${Math.round(diff).toLocaleString('es-MX')}</td>`;
+  }
+
+  // Dynamic header
+  const hasComp=!!cx2, cl=viewLabel||'';
+  let thHtml=`<tr><th>Segmento</th><th style="text-align:right">Und. Real</th>`;
+  if(hasComp) thHtml+=`<th style="text-align:right">Und. ${cl}</th><th style="text-align:right">Δ Und</th>`;
+  thHtml+=`<th>Ingresos Real</th>`;
+  if(hasComp) thHtml+=`<th>Ing. ${cl}</th><th>Var $ Ing</th><th>Var % Ing</th>`;
+  thHtml+=`<th>Costo Real</th><th>Ut. Bruta Real</th><th>% Mg.B</th>`;
+  if(hasComp) thHtml+=`<th>UB ${cl}</th><th>Var $ UB</th><th>Var % UB</th>`;
+  thHtml+=`<th>Gastos Real</th>`;
+  if(hasComp) thHtml+=`<th>Gto ${cl}</th><th>Var $ Gto</th><th>Var % Gto</th>`;
+  thHtml+=`<th>Plan Piso</th><th>MC Real</th><th>% Mg.C</th>`;
+  if(hasComp) thHtml+=`<th>MC ${cl}</th><th>Var $ MC</th><th>Var % MC</th>`;
+  thHtml+=`</tr>`;
+  document.querySelector('#tbl-margen-seg thead').innerHTML=thHtml;
+
+  function rowHtml(r, r2, isTotal){
+    const nameCell=isTotal?`<td style="font-weight:700;color:#fff">TOTAL</td>`:`<td>${sb(r.s,true)}</td>`;
+    const style=isTotal?'border-top:2px solid rgba(0,212,170,.25);font-weight:700;background:rgba(0,212,170,.05)':'';
+    let h=`<tr style="${style}">${nameCell}`;
+    h+=`<td style="text-align:right">${r.und||'—'}</td>`;
+    if(hasComp){ h+=`<td style="text-align:right;color:#94a3b8">${r2?.und||'—'}</td>`; h+=undVarTd(r.und,r2?.und); }
+    h+=`<td>${fmtC(r.rev)}</td>`;
+    if(hasComp){ h+=`<td style="color:#94a3b8">${fmtC(r2?.rev)}</td>`; h+=varTd(r.rev,r2?.rev); }
+    h+=`<td>${fmtC(r.cost)}</td>`;
+    h+=`<td>${colored(r.ub)}</td><td>${pill(r.ub,r.rev)}</td>`;
+    if(hasComp){ h+=`<td style="color:#94a3b8">${colored(r2?.ub??0)}</td>`; h+=varTd(r.ub,r2?.ub); }
+    h+=`<td>${fmtC(r.gv)}</td>`;
+    if(hasComp){ h+=`<td style="color:#94a3b8">${fmtC(r2?.gv)}</td>`; h+=varTd(r.gv,r2?.gv); }
+    h+=`<td style="color:#f59e0b">${r.pp?fmtC(r.pp):'—'}</td>`;
+    h+=`<td>${colored(r.mc)}</td><td>${pill(r.mc,r.rev)}</td>`;
+    if(hasComp){ h+=`<td style="color:#94a3b8">${colored(r2?.mc??0)}</td>`; h+=varTd(r.mc,r2?.mc); }
+    h+=`</tr>`;
+    return h;
+  }
+
+  document.querySelector('#tbl-margen-seg tbody').innerHTML=
+    tableRows.map(r=>rowHtml(r,r.r2,false)).join('')+rowHtml(realTot,compTot,true);
+
+}  // renderMargenSeg
+
+function buildIndicadores({modeLabel,pers,edoSeg,segFilter4,cx,cx25,cxPpto,ppPiso,ppPisoPpto,ppPiso25,hasPpto,has25}){
+  const tbl = document.getElementById('tbl-indicadores');
+  if(!tbl) return;
+
+  const hint = document.getElementById('ind-seg-hint');
+  if(hint) hint.textContent = edoSeg ? ` · ${edoSeg}` : '';
+  const title = document.getElementById('ind-title');
+  if(title) title.textContent = `📊 Indicadores por Unidad — ${modeLabel}`;
+
+  // Column header — mirrors tbl-edo structure
+  const thHead = tbl.querySelector('thead tr');
+  if(thHead) thHead.innerHTML = `<th>Indicador</th><th style="text-align:right">${modeLabel} Real</th>`+
+    (hasPpto?`<th style="text-align:right">Presupuesto</th><th style="text-align:right">Var Ppto</th><th style="text-align:right">% Var</th>`
+            :`<th colspan="3" style="color:#475569">Presupuesto — carga archivo</th>`)+
+    (has25?`<th style="text-align:right">2025</th><th style="text-align:right">Var AA</th><th style="text-align:right">% Var</th>`
+          :`<th colspan="3" style="color:#475569">2025 — carga archivo</th>`);
+
+  // Gather units from unidades sheet, filtered by edoSeg
+  const allUnidades = window._bdd?.unidades||[];
+  function getUnits(seg){
+    return allUnidades.filter(r=>pers.includes(r.periodo)&&(!seg||r.segmento===seg))
+                      .reduce((a,r)=>a+r.unidades,0);
+  }
+  const und    = getUnits(segFilter4);
+  // 2025 units from BDD 2025 unidades sheet
+  const und25  = (window._bdd25?.unidades||[]).filter(r=>pers.includes(r.periodo)&&(!segFilter4||r.segmento===segFilter4)).reduce((a,r)=>a+r.unidades,0)||null;
+  // Presupuesto units from parsePpto's unidades array (Cantidad planificada)
+  const undPpto = hasPpto
+    ? ((window._ppto?.unidades||[]).filter(r=>pers.includes(r.periodo)&&(!segFilter4||r.segmento===segFilter4)).reduce((a,r)=>a+r.unidades,0)||null)
+    : null;
+
+  // Compute revenue/cost/gv sums (already available from buildEdo context via params is complex,
+  // so we recompute cleanly here with same filters)
+  function sum(dataset, tipo, seg){
+    if(!dataset||!dataset.length) return 0;
+    return dataset.filter(r=>pers.includes(r.periodo)&&r.ctaTipo===tipo&&(!seg||r.seg===seg))
+                  .reduce((a,r)=>a+r.importe,0);
+  }
+  const ALL_SS=['TRACTO','PASAJE','CARGA','SEMIREMOLQUES','REFACCIONES',
+    'TALLER','VEHICULOS SEMINUEVOS','FL360','VANES','COLLISION CENTER Y HYP'];
+  const DS = (segFilter4) ? [segFilter4] : ALL_SS;
+
+  function totals(dataset){
+    if(!dataset) return null;
+    const rev  = -sum(dataset,'4',segFilter4);
+    const cost =  sum(dataset,'5',segFilter4);
+    const gv   = DS.reduce((s,seg)=>s+sum(dataset,'6',seg),0);
+    const ipp  = dataset.filter(r=>pers.includes(r.periodo)&&r.cuenta&&r.cuenta.includes('Plan Piso')&&(!segFilter4||r.seg===segFilter4)).reduce((a,r)=>a+r.importe,0);
+    const ub   = rev-cost;
+    const mc   = ub-gv;
+    return{rev,cost,gv,ipp,ub,mc};
+  }
+
+  const real = totals(cx);
+  const ppto = hasPpto ? totals(cxPpto) : null;
+  const aa   = has25   ? totals(cx25)   : null;
+
+  // Per-unit helpers
+  function ppu(t,u){ return u ? t/u : null; }
+  function pct(t,d){ return d ? t/d : null; }
+
+  // Format helpers — values are in pesos per unit (not millions)
+  function fK(v){ if(v==null||!isFinite(v))return'—'; const s=(v<0)?'-':''; return s+'$'+Math.abs(Math.round(v/1000)).toLocaleString('es-MX')+'K'; }
+  function fP(v){ if(v==null||!isFinite(v))return'—'; return(v*100).toFixed(1)+'%'; }
+  function fU(v){ if(v==null||!isFinite(v))return'—'; return Math.round(v).toLocaleString('es-MX'); }
+
+  function varCell(real,comp,fmt){
+    if(comp==null)return'<td style="color:#475569">—</td><td style="color:#475569">—</td>';
+    const diff=real-comp;
+    const pctV=comp?((diff/Math.abs(comp))*100):null;
+    const col=diff>=0?'#00d4aa':'#ef4444';
+    const dF = fmt==='pct'
+      ? `<span style="color:${col}">${diff>0?'+':''}${(diff*100).toFixed(1)}pp</span>`
+      : fmt==='units'
+        ? `<span style="color:${col}">${diff>0?'+':''}${Math.round(diff).toLocaleString('es-MX')}</span>`
+        : `<span style="color:${col}">${diff<0?'(':''}${fK(Math.abs(diff))}${diff<0?')':''}</span>`;
+    const pF=pctV!=null?`<span class="pill ${diff>=0?'pg':'pr'}">${diff>0?'+':''}${pctV.toFixed(1)}%</span>`:'—';
+    return`<td>${dF}</td><td>${pF}</td>`;
+  }
+  function compCell(v,fmt){
+    if(v==null) return'<td style="color:#475569">—</td>';
+    const s = fmt==='pct'?fP(v):fmt==='units'?fU(v):fK(v);
+    return`<td style="text-align:right;color:#94a3b8">${s}</td>`;
+  }
+
+  // Build a row: label | real | [ppto|var|%] | [aa|var|%]
+  function mkRow(label, rVal, pVal, aVal, fmt='money', opts={}){
+    const col = opts.color||'';
+    const bold = opts.bold?'font-weight:700;':'';
+    const bg   = opts.bg||'';
+    const colored = (v,f)=>{
+      if(v==null||!isFinite(v))return'—';
+      const s=f==='pct'?fP(v):f==='units'?fU(v):fK(v);
+      if(opts.utilColor) return`<span style="color:${v>=0?'#00d4aa':'#ef4444'};${bold}">${v<0&&f!=='pct'?'('+fK(Math.abs(v))+')':s}</span>`;
+      return`<span style="color:${col||'#e2e8f0'};${bold}">${s}</span>`;
+    };
+    return`<tr style="${bg}">
+      <td style="${bold}${col?'color:'+col+';':''}">${label}</td>
+      <td style="text-align:right">${colored(rVal,fmt)}</td>
+      ${compCell(pVal,fmt)}${varCell(rVal??0,pVal,fmt)}
+      ${compCell(aVal,fmt)}${varCell(rVal??0,aVal,fmt)}</tr>`;
+  }
+  function sepRow(label){
+    return`<tr style="background:rgba(0,212,170,.03)"><td colspan="8" style="padding:4px 12px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`;
+  }
+  function subtotalRow(label,rVal,pVal,aVal,fmt='money'){
+    const bg=rVal>=0?'background:rgba(0,212,170,.07);border-top:2px solid rgba(0,212,170,.2)':'background:rgba(239,68,68,.05);border-top:2px solid rgba(239,68,68,.2)';
+    return mkRow(label,rVal,pVal,aVal,fmt,{bold:true,utilColor:true,bg});
+  }
+
+  let html='';
+
+  // ─ Volumen (unidades) ────────────────────────────────────
+  html+=sepRow('📦 Volumen');
+  html+=mkRow('Unidades vendidas', und, undPpto, und25, 'units', {bold:true});
+
+  // ─ Precio ────────────────────────────────────────────────
+  html+=sepRow('💰 Precio por Unidad');
+  html+=mkRow('Precio promedio / Und', ppu(real?.rev,und), ppu(ppto?.rev,undPpto), ppu(aa?.rev,und25));
+
+  // ─ Ut. Bruta ─────────────────────────────────────────────
+  html+=sepRow('📊 Rentabilidad por Unidad');
+  html+=mkRow('Ut. Bruta / Und', ppu(real?.ub,und), ppu(ppto?.ub,undPpto), ppu(aa?.ub,und25), 'money', {utilColor:true});
+  html+=mkRow('% Margen Bruto', pct(real?.ub,real?.rev), pct(ppto?.ub,ppto?.rev), pct(aa?.ub,aa?.rev), 'pct');
+
+  // ─ Gastos ────────────────────────────────────────────────
+  html+=sepRow('🏷️ Gastos de Venta por Unidad');
+  html+=mkRow('Gasto de Venta / Und', ppu(real?.gv,und), ppu(ppto?.gv,undPpto), ppu(aa?.gv,und25), 'money', {color:'#f59e0b'});
+
+  // ─ Contribución ──────────────────────────────────────────
+  html+=subtotalRow('★ Mg. Contribución / Und', ppu(real?.mc,und), ppu(ppto?.mc,undPpto), ppu(aa?.mc,und25));
+  html+=mkRow('% Mg. Contribución', pct(real?.mc,real?.rev), pct(ppto?.mc,ppto?.rev), pct(aa?.mc,aa?.rev), 'pct');
+
+  // ─ IPP ───────────────────────────────────────────────────
+  const ipp25 = has25 ? aa?.ipp : null;
+  if(real?.ipp||ppPisoPpto||ipp25){
+    html+=sepRow('🚗 IPP — Intereses Plan Piso por Unidad');
+    html+=mkRow('IPP / Und (informativo)', ppu(real?.ipp,und), ppu(ppto?.ipp||ppPisoPpto,undPpto), ppu(ipp25,und25), 'money', {color:'#f59e0b'});
+    html+=subtotalRow('★ Ut. neta de IPP / Und', ppu((real?.mc||0)-(real?.ipp||0),und), ppu((ppto?.mc||0)-(ppto?.ipp||ppPisoPpto||0),undPpto), ppu((aa?.mc||0)-(ipp25||0),und25));
+  }
+
+  tbl.querySelector('tbody').innerHTML=html;
+}
+
+
+function renderFinKPIs(p){
+  const f=window._fin; if(!f)return;
+  const r  = p===0 ? f.revP.reduce((s,v)=>s+v,0)  : f.revP[(p-1)]||0;
+  const co = p===0 ? f.costP.reduce((s,v)=>s+v,0) : f.costP[(p-1)]||0;
+  const gv = p===0 ? f.gtoP.reduce((s,v)=>s+v,0)  : f.gtoP[(p-1)]||0;
+  const gp=r-co; const mc=gp-gv;
+  document.getElementById('kpi-fin').innerHTML=`
+    <div class="kcard ct"><div class="klabel">Ingresos (4)</div><div class="kval">${fmtM(r)}</div></div>
+    <div class="kcard cb"><div class="klabel">Costo Ventas (5)</div><div class="kval">${fmtM(co)}</div><div class="ksub">${pct(co,r)}</div></div>
+    <div class="kcard cg"><div class="klabel">Ut. Bruta</div><div class="kval">${fmtM(gp)}</div><div class="ksub">Margen ${pct(gp,r)}</div></div>
+    <div class="kcard ca"><div class="klabel">Gastos (6)</div><div class="kval">${fmtM(gv)}</div><div class="ksub">${pct(gv,r)}</div></div>
+    <div class="kcard cr"><div class="klabel">Mg. Contribución</div><div class="kval">${fmtM(mc)}</div><div class="ksub">${pct(mc,r)}</div></div>
+  `;
+}
+
+function buildFinCharts(p){
+  const f=window._fin; if(!f)return;
+  const cx=window._bdd.cuentas;
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Sep','Oct','Nov','Dic'];
+  const PALS=['rgba(59,130,246,.75)','rgba(0,212,170,.75)','rgba(245,158,11,.75)'];
+  const SEGS=['TRACTO','PASAJE','CARGA','SEMIREMOLQUES','REFACCIONES',
+    'TALLER','VEHICULOS SEMINUEVOS','FL360','VANES','COLLISION CENTER Y HYP'];
+  const SEG_SHORT=['Tracto','Pasaje','Carga','Semi','Refacc','Taller','Semi-Nvos','FL360','Vanes','CC/HYP'];
+
+  // Ingresos por segmento (cuentas 4)
+  function revSeg(seg,per){
+    let v=-cx.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&(per===0||r.periodo===per)).reduce((s,r)=>s+r.importe,0);
+    if(window._bal && per===3) v+=-window._bal.rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&r.periodo===3).reduce((s,r)=>s+r.importe,0);
+    return v/1e6;
+  }
+
+  dch('ch-ing2');
+  const showPers=p===0?f.PERS:[p];
+  const ingDatasets=showPers.map((per,i)=>({
+    label:NAMES[per-1],
+    data:SEGS.map(s=>revSeg(s,per)),
+    backgroundColor:PALS[i]||PALS[0],borderRadius:4
+  }));
+  CH['ch-ing2']=new Chart(document.getElementById('ch-ing2'),{type:'bar',
+    data:{labels:SEG_SHORT,datasets:ingDatasets},
+    options:{...bOpts('M MXN',true),plugins:{...bOpts('M MXN',true).plugins,
+      legend:{display:p===0,labels:{color:'#94a3b8',font:{size:9}}}}}});
+
+  // Costo vs Gasto por segmento
+  function costSeg(seg,per){
+    let v=cx.filter(r=>r.ctaTipo==='5'&&r.seg===seg&&(per===0||r.periodo===per)).reduce((s,r)=>s+r.importe,0);
+    if(window._bal && per>=3) v+=window._bal.rows.filter(r=>r.ctaTipo==='5'&&r.seg===seg&&r.periodo===per).reduce((s,r)=>s+r.importe,0);
+    return v/1e6;
+  }
+  dch('ch-cost');
+  CH['ch-cost']=new Chart(document.getElementById('ch-cost'),{type:'bar',
+    data:{labels:SEG_SHORT,datasets:[
+      {label:'Costo (5)',data:SEGS.map(s=>costSeg(s,p)),backgroundColor:'#ef4444aa',borderRadius:4},
+      {label:'Gasto (6)',data:SEGS.map(s=>(f.gvBySeg[s]?.['p'+p]||0)/1e6),backgroundColor:'#f59e0baa',borderRadius:4}
+    ]},
+    options:{...bOpts('M MXN',true),plugins:{...bOpts('M MXN',true).plugins,
+      legend:{display:true,labels:{color:'#94a3b8',font:{size:9}}}}}});
+}
+
+// ═══════════════════════════════════════════
+// CHART HELPERS
+// ═══════════════════════════════════════════
+function chartClick(chart,event,labels){
+  const pts=chart.getElementsAtEventForMode(event,'nearest',{intersect:true},false);
+  if(!pts.length){clearFilter();return;}
+  applyFilter(labels[pts[0].index]);
+}
+function bucketChartClick(chart,event,labels){
+  const pts=chart.getElementsAtEventForMode(event,'nearest',{intersect:true},false);
+  if(!pts.length){clearBktFilter();return;}
+  applyBucketFilter(labels[pts[0].index]);
+}
+function bOpts(label,horiz=false){
+  return{responsive:true,maintainAspectRatio:false,indexAxis:horiz?'y':'x',
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.raw.toLocaleString('es-MX',{minimumFractionDigits:1})} ${label}`}}},
+    scales:{x:{grid:{color:'rgba(255,255,255,0.03)'},ticks:{color:'#64748b',font:{size:10}}},y:{grid:{color:'rgba(255,255,255,0.03)'},ticks:{color:'#64748b',font:{size:10}}}}};
+}
+function dOpts(){return{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:9},padding:8,boxWidth:8}},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fmtC(ctx.raw)} (${((ctx.raw/ctx.dataset.data.reduce((a,b)=>a+b,0))*100).toFixed(1)}%)`}}}};}
+
+// ═══════════════════════════════════════════
+// NAV
+// ═══════════════════════════════════════════
+function nuevaCarga(){
+  Object.keys(F).forEach(k=>F[k]=null);
+  window._bdd25=null; window._ppto=null;
+  ['inv','ant','bdd','bal','bdd25','ppto'].forEach(id=>{
+    const card=document.getElementById('card-'+id);
+    if(card){card.classList.remove('loaded');card.querySelectorAll('input[type=file]').forEach(i=>i.value='');}
+    const st=document.getElementById('status-'+id);
+    const optIds={'bal':'Opcional — mejora razones','bdd25':'Opcional — habilita vs 2025','ppto':'Opcional — habilita vs Ppto'};
+    if(st)st.textContent=optIds[id]||'Esperando…';
+  });
+  document.getElementById('btn-process').classList.remove('ready');
+  document.getElementById('dashboard').style.display='none';
+  document.getElementById('upload-section').style.display='flex';
+  document.getElementById('filter-bar').style.display='none';
+  document.getElementById('btn-reload').style.display='none';
+  document.getElementById('report-date').textContent='Sin datos';
+  activeSeg=null; activeBucket=null; currentPer=1;
+  document.querySelectorAll('.pbtn').forEach((b,i)=>b.classList.toggle('active',i===0));
+  document.querySelectorAll('.tcontent').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-resumen').classList.add('active');
+  document.querySelectorAll('.tbtn').forEach((b,i)=>b.classList.toggle('active',i===0));
+}
+
+function showTab(tab,btn){
+  document.querySelectorAll('.tcontent').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tbtn').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  btn.classList.add('active');
+  if(tab==='usuarios') renderUsersTable();
+}
+function buildEdoSegCombo(){
+  const sel=document.getElementById('edo-seg-select');
+  if(!sel)return;
+  const SEGS=['TRACTO','PASAJE','CARGA','SEMIREMOLQUES','REFACCIONES',
+    'TALLER','VEHICULOS SEMINUEVOS','FL360','VANES','COLLISION CENTER Y HYP','ADMINISTRACIÓN'];
+  const cx=fCx();
+  const available=SEGS.filter(s=>cx.some(r=>r.seg===s));
+  const cur=activeEdoSeg;
+  sel.innerHTML='<option value="">🏢 Todos los segmentos</option>'+
+    available.map(s=>`<option value="${s}" ${cur===s?'selected':''}>${s}</option>`).join('');
+}
+function setEdoSeg(val){
+  activeEdoSeg=val||null;
+  buildEdo(currentPer);
+  renderMargenSeg();
+}
+function setEdoMode(mode,btn){
+  edoMode=mode;
+  document.getElementById('edo-btn-mes')?.classList.remove('active');
+  document.getElementById('edo-btn-acum')?.classList.remove('active');
+  btn.classList.add('active');
+  buildEdo(currentPer);
+  renderMargenSeg();
+}
+function setPeriodo(p,btn){
+  currentPer=p;
+  document.querySelectorAll('#ptoggle-wrap .pbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderFinKPIs(p);
+  buildFinCharts(p);
+  buildEdo(p);
+  renderMargenSeg();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FORECAST — State
+// ═══════════════════════════════════════════════════════════════
+const FC = {ventas:null, banorte:null, santander:null, bbva:null, daimler:null};
+const DIAS_MES = [31,28,31,30,31,30,31,31,30,31,30,31];
+
+function handleFcFile(type, input){
+  const file = input.files[0]; if(!file) return;
+  fcStatus(`⏳ Leyendo ${file.name.substring(0,25)}…`, 'var(--text-dim)');
+  const reader = new FileReader();
+  reader.onload = e => {
+    FC[type] = new Uint8Array(e.target.result);
+    console.log('[IPP loaded]', type, 'size='+FC[type].length, 'hayIPP=', !!(FC.banorte||FC.santander||FC.bbva||FC.daimler));
+    const stEl = document.getElementById('fc-st-'+type);
+    if(stEl) stEl.textContent = '✓ ' + file.name.substring(0,20);
+    const btnEl = document.getElementById('fc-btn-'+type);
+    if(btnEl) btnEl.classList.add('loaded');
+    runForecast();
+  };
+  reader.onerror = () => fcStatus(`❌ Error leyendo ${file.name}`, '#ef4444');
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── Parse Ventas file ─────────────────────────────────────────
+// Format: Segmento | Distribuidora | Referencia | Cliente | Modelo | Vendedor | Precio Unitario | Utilidad Bruta | %
+function parseFcVentas(data){
+  const wb = XLSX.read(data, {type:'array'});
+  const rawArr = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:null});
+  if(rawArr.length < 2) return [];
+
+  // Find header row: the row that contains 'Segmento' and 'Precio Unitario'
+  let hdrIdx = 0;
+  for(let i = 0; i < Math.min(rawArr.length, 5); i++){
+    const row = rawArr[i];
+    if(row && row.some(v => String(v||'').toLowerCase().includes('segmento'))){
+      hdrIdx = i; break;
+    }
+  }
+  const hdr = rawArr[hdrIdx].map(v => String(v||'').trim().toLowerCase());
+  const iSeg   = hdr.findIndex(h => h === 'segmento');
+  const iPrecio= hdr.findIndex(h => h.includes('precio unitario'));
+  const iUB    = hdr.findIndex(h => h.includes('utilidad bruta'));
+  const iMod   = hdr.findIndex(h => h === 'modelo');
+  const iDist  = hdr.findIndex(h => h === 'distribuidora');
+
+  console.log('[parseFcVentas] hdrIdx='+hdrIdx+' iSeg='+iSeg+' iPrecio='+iPrecio+' iUB='+iUB);
+
+  const result = [];
+  rawArr.slice(hdrIdx + 1).forEach(row => {
+    if(!row) return;
+    const seg    = String(row[iSeg]||'').trim().toUpperCase();
+    const precio = +(row[iPrecio]||0);
+    const ub     = +(row[iUB]||0);
+    const modelo = String(row[iMod]||'');
+    const dist   = +(row[iDist]||0);
+    if(seg && precio > 0) result.push({seg, precio, ub, costo: precio - ub, modelo, dist});
+  });
+  return result;
+}
+
+// ─── Parse IPP Banorte ─────────────────────────────────────────
+// Cols: AGENCIA | CREDITO | VIN | INTERES
+// ─── Shared: normalize seg/dist keys ─────────────────────────
+function normSeg(v){ return String(v||'').trim().toUpperCase(); }
+function normDist(v){ return String(v||'').trim(); }
+
+// ─── Shared: accumulate into bySeg map ────────────────────────
+// bySeg[seg][dist] = {saldo, interes, count}
+function ippAccum(map, seg, dist, saldo, interes){
+  const s = normSeg(seg)||'SIN SEGMENTO';
+  const d = normDist(dist)||'SIN DIST';
+  if(!map[s]) map[s]={};
+  if(!map[s][d]) map[s][d]={saldo:0,interes:0,count:0};
+  map[s][d].saldo   += saldo;
+  map[s][d].interes += interes;
+  map[s][d].count++;
+}
+
+// ─── Flatten bySeg map → summary rows ─────────────────────────
+function ippFlatten(banco, map){
+  const rows=[];
+  let total=0, saldo=0, count=0;
+  Object.entries(map).forEach(([seg,dists])=>{
+    Object.entries(dists).forEach(([dist,d])=>{
+      rows.push({banco,seg,dist,saldo:d.saldo,interes:d.interes,count:d.count});
+      total+=d.interes; saldo+=d.saldo; count+=d.count;
+    });
+  });
+  return {banco, rows, total, saldo, count};
+}
+
+// ─── Parse IPP Banorte ─────────────────────────────────────────
+// Cols: AGENCIA | CREDITO | VIN | Distribuidora | Segmento | INTERES
+// INTERES already calculated — use directly
+function parseFcBanorte(data, _tasa, _dias){
+  const wb   = XLSX.read(data, {type:'array'});
+  const raw  = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:null});
+  const hdr  = raw[0].map(h=>String(h||'').trim().toUpperCase());
+  const iInt = hdr.findIndex(h=>h==='INTERES'||h==='INTERÉS'||h==='INTERESES');
+  const iDist= hdr.findIndex(h=>h==='DISTRIBUIDORA');
+  const iSeg = hdr.findIndex(h=>h==='SEGMENTO');
+  const map={};
+  raw.slice(1).forEach(row=>{
+    if(!row||!row[iInt]) return;
+    const interes = +(row[iInt]||0);
+    if(interes<=0) return;
+    ippAccum(map, row[iSeg], row[iDist], 0, interes);
+  });
+  return ippFlatten('Banorte', map);
+}
+
+// ─── Parse IPP Santander ───────────────────────────────────────
+// Cols: MODELO|AÑO|COLOR|VIN|REFERENCIA|Segmento|Distribuidora|...|Valor a financiar|...|tasa|...|dias financiados|intereses
+// Recalculate: Valor a financiar × (tasa_global/365) × diasMes
+function parseFcSantander(data, tasaAnual, diasMes){
+  const wb   = XLSX.read(data, {type:'array'});
+  const raw  = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:null});
+  const hdr  = raw[0].map(h=>String(h||'').replace(/\n/g,' ').trim().toLowerCase());
+  const iSaldo= hdr.findIndex(h=>h.includes('valor a financiar'));
+  const iDist = hdr.findIndex(h=>h==='distribuidora');
+  const iSeg  = hdr.findIndex(h=>h==='segmento');
+  const tasaDiaria = tasaAnual/100/365;
+  const map={};
+  raw.slice(1).forEach(row=>{
+    if(!row) return;
+    const saldo = +(row[iSaldo]||0);
+    if(saldo<=0) return;
+    const interes = saldo * tasaDiaria * diasMes;
+    ippAccum(map, row[iSeg], row[iDist], saldo, interes);
+  });
+  return ippFlatten('Santander', map);
+}
+
+// ─── Parse IPP BBVA ────────────────────────────────────────────
+// Row 0 = main header (UNIDAD|MODELO|…|Distribuidora|Segmento|…|IMPORTE|…)
+// Row 1 = sub-header (second line with 'AL DÍA' etc.) → skip
+// IMPORTE = saldo; recalculate interest
+function parseFcBBVA(data, tasaAnual, diasMes){
+  const wb   = XLSX.read(data, {type:'array'});
+  const raw  = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:null});
+  // Row 0 is the real column header
+  const hdr0 = raw[0].map(h=>String(h||'').trim().toUpperCase());
+  // Row 1 may be a sub-header row — skip rows where VIN column is null
+  const iVIN  = hdr0.findIndex(h=>h==='VIN');
+  const iImp  = hdr0.findIndex(h=>h==='IMPORTE');
+  const iDist = hdr0.findIndex(h=>h==='DISTRIBUIDORA');
+  const iSeg  = hdr0.findIndex(h=>h==='SEGMENTO');
+  const tasaDiaria = tasaAnual/100/365;
+  const map={};
+  raw.slice(1).forEach(row=>{
+    if(!row) return;
+    // Skip sub-header rows (no numeric IMPORTE)
+    const saldo = +(row[iImp]||0);
+    if(saldo<=0) return;
+    const interes = saldo * tasaDiaria * diasMes;
+    ippAccum(map, row[iSeg], row[iDist], saldo, interes);
+  });
+  return ippFlatten('BBVA', map);
+}
+
+// ─── Parse IPP Daimler ─────────────────────────────────────────
+// Header at row 7 (idx 6): …|Distribuidora|Segmento|VIN|…|Saldo Actual M.N.|Días en inventario
+// Recalculate: Saldo × (tasa/365) × diasMes
+function parseFcDaimler(data, tasaAnual, diasMes){
+  const wb   = XLSX.read(data, {type:'array'});
+  const raw  = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:null});
+  let hdrIdx = 0;
+  for(let i=0;i<raw.length;i++){
+    if(raw[i]&&raw[i].some(v=>String(v||'').toLowerCase().includes('saldo actual'))){
+      hdrIdx=i; break;
+    }
+  }
+  const hdr   = raw[hdrIdx].map(h=>String(h||'').toLowerCase().trim());
+  const iSaldo= hdr.findIndex(h=>h.includes('saldo actual'));
+  const iDist = hdr.findIndex(h=>h==='distribuidora');
+  const iSeg  = hdr.findIndex(h=>h==='segmento');
+  const tasaDiaria = tasaAnual/100/365;
+  const map={};
+  raw.slice(hdrIdx+1).forEach(row=>{
+    if(!row) return;
+    const saldo = +(row[iSaldo]||0);
+    if(saldo<=0) return;
+    const interes = saldo * tasaDiaria * diasMes;
+    ippAccum(map, row[iSeg], row[iDist], saldo, interes);
+  });
+  return ippFlatten('Daimler', map);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN FORECAST RUNNER
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// SEGUIMIENTO INVENTARIO POR VIN — persistent comments
+// ═══════════════════════════════════════════════════════════════
+let _invComments = {};  // {vin: {comment, ts}}
+
+async function loadInvComments(){
+  try{
+    const rows = await supaGet('dashboard_comments','key_type=eq.inventario');
+    _invComments = {};
+    (rows||[]).forEach(r=>{ _invComments[r.key_value]={comment:r.comment,ts:r.updated_at}; });
+  } catch(e){ _invComments={}; }
+}
+async function saveInvComment(vin, comment){
+  if(comment.trim()){
+    _invComments[vin]={comment:comment.trim(),ts:Date.now()};
+    await supaUpsert('dashboard_comments',{key_type:'inventario',key_value:vin,comment:comment.trim(),updated_at:new Date().toISOString()});
+  } else {
+    delete _invComments[vin];
+    await supaDel('dashboard_comments','key_type=eq.inventario&key_value=eq.'+encodeURIComponent(vin));
+  }
+}
+async function pruneInvComments(activeVins){
+  const toDelete=Object.keys(_invComments).filter(v=>!activeVins.has(v));
+  for(const vin of toDelete){
+    delete _invComments[vin];
+    await supaDel('dashboard_comments','key_type=eq.inventario&key_value=eq.'+encodeURIComponent(vin));
+  }
+}
+
+
+let _refComments = {};  // {ref: {comment, ts}}
+
+async function loadRefComments(){
+  try{
+    const rows = await supaGet('dashboard_comments','key_type=eq.cartera');
+    _refComments = {};
+    (rows||[]).forEach(r=>{ _refComments[r.key_value]={comment:r.comment,ts:r.updated_at}; });
+  } catch(e){ _refComments={}; }
+}
+async function saveRefComment(ref, comment){
+  if(comment.trim()){
+    _refComments[ref]={comment:comment.trim(),ts:Date.now()};
+    await supaUpsert('dashboard_comments',{key_type:'cartera',key_value:ref,comment:comment.trim(),updated_at:new Date().toISOString()});
+  } else {
+    delete _refComments[ref];
+    await supaDel('dashboard_comments','key_type=eq.cartera&key_value=eq.'+encodeURIComponent(ref));
+  }
+}
+async function pruneRefComments(activeRefs){
+  const toDelete=Object.keys(_refComments).filter(r=>!activeRefs.has(r));
+  for(const ref of toDelete){
+    delete _refComments[ref];
+    await supaDel('dashboard_comments','key_type=eq.cartera&key_value=eq.'+encodeURIComponent(ref));
+  }
+}
+
+async function buildRefTable(){
+  const rows = fAnt();
+  if(!rows || rows.length===0) return;
+  await loadRefComments();
+
+  // Aggregate by referencia (one row may appear multiple times per ref)
+  const byRef = {};
+  rows.forEach(r=>{
+    if(!r.ref) return;
+    if(!byRef[r.ref]) byRef[r.ref]={ref:r.ref,cliente:r.cliente,segmento:r.segmento,
+      saldo:0,diasVenc:r.diasVenc,fechaDoc:r.fechaDoc};
+    byRef[r.ref].saldo += r.saldo;
+    // Use max diasVenc for the reference
+    if(r.diasVenc > byRef[r.ref].diasVenc) byRef[r.ref].diasVenc = r.diasVenc;
+  });
+  const refRows = Object.values(byRef).sort((a,b)=>b.diasVenc-a.diasVenc||b.saldo-a.saldo);
+  const activeRefs = new Set(refRows.map(r=>r.ref));
+  await pruneRefComments(activeRefs);
+
+  function fmtFecha(d){
+    if(!d) return '—';
+    try{ return new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}); }
+    catch(e){ return '—'; }
+  }
+  function diasColor(d){
+    if(d<=0) return 'var(--green)';
+    if(d<=30) return '#f59e0b';
+    if(d<=60) return '#f97316';
+    return 'var(--red)';
+  }
+
+  document.getElementById('tbody-seg-ref').innerHTML = refRows.map(r=>{
+    const saved = _refComments[r.ref]?.comment||'';
+    const dColor = diasColor(r.diasVenc);
+    const diasTxt = r.diasVenc<=0 ? `Por vencer ${Math.abs(r.diasVenc)}d` : `${r.diasVenc}d vencido`;
+    return `<tr data-ref="${r.ref}" data-cliente="${r.cliente.toLowerCase()}">
+      <td style="font-family:monospace;font-size:11px;color:var(--text-muted)">${r.ref}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.cliente}">${r.cliente}</td>
+      <td>${sb(r.segmento,false)}</td>
+      <td style="text-align:right;font-weight:600">${fmtM(r.saldo)}</td>
+      <td style="text-align:right"><span style="color:${dColor};font-weight:600">${diasTxt}</span></td>
+      <td style="white-space:nowrap;color:var(--text-muted)">${fmtFecha(r.fechaDoc)}</td>
+      <td><input type="text" value="${saved.replace(/"/g,'&quot;')}"
+        placeholder="Agregar comentario…"
+        data-ref="${r.ref}"
+        onchange="saveRefComment(this.dataset.ref, this.value)"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);
+               color:var(--text);font-size:11px;padding:4px 8px;border-radius:5px;
+               font-family:'Inter',sans-serif;outline:none"
+        onfocus="this.style.borderColor='#f59e0b'"
+        onblur="this.style.borderColor='var(--border)'"></td>
+    </tr>`;
+  }).join('');
+
+  const total = refRows.length;
+  const conComentario = refRows.filter(r=>_refComments[r.ref]).length;
+  document.getElementById('seg-ref-status').textContent =
+    `${total} referencias · ${conComentario} con comentario`;
+}
+
+function filterRefTable(){
+  const q = document.getElementById('seg-ref-filter').value.toLowerCase();
+  document.querySelectorAll('#tbody-seg-ref tr').forEach(tr=>{
+    const ref = (tr.dataset.ref||'').toLowerCase();
+    const cli = (tr.dataset.cliente||'').toLowerCase();
+    tr.style.display = (!q || ref.includes(q) || cli.includes(q)) ? '' : 'none';
+  });
+}
+
+function setFcSeg(val){
+  activeFcSeg = val || null;
+  if(FC.ventas) runForecast();
+}
+
+function fcStatus(msg, color='var(--text-dim)'){
+  const el=document.getElementById('fc-status');
+  if(el) el.innerHTML=`<span style="color:${color}">${msg}</span>`;
+}
+
+function runForecast(manual=false){
+  const mes    = +document.getElementById('fc-mes').value || 3;
+  const tasa   = +document.getElementById('fc-tasa').value || 12.5;
+  const diasMes = DIAS_MES[mes-1] || 30;
+  const NAMES  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Sep','Oct','Nov','Dic'];
+
+  document.getElementById('fc-edo-title').textContent = `🔮 Estado de Resultados Estimado — ${NAMES[mes-1]}`;
+
+  // ── 1. Ventas estimadas ──────────────────────────────────────
+  if(!FC.ventas){
+    fcStatus('⚠️ Carga el archivo de Ventas Estimadas para generar el forecast','#f59e0b');
+    return;
+  }
+  fcStatus('⏳ Calculando…','var(--text-dim)');
+  try{
+  const ventas = parseFcVentas(FC.ventas);
+  if(!ventas.length){
+    fcStatus('❌ No se encontraron ventas válidas en el archivo. Verifica columnas: Segmento, Precio Unitario, Utilidad Bruta','#ef4444');
+    return;
+  }
+
+  // ── 2. Apply segment + society filters to ventas ──────────────
+  let ventasFilt = ventas;
+  if(activeSoc){
+    ventasFilt = ventasFilt.filter(v => div2soc(String(v.dist||'')) === activeSoc);
+  }
+  if(activeFcSeg) ventasFilt = ventasFilt.filter(v => v.seg === activeFcSeg);
+
+  // Group by segment
+  const bySeg = {};
+  ventasFilt.forEach(v => {
+    if(!bySeg[v.seg]) bySeg[v.seg] = {und:0,rev:0,costo:0,ub:0};
+    bySeg[v.seg].und++;
+    bySeg[v.seg].rev   += v.precio;
+    bySeg[v.seg].costo += v.costo;
+    bySeg[v.seg].ub    += v.ub;
+  });
+  const segRows = Object.entries(bySeg).sort((a,b) => b[1].rev - a[1].rev);
+
+  // ── 3. Parse IPP FIRST (so hayIPP is known before GV calc) ──────
+  const fcSegFilter = activeFcSeg || null;  // needed by ippTotalFilt below
+  const ippBancos = [];
+  if(FC.banorte)  ippBancos.push(parseFcBanorte(FC.banorte,   tasa, diasMes));
+  if(FC.santander)ippBancos.push(parseFcSantander(FC.santander,tasa, diasMes));
+  if(FC.bbva)     ippBancos.push(parseFcBBVA(FC.bbva,         tasa, diasMes));
+  if(FC.daimler)  ippBancos.push(parseFcDaimler(FC.daimler,   tasa, diasMes));
+  const ippTotal = ippBancos.reduce((s,b)=>s+b.total,0);
+  const ippSaldo = ippBancos.reduce((s,b)=>s+b.saldo,0);
+  // IPP by segment — filter by society and segment
+  const ippBySeg={};
+  ippBancos.forEach(b=>{
+    b.rows.forEach(r=>{
+      if(activeSoc && div2soc(r.dist)!==activeSoc) return;
+      const segKey = normSeg(r.seg);
+      if(!ippBySeg[segKey]) ippBySeg[segKey]={saldo:0,interes:0,count:0};
+      ippBySeg[segKey].saldo   += r.saldo;
+      ippBySeg[segKey].interes += r.interes;
+      ippBySeg[segKey].count   += r.count;
+    });
+  });
+  const ippTotalFilt = fcSegFilter
+    ? (ippBySeg[normSeg(fcSegFilter)]?.interes||0)
+    : Object.values(ippBySeg).reduce((s,v)=>s+v.interes,0);
+  const hayIPP = ippBancos.length > 0; // true only when at least one IPP file was parsed
+
+  // ── 4. Presupuesto — sociedad via fCxPpto() + segmento filter ──
+  const cxP = fCxPpto();
+  function cxPfilt(arr){ return fcSegFilter ? arr.filter(r=>r.seg===fcSegFilter) : arr; }
+
+  // Detect Plan Piso cuenta names dynamically from ppto data
+  const ppPisoCuentas = new Set(
+    cxP.filter(r=>r.ctaTipo==='6'&&r.cuenta&&
+      (r.cuenta.toLowerCase().includes('plan piso')||
+       r.cuenta.toLowerCase().includes('plan de piso')||
+       r.cuenta.toLowerCase().includes('intereses pp')||
+       r.cuenta.toLowerCase().includes('ipp')))
+      .map(r=>r.cuenta)
+  );
+  console.log('[Forecast] hayIPP='+hayIPP+' ippTotal='+ippTotal.toFixed(0)+
+    ' fcSegFilter='+fcSegFilter+' ppPisoCuentas=',[...ppPisoCuentas]);
+
+  function isPlanPiso(cuenta){ return ppPisoCuentas.size>0
+    ? ppPisoCuentas.has(cuenta)
+    : (cuenta||'').toLowerCase().includes('plan piso')||(cuenta||'').toLowerCase().includes('ipp');
+  }
+  function pptoGv(seg){
+    return cxP.filter(r=>r.seg===seg&&r.periodo===mes&&r.ctaTipo==='6'
+                        &&(hayIPP ? !isPlanPiso(r.cuenta) : true))
+               .reduce((a,r)=>a+r.importe,0);
+  }
+  function pptoPP(seg){
+    return cxP.filter(r=>r.seg===seg&&r.periodo===mes&&r.ctaTipo==='6'&&isPlanPiso(r.cuenta))
+               .reduce((a,r)=>a+r.importe,0);
+  }
+  function pptoGi(){
+    if(fcSegFilter) return 0;
+    return cxP.filter(r=>r.seg==='ADMINISTRACIÓN'&&r.periodo===mes&&r.ctaTipo==='6')
+               .reduce((a,r)=>a+r.importe,0);
+  }
+
+  // ── 5. Totals ─────────────────────────────────────────────────
+  const totRev   = segRows.reduce((s,[,d])=>s+d.rev,0);
+  const totCosto = segRows.reduce((s,[,d])=>s+d.costo,0);
+  const totUB    = segRows.reduce((s,[,d])=>s+d.ub,0);
+  // GV total = suma de todos los segmentos del presupuesto (no solo los de ventas)
+  // Fórmula: sin IPP → GV = ppto completo | con IPP → GV = ppto − PP ppto + IPP calculado
+  const segsGVppto = [...new Set(
+    cxP.filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg)
+  )];
+  function ippPorSeg(seg){ return hayIPP ? (ippBySeg[normSeg(seg)]?.interes||0) : 0; }
+  function gvForecast(seg){ return pptoGv(seg) + ippPorSeg(seg); }
+  // pptoGv ya excluye PP cuando hayIPP=true, así que: gvForecast = (ppto−PP) + IPP real ✓
+  //                                                o: gvForecast = ppto completo (sin IPP) ✓
+  let totGVreal = 0; segsGVppto.forEach(seg=>{ totGVreal += gvForecast(seg); });
+  // IPP informativo para el renglón de referencia
+  const totIPPinfo = hayIPP ? ippTotalFilt : segsGVppto.reduce((s,seg)=>s+pptoPP(seg),0);
+  const totGI    = pptoGi();
+  const totUnd   = ventasFilt.length;
+  const utBruta  = totUB;
+  const utMC     = utBruta - totGVreal;
+  const utOp     = utMC - totGI;
+
+  // Presupuesto comparison (ppGV siempre incluye PP para comparación correcta)
+  const ppRev    = -cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
+  const ppCost   =  cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
+  const ppUB     = ppRev - ppCost;
+  const ppTotalPP= cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&isPlanPiso(r.cuenta))
+                     .reduce((a,r)=>a+r.importe,0);
+  const ppGV     = cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN')
+                     .reduce((a,r)=>a+r.importe,0);  // ppto GV completo (incl PP)
+  const ppGI     = pptoGi();
+  const ppMC     = ppUB - ppGV;
+  const ppOp     = ppMC - ppGI;
+  const ppOtros  = cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='7').reduce((a,r)=>a+r.importe,0);
+  const ppUAIT   = ppOp - ppOtros;
+
+  // ── 5. Render KPIs ───────────────────────────────────────────
+  const hasPpto = cxP.length > 0;
+  document.getElementById('fc-kpi').innerHTML = [
+    {l:'Unidades Est.',   v: totUnd,     fmt:'u', cls:'ct'},
+    {l:'Ingresos Est.',   v: totRev,     fmt:'m', cls:'ct'},
+    {l:'Ut. Bruta Est.',  v: utBruta,    fmt:'m', cls:'cg', sub: totRev?(utBruta/totRev*100).toFixed(1)+'%':''},
+    {l:'IPP '+(hayIPP?'Real':'Ppto'),    v: totIPPinfo, fmt:'m', cls:'ca'},
+    {l:'MC Estimada',     v: utMC,       fmt:'m', cls:utMC>=0?'cg':'cr', sub: totRev?(utMC/totRev*100).toFixed(1)+'%':''},
+    {l:'Ut. Operación',   v: utOp,       fmt:'m', cls:utOp>=0?'cg':'cr', sub: totRev?(utOp/totRev*100).toFixed(1)+'%':''},
+  ].map(k=>`<div class="kcard ${k.cls}">
+    <div class="klabel">${k.l}</div>
+    <div class="kval">${k.fmt==='u' ? k.v.toLocaleString('es-MX') : fmtM(k.v)}</div>
+    ${k.sub?`<div class="ksub">${k.sub}</div>`:''}
+  </div>`).join('');
+
+  // ── 6. Render P&L table ──────────────────────────────────────
+  function fC(v){ return v==null?'—':'$'+(v/1e6).toFixed(2)+'M'; }
+  function fCK(v){ return '$'+Math.round(v).toLocaleString('es-MX'); }
+  function varTds(fc, pp){
+    if(!hasPpto||pp==null) return '<td style="color:#475569">—</td><td style="color:#475569">—</td>';
+    const d=fc-pp, pct=pp?d/Math.abs(pp)*100:null;
+    const cl=d>=0?'#00d4aa':'#ef4444';
+    return `<td><span style="color:${cl}">${d<0?'('+fC(Math.abs(d))+')':fC(d)}</span></td>`+
+           `<td><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(1)+'%':'—'}</span></td>`;
+  }
+  function sepRow(label){
+    return `<tr style="background:rgba(245,158,11,.04)"><td colspan="5" style="padding:4px 12px;font-size:10px;color:#f59e0b;text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`;
+  }
+  function totRow(label, fc, pp, opts={}){
+    const bg = fc>=0 ? 'background:rgba(0,212,170,.07);border-top:2px solid rgba(0,212,170,.2)'
+                     : 'background:rgba(239,68,68,.05);border-top:2px solid rgba(239,68,68,.2)';
+    const col = fc>=0 ? '#00d4aa' : '#ef4444';
+    const ppTd = hasPpto&&pp!=null ? `<td style="color:#94a3b8">${fC(pp)}</td>` : `<td style="color:#475569">—</td>`;
+    return `<tr style="${bg}${opts.style||''}">
+      <td style="font-weight:700;color:#fff">${label}</td>
+      <td><span style="color:${col};font-weight:700">${fC(fc)}</span></td>
+      ${ppTd}${varTds(fc,pp)}</tr>`;
+  }
+  function dataRow(label, fc, pp, opts={}){
+    const ppTd = hasPpto&&pp!=null ? `<td style="color:#94a3b8">${fC(pp)}</td>` : `<td style="color:#475569">—</td>`;
+    return `<tr style="${opts.style||''}">
+      <td style="${opts.indent?'padding-left:22px;':''}color:${opts.color||'var(--text-dim)'}">${label}</td>
+      <td style="color:${opts.color||'var(--text)'}">${fC(fc)}</td>
+      ${ppTd}${varTds(fc,pp)}</tr>`;
+  }
+  function pctRow(label, num, den, ppNum, ppDen){
+    const p=(v,d)=>d?`${(v/d*100).toFixed(1)}%`:'—';
+    return `<tr style="font-style:italic"><td style="padding-left:22px;font-size:10px;color:var(--text-muted)">${label}</td>
+      <td style="font-size:10px;color:var(--text-muted)">${p(num,den)}</td>
+      <td style="font-size:10px;color:var(--text-muted)">${hasPpto?p(ppNum,ppDen):'—'}</td>
+      <td colspan="2"></td></tr>`;
+  }
+
+  let html = '';
+  html += sepRow('📦 Volumen estimado');
+  const ppUndN = hasPpto ? (()=>{
+    let u = (window._ppto?.unidades||[]).filter(r=>r.periodo===mes);
+    if(activeSoc)   u = u.filter(r=>div2soc(r.division)===activeSoc);
+    if(fcSegFilter) u = u.filter(r=>r.segmento===fcSegFilter);
+    const tot = u.reduce((a,r)=>a+r.unidades,0);
+    return tot || null;
+  })() : null;
+  html += `<tr><td style="color:var(--text-dim)">Unidades vendidas</td>
+    <td style="font-weight:700">${totUnd.toLocaleString('es-MX')}</td>
+    <td style="color:#94a3b8">${ppUndN!=null?ppUndN.toLocaleString('es-MX'):'—'}</td>
+    ${ppUndN!=null?`<td style="color:${totUnd>=ppUndN?'#00d4aa':'#ef4444'}">${totUnd>ppUndN?'+':''}${(totUnd-ppUndN).toLocaleString('es-MX')}</td><td>—</td>`:'<td colspan="2" style="color:#475569">—</td>'}</tr>`;
+
+  html += sepRow('💰 Ingresos (ventas estimadas)');
+  html += totRow('TOTAL INGRESOS', totRev, hasPpto?ppRev:null);
+
+  html += sepRow('📦 Costo de Ventas (del archivo ventas)');
+  html += totRow('TOTAL COSTO DE VENTAS', totCosto, hasPpto?ppCost:null);
+  html += totRow('★ UTILIDAD BRUTA', utBruta, hasPpto?ppUB:null);
+  html += pctRow('% Margen Bruto', utBruta, totRev, ppUB, ppRev);
+
+  const gvLabel = hayIPP ? '🏷️ Gastos de Venta (Ppto − Plan Piso + IPP Real)' : '🏷️ Gastos de Venta — del Presupuesto';
+  html += sepRow(gvLabel);
+  const segsConGV = [...new Set(
+    cxP.filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg)
+  )].sort();
+  segsConGV.forEach(seg => {
+    const gvSeg  = gvForecast(seg);
+    const ippSeg = ippPorSeg(seg);
+    const ppGvSeg = cxP.filter(r=>r.seg===seg&&r.periodo===mes&&r.ctaTipo==='6'
+                      &&r.seg!=='ADMINISTRACIÓN').reduce((a,r)=>a+r.importe,0);
+    if(gvSeg||ppGvSeg) html += `<tr>
+      <td style="padding-left:22px;color:#94a3b8">${seg}</td>
+      <td style="color:#f59e0b">${fC(gvSeg)}</td>
+      <td style="color:#94a3b8">${hasPpto&&ppGvSeg?fC(ppGvSeg):'—'}</td>
+      <td colspan="2"></td></tr>`;
+  });
+  html += totRow('TOTAL GASTOS DE VENTA', totGVreal, hasPpto?ppGV:null);
+  html += totRow('★ UTILIDAD CONTRIBUCIÓN', utMC, hasPpto?ppMC:null);
+  html += pctRow('% Margen Contribución', utMC, totRev, ppMC, ppRev);
+
+  // Renglón informativo Plan Piso (no genera nueva línea de utilidad)
+  const ippLabel = hayIPP ? '🚗 Plan Piso — Intereses bancarios (real)'
+                          : '🚗 Plan Piso — del Presupuesto (referencia)';
+  html += sepRow(ippLabel);
+  html += dataRow(hayIPP ? 'IPP real bancario' : 'Plan Piso presupuesto',
+                  totIPPinfo, hasPpto ? ppTotalPP : null,
+                  {indent:true, color:'#f59e0b'});
+
+  if(!fcSegFilter){
+    html += sepRow('🏢 Gastos Indirectos — del Presupuesto');
+    html += dataRow('Gastos Administración', totGI, hasPpto?ppGI:null, {indent:true, color:'#f59e0b'});
+    html += totRow('★ UTILIDAD OPERACIÓN', utOp, hasPpto?ppOp:null);
+    html += pctRow('% Margen Operación', utOp, totRev, ppOp, ppRev);
+
+    html += sepRow('📊 Otros Ingresos / Gastos — del Presupuesto');
+    html += dataRow('Otros neto (intereses, FX, etc.)', ppOtros, hasPpto?ppOtros:null, {indent:true, color:'#94a3b8'});
+    const utAIT = utOp - ppOtros;
+    const ppUAITval = ppOp - ppOtros;
+    html += totRow('★ UTILIDAD ANTES DE IMPUESTOS', utAIT, hasPpto?ppUAITval:null);
+    html += pctRow('% UAIT', utAIT, totRev, ppUAITval, ppRev);
+  }
+
+  document.querySelector('#tbl-fc-edo thead tr').innerHTML =
+    `<th>Concepto</th><th style="text-align:right">Forecast ${NAMES[mes-1]}</th>`+
+    (hasPpto?`<th style="text-align:right">Presupuesto</th><th style="text-align:right">Var $</th><th style="text-align:right">Var %</th>`
+            :`<th colspan="3" style="color:#475569">Presupuesto — carga archivo</th>`);
+  document.querySelector('#tbl-fc-edo tbody').innerHTML = html;
+
+  // ── 7. Margen por segmento forecast ──────────────────────────
+  function colored(v){return`<span style="color:${v>=0?'var(--green)':'var(--red)'};font-weight:700">${fC(v)}</span>`;}
+  function pf(n,d){return d?((n/d)*100).toFixed(1)+'%':'—';}
+  function pill(v,d){return`<span class="pill ${v>=0?'pg':'pr'}">${pf(v,d)}</span>`;}
+
+  document.querySelector('#tbl-fc-seg tbody').innerHTML = [
+    ...segRows.map(([seg, d]) => {
+      const ipp = ippPorSeg(seg);
+      const gv  = gvForecast(seg);
+      const mc  = d.ub - gv;
+      return `<tr>
+        <td>${sb(seg,true)}</td>
+        <td style="text-align:right">${d.und}</td>
+        <td>${fC(d.rev)}</td>
+        <td>${fC(d.costo)}</td>
+        <td>${colored(d.ub)}</td>
+        <td>${pill(d.ub,d.rev)}</td>
+        <td style="color:#f59e0b">${gv?fC(gv):'—'}</td>
+        <td style="color:#f59e0b">${ipp?fC(ipp):'—'}</td>
+        <td>${colored(mc)}</td>
+        <td>${pill(mc,d.rev)}</td></tr>`;
+    }),
+    (()=>{
+      const tMC = utBruta - totGVreal;
+      return`<tr style="border-top:2px solid rgba(0,212,170,.25);font-weight:700;background:rgba(0,212,170,.05)">
+        <td>TOTAL</td><td style="text-align:right">${totUnd}</td>
+        <td>${fC(totRev)}</td><td>${fC(totCosto)}</td>
+        <td>${colored(utBruta)}</td><td>${pill(utBruta,totRev)}</td>
+        <td style="color:#f59e0b">${fC(totGVreal)}</td>
+        <td style="color:#f59e0b">${fC(totIPPinfo)}</td>
+        <td>${colored(tMC)}</td><td>${pill(tMC,totRev)}</td></tr>`;
+    })()
+  ].join('');
+
+  // ── 8. IPP detail table ──────────────────────────────────────
+  const ippWrap = document.getElementById('fc-ipp-wrap');
+  // Collect all detail rows filtered by society
+  const ippDetailRows = [];
+  ippBancos.forEach(b=>{
+    b.rows.forEach(r=>{
+      if(activeSoc && div2soc(r.dist)!==activeSoc) return;
+      if(fcSegFilter && normSeg(r.seg)!==normSeg(fcSegFilter)) return;
+      ippDetailRows.push({...r, banco:b.banco});
+    });
+  });
+  if(ippDetailRows.length > 0){
+    ippWrap.style.display='block';
+    // Update thead to include segment column
+    document.querySelector('#tbl-fc-ipp thead tr').innerHTML =
+      `<th>Banco</th><th>Segmento</th><th>Distribuidora</th>
+       <th style="text-align:right">Saldo</th>
+       <th style="text-align:right">Intereses del Mes</th>
+       <th style="text-align:right">Unidades</th>
+       <th style="text-align:right">IPP/Und</th>`;
+    const totSaldo   = ippDetailRows.reduce((s,r)=>s+r.saldo,0);
+    const totInteres = ippDetailRows.reduce((s,r)=>s+r.interes,0);
+    const totCount   = ippDetailRows.reduce((s,r)=>s+r.count,0);
+    document.querySelector('#tbl-fc-ipp tbody').innerHTML = [
+      ...ippDetailRows.sort((a,b)=>b.interes-a.interes).map(r=>`<tr>
+        <td>${r.banco}</td>
+        <td>${sb(r.seg,false)}</td>
+        <td style="color:#94a3b8">${r.dist}</td>
+        <td style="text-align:right;color:#94a3b8">${r.saldo?fC(r.saldo):'—'}</td>
+        <td style="text-align:right;color:#f59e0b">${fC(r.interes)}</td>
+        <td style="text-align:right">${r.count}</td>
+        <td style="text-align:right">${r.count?'$'+Math.round(r.interes/r.count).toLocaleString('es-MX'):'—'}</td>
+      </tr>`),
+      `<tr style="border-top:2px solid rgba(0,212,170,.25);font-weight:700;background:rgba(0,212,170,.05)">
+        <td>TOTAL</td><td colspan="2"></td>
+        <td style="text-align:right">${fC(totSaldo)}</td>
+        <td style="text-align:right;color:#f59e0b">${fC(totInteres)}</td>
+        <td style="text-align:right">${totCount}</td>
+        <td style="text-align:right">${totCount?'$'+Math.round(totInteres/totCount).toLocaleString('es-MX'):'—'}</td>
+      </tr>`
+    ].join('');
+  } else {
+    ippWrap.style.display='none';
+  }
+
+  // Done
+  const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
+  fcStatus(`✓ Forecast calculado — ${ventas.length} unidades · Ingresos: ${fC(totRev)} · MC: ${fC(utMC)}${ippMsg}`, '#00d4aa');
+  } catch(err){
+    fcStatus('❌ Error JS: ' + err.message + ' (línea ~' + (err.stack||'').split('\n').slice(0,2).join(' | ') + ')', '#ef4444');
+    console.error('[runForecast] ERROR:', err);
+  }
+}
+
+// ═══════════════════════════════════════════
+// PAGE INIT
+// ═══════════════════════════════════════════
+(async function initApp(){
+  document.getElementById('login-screen').style.display  = 'none';
+  document.getElementById('upload-section').style.display = 'none';
+  document.getElementById('dashboard').style.display      = 'none';
+  document.getElementById('soc-bar').style.display        = 'none';
+
+  await loadUsers();
+  const session = loadSession();   // sync localStorage
+  if(session && _users.find(u => u.username === session.username)){
+    await applySession(session);
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+  }
+})();
+</script>
+</body>
+</html>
