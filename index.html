@@ -512,22 +512,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <div class="tcard" style="max-width:860px">
       <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <h4>👥 Gestión de Usuarios</h4>
-        <button onclick="showAddUser()" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:11px;font-weight:600;padding:5px 14px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif">+ Nuevo Usuario</button>
-      </div>
-      <!-- Add user form (hidden by default) -->
-      <div id="add-user-form" style="display:none;padding:16px 20px;border-top:1px solid var(--border);background:rgba(0,212,170,.03)">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;max-width:700px">
-          <div class="lfield"><label>Nombre de usuario</label><input id="nu-user" type="text" placeholder="usuario"></div>
-          <div class="lfield"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="contraseña"></div>
-          <div class="lfield"><label>Rol</label>
-            <select id="nu-role" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:13px;padding:9px 13px;border-radius:8px;font-family:'Inter',sans-serif">
-              <option value="gerente">Gerente</option>
-              <option value="admin">Administrador</option>
-            </select>
-          </div>
-          <button onclick="addUser()" style="background:linear-gradient(135deg,var(--accent),#00a88a);color:#000;font-weight:700;font-size:12px;padding:9px 18px;border:none;border-radius:8px;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif">Agregar</button>
-        </div>
-        <div class="lerr" id="nu-err" style="text-align:left;margin-top:6px"></div>
+        <button onclick="toggleUsuariosPanel()" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:11px;font-weight:600;padding:5px 14px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif">+ Nuevo Usuario</button>
       </div>
       <div class="tscroll" style="padding:0 0 4px">
         <table id="tbl-usuarios" style="font-size:12px">
@@ -1230,18 +1215,41 @@ async function loadSnapshot(){
 function applySnapshotData(d){
   if(!d) return false;
   window._inv   = d.inv   || null;
-  // Restore Date objects in ant (fechaDoc serializes as string)
   window._ant   = (d.ant||null)?.map(r=>({
     ...r,
     fechaDoc: r.fechaDoc ? new Date(r.fechaDoc) : null
   })) || null;
   window._bdd   = d.bdd   || null;
-  window._bal   = d.bal   || null;
   window._bdd25 = d.bdd25 || null;
   window._ppto  = d.ppto  || null;
+
+  // Reconstruct _bal: JSON strips functions, rebuild them from rows
+  if(d.bal && d.bal.rows){
+    const rows = d.bal.rows;
+    const BAL_EXCL=new Set(['IVA Acreditado 16%','IVA Acred Dif 16%','IVA Trasladado  16%','IVA Trasl Dif 16%','IVA X cob (Fiscal)','Iva X pagar (Fiscal)','IVA Acreditado 8%','IVA Acreditado Dif8%','Clientes Nacionales','Ant de Clientes Nac','Anticipo Deudors Div','Proveedores Nacional','Prov Operat y Adtiva','Prov Nacional(ICIAS)','CXC Entre Divisiones','CXC  Empresas Grupo','CXP entre Divisiones','Cta comp sdo cero','Cajas Uno','Banco virtual','Obligacion Fin BBVA','Obligacion Fin Banor','Obligacion Fin Sant','Oblig Fin Planta','DXP Tercer CP Bancos','Pasivo Arrend L.P.','Inventarios Nuevos','Inventario Semi-Nvos','Inv. Refacciones','Mercancias Transito','Comp (EM-RF) Refacc','Comp (EM-RF) TOT','ISR Ret por Salarios','ISR por Pagar','Aportes IMSS X pagar','Aportes INFONA X pag','Aportes SAR X pagar','Aportes Fonacot','Retención ISR Prov','Retención IVA Prov','Retención RESICO',' Retención RESICO','Prov Contable ISR','Compens.impuesto rep','Dif Cam Doc x P','Diferencia Cam Prove','Dif Cam Pro ICIA','Dif Camb Clientes','Intereses Cobrados','Ganancia por Diferen','Pérdida por Dif en C','Pérdida por Diferenc','Diferencia Cobranza','Ingresos por Rec Gto','IMPTO SOBRE LA RENTA','ISR Bancos','Recursos Enviados','Otros Gastos Prepaga','Acreedores de Ret','Acreedores Diversos','Ingresos Extraordina','Gastos Extraordinar','Vtas de Veh Nuevos','Vtas de Veh SemiNu','Venta de Refacciones','Venta Ref Taller','Ventas Int Refacc','Ventas Mano de Obra','Vtas Mano Obra Man.','Ventas MO por Gtia','Ventas Interna TOT','Ventas Interna MO','Ventas de Servicios','Venta Manual','Ventas Ref Garantia','Ventas TOT Garantia','Costo Veh Nuevos','Costo manual NV US','Costo Veh Semi','Costo de Refacciones','Consumo Refacciones','Costo Mano de Obra','Costo TOT','Interese Plan Piso N','Interese Plan Piso U']);
+    function isBankCode(n){return/^\d{4}/.test(n.trim());}
+    const opexRows=rows.filter(r=>!BAL_EXCL.has(r.cuenta)&&!isBankCode(r.cuenta));
+    const OTROS_ING=['Intereses Cobrados','Ganancia por Diferen','Ingresos por Rec Gto','Ingresos Extraordina'];
+    const OTROS_GTO=['Pérdida por Dif en C','Pérdida por Diferenc','Comisiones Bancarias','ISR Bancos'];
+    const ISR_ACC=['IMPTO SOBRE LA RENTA'];
+    const maxBalPer=d.bal.maxBalPer||Math.max(0,...rows.filter(r=>r.ctaTipo==='4').map(r=>r.periodo));
+    window._bal = {
+      rows,
+      maxBalPer, OTROS_ING, OTROS_GTO, ISR_ACC,
+      sumBy:     (cuenta,pers)=>rows.filter(r=>r.cuenta===cuenta&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
+      sumOpex:   (seg,pers)=>opexRows.filter(r=>r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
+      sumOtros:  (accs,pers)=>rows.filter(r=>accs.includes(r.cuenta)&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
+      sumRevSeg: (seg,pers)=>-rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
+      balSum:    (accs,pers)=>rows.filter(r=>accs.includes(r.cuenta)&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
+    };
+  } else {
+    window._bal = null;
+  }
+
   const ok = !!(window._bdd && window._ant && window._inv);
-  console.log('[snapshot] applySnapshotData →', ok ? '✓ OK' : '✗ faltan datos',
-    'inv:', window._inv?.length, 'ant:', window._ant?.length, 'bdd:', window._bdd?.cuentas?.length);
+  console.log('[snapshot] applySnapshotData →', ok?'✓ OK':'✗ faltan datos',
+    'inv:', window._inv?.length, 'ant:', window._ant?.length,
+    'bdd:', window._bdd?.cuentas?.length, 'bal:', window._bal?'✓':'—');
   return ok;
 }
 
@@ -1304,7 +1312,11 @@ async function applySession(user){
       _setLoadingMsg('⏳ Construyendo dashboard…');
       await new Promise(r=>setTimeout(r,50));
       try{
-        buildStatic(); refreshAll();
+        console.log('[build] iniciando buildStatic...');
+        buildStatic();
+        console.log('[build] buildStatic OK, iniciando refreshAll...');
+        refreshAll();
+        console.log('[build] refreshAll OK');
         document.getElementById('upload-section').style.display='none';
         document.getElementById('dashboard').style.display='block';
         document.getElementById('soc-bar').style.display='flex';
@@ -1312,7 +1324,7 @@ async function applySession(user){
         document.getElementById('report-date').textContent='Datos del administrador';
       } catch(e){
         showGerenteWait('❌ Error al construir: '+e.message);
-        console.error('[buildStatic/refreshAll]',e);
+        console.error('[buildStatic/refreshAll gerente]',e);
       }
     } else {
       showGerenteWait('Sin datos — el administrador debe generar el dashboard primero');
@@ -1326,7 +1338,11 @@ async function applySession(user){
       rd.textContent='⏳ Construyendo dashboard…';
       await new Promise(r=>setTimeout(r,50));
       try{
-        buildStatic(); refreshAll();
+        console.log('[build] iniciando buildStatic (admin)...');
+        buildStatic();
+        console.log('[build] buildStatic OK, iniciando refreshAll...');
+        refreshAll();
+        console.log('[build] refreshAll OK');
         document.getElementById('upload-section').style.display='none';
         document.getElementById('dashboard').style.display='block';
         document.getElementById('soc-bar').style.display='flex';
@@ -1334,7 +1350,7 @@ async function applySession(user){
         rd.textContent='Último reporte ✓';
       } catch(e){
         rd.textContent='❌ Error: '+e.message;
-        console.error('[buildStatic/refreshAll]',e);
+        console.error('[buildStatic/refreshAll admin]',e);
         document.getElementById('upload-section').style.display='flex';
       }
     } else {
