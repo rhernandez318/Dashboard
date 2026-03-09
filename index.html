@@ -1096,36 +1096,11 @@ async function supaDel(table, query){
   await fetch(`${SUPA_URL}/rest/v1/${table}?${query}`, {method:'DELETE', headers:SUPA_HDR});
 }
 
-// Compress/decompress JSON for large snapshot payloads
-async function compressData(obj){
-  const bytes = new TextEncoder().encode(JSON.stringify(obj));
-  const cs = new CompressionStream('gzip');
-  const writer = cs.writable.getWriter();
-  writer.write(bytes); writer.close();
-  const chunks = []; const reader = cs.readable.getReader();
-  while(true){ const {done,value}=await reader.read(); if(done)break; chunks.push(value); }
-  const all = new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
-  let off=0; for(const c of chunks){all.set(c,off);off+=c.length;}
-  // safe base64 for large arrays
-  let bin=''; const chunkSz=8192;
-  for(let i=0;i<all.length;i+=chunkSz) bin+=String.fromCharCode(...all.subarray(i,i+chunkSz));
-  return btoa(bin);
-}
-async function decompressData(b64){
-  const bin=atob(b64);
-  const bytes=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  const ds=new DecompressionStream('gzip');
-  const writer=ds.writable.getWriter();
-  writer.write(bytes); writer.close();
-  const chunks=[]; const reader=ds.readable.getReader();
-  while(true){const{done,value}=await reader.read();if(done)break;chunks.push(value);}
-  const all=new Uint8Array(chunks.reduce((a,c)=>a+c.length,0));
-  let off=0; for(const c of chunks){all.set(c,off);off+=c.length;}
-  return JSON.parse(new TextDecoder().decode(all));
-}
-
 // ── SNAPSHOT ────────────────────────────────────────────────────
+// Splits large payload into chunks of ~500KB each (Supabase jsonb limit ~1GB but 
+// REST payload limit is ~2MB per request, so we chunk the stringified data)
+const CHUNK_SIZE = 400000; // chars per chunk
+
 async function saveSnapshot(){
   try{
     const payload = {
@@ -1137,24 +1112,57 @@ async function saveSnapshot(){
       ppto:  window._ppto  || null,
       savedAt: Date.now()
     };
-    const compressed = await compressData(payload);
-    await supaUpsert('dashboard_snapshot',{id:'main',data:{z:compressed},updated_by:_currentUser?.username,updated_at:new Date().toISOString()});
-    console.log('[snapshot] guardado correctamente');
-  } catch(e){ console.error('[snapshot] error al guardar:', e); }
+    const str = JSON.stringify(payload);
+    const chunks = [];
+    for(let i=0; i<str.length; i+=CHUNK_SIZE) chunks.push(str.slice(i,i+CHUNK_SIZE));
+    // Save each chunk as a separate row: id = 'main_0', 'main_1', etc.
+    // First delete all existing chunks
+    await supaDel('dashboard_snapshot', 'id=like.main_%25');
+    await supaDel('dashboard_snapshot', 'id=eq.main');
+    for(let i=0; i<chunks.length; i++){
+      await supaUpsert('dashboard_snapshot',{
+        id: `main_${i}`,
+        data: {chunk: chunks[i], total: chunks.length, index: i},
+        updated_by: _currentUser?.username,
+        updated_at: new Date().toISOString()
+      });
+    }
+    console.log(`[snapshot] guardado: ${chunks.length} chunk(s), ${str.length} chars`);
+  } catch(e){ console.error('[snapshot] error al guardar:', e); throw e; }
 }
+
 async function loadSnapshot(){
   try{
-    const rows = await supaGet('dashboard_snapshot','id=eq.main');
-    if(!rows||!rows[0]?.data) return false;
-    const d = rows[0].data.z ? await decompressData(rows[0].data.z) : rows[0].data;
-    window._inv   = d.inv   || null;
-    window._ant   = d.ant   || null;
-    window._bdd   = d.bdd   || null;
-    window._bal   = d.bal   || null;
-    window._bdd25 = d.bdd25 || null;
-    window._ppto  = d.ppto  || null;
-    return !!(window._bdd && window._ant && window._inv);
+    // Load all chunks ordered by index
+    const rows = await supaGet('dashboard_snapshot', 'id=like.main_%25&order=id.asc');
+    if(!rows || rows.length===0){
+      // Try legacy single-row format
+      const legacy = await supaGet('dashboard_snapshot','id=eq.main');
+      if(!legacy||!legacy[0]?.data) return false;
+      return applySnapshotData(legacy[0].data);
+    }
+    // Reassemble chunks
+    const sorted = rows.sort((a,b)=>{
+      const ai=parseInt(a.id.split('_')[1]||0);
+      const bi=parseInt(b.id.split('_')[1]||0);
+      return ai-bi;
+    });
+    const str = sorted.map(r=>r.data.chunk||'').join('');
+    if(!str) return false;
+    const d = JSON.parse(str);
+    return applySnapshotData(d);
   } catch(e){ console.error('[snapshot] error al cargar:', e); return false; }
+}
+
+function applySnapshotData(d){
+  if(!d) return false;
+  window._inv   = d.inv   || null;
+  window._ant   = d.ant   || null;
+  window._bdd   = d.bdd   || null;
+  window._bal   = d.bal   || null;
+  window._bdd25 = d.bdd25 || null;
+  window._ppto  = d.ppto  || null;
+  return !!(window._bdd && window._ant && window._inv);
 }
 
 // ── AUTH / USERS ─────────────────────────────────────────────────
@@ -1366,8 +1374,9 @@ function procesarDatos(){
       const rd=document.getElementById('report-date');
       const origTxt=rd.textContent;
       rd.textContent='⏳ Publicando…';
-      saveSnapshot().then(()=>{ rd.textContent=origTxt+' ✓ Publicado'; })
-                    .catch(()=>{ rd.textContent=origTxt+' ⚠ Error al publicar'; });
+      saveSnapshot()
+        .then(()=>{ rd.textContent=origTxt+' · ✓ Publicado en Supabase'; })
+        .catch((e)=>{ rd.textContent=origTxt+' · ⚠ Error: '+e.message; console.error(e); });
     }catch(e){alert('Error: '+e.message);console.error(e);}
     finally{document.getElementById('loading').style.display='none';}
   },80);
