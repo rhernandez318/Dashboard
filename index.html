@@ -1097,61 +1097,93 @@ async function supaDel(table, query){
 }
 
 // ── SNAPSHOT ────────────────────────────────────────────────────
-// Splits large payload into chunks of ~500KB each (Supabase jsonb limit ~1GB but 
-// REST payload limit is ~2MB per request, so we chunk the stringified data)
-const CHUNK_SIZE = 400000; // chars per chunk
+const CHUNK_SIZE = 350000; // chars per chunk, safe under Supabase 2MB limit
+
+async function supaUpsertChecked(table, body){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${table}`, {
+    method:'POST',
+    headers:{...SUPA_HDR,'Prefer':'resolution=merge-duplicates,return=representation'},
+    body: JSON.stringify(body)
+  });
+  if(!r.ok){ const t=await r.text(); throw new Error(`Supabase ${r.status}: ${t}`); }
+  return r.json();
+}
 
 async function saveSnapshot(){
-  try{
-    const payload = {
-      inv:   window._inv   || null,
-      ant:   window._ant   || null,
-      bdd:   window._bdd   || null,
-      bal:   window._bal   || null,
-      bdd25: window._bdd25 || null,
-      ppto:  window._ppto  || null,
-      savedAt: Date.now()
-    };
-    const str = JSON.stringify(payload);
-    const chunks = [];
-    for(let i=0; i<str.length; i+=CHUNK_SIZE) chunks.push(str.slice(i,i+CHUNK_SIZE));
-    // Save each chunk as a separate row: id = 'main_0', 'main_1', etc.
-    // First delete all existing chunks
-    await supaDel('dashboard_snapshot', 'id=like.main_%25');
-    await supaDel('dashboard_snapshot', 'id=eq.main');
-    for(let i=0; i<chunks.length; i++){
-      await supaUpsert('dashboard_snapshot',{
-        id: `main_${i}`,
-        data: {chunk: chunks[i], total: chunks.length, index: i},
-        updated_by: _currentUser?.username,
-        updated_at: new Date().toISOString()
-      });
-    }
-    console.log(`[snapshot] guardado: ${chunks.length} chunk(s), ${str.length} chars`);
-  } catch(e){ console.error('[snapshot] error al guardar:', e); throw e; }
+  const payload = {
+    inv:   window._inv   || null,
+    ant:   window._ant   || null,
+    bdd:   window._bdd   || null,
+    bal:   window._bal   || null,
+    bdd25: window._bdd25 || null,
+    ppto:  window._ppto  || null,
+    savedAt: Date.now()
+  };
+  const str = JSON.stringify(payload);
+  const totalChunks = Math.ceil(str.length / CHUNK_SIZE);
+  console.log(`[snapshot] guardando ${totalChunks} chunk(s), ${str.length} chars`);
+
+  // Save metadata row first
+  await supaUpsertChecked('dashboard_snapshot', {
+    id: 'main_meta',
+    data: {total: totalChunks, savedAt: Date.now(), savedBy: _currentUser?.username},
+    updated_by: _currentUser?.username,
+    updated_at: new Date().toISOString()
+  });
+
+  // Save each chunk
+  for(let i=0; i<totalChunks; i++){
+    const chunk = str.slice(i*CHUNK_SIZE, (i+1)*CHUNK_SIZE);
+    await supaUpsertChecked('dashboard_snapshot', {
+      id: `main_${i}`,
+      data: {chunk, index: i, total: totalChunks},
+      updated_by: _currentUser?.username,
+      updated_at: new Date().toISOString()
+    });
+    console.log(`[snapshot] chunk ${i+1}/${totalChunks} guardado`);
+  }
+
+  // Verify by reading back metadata
+  const verify = await supaGet('dashboard_snapshot','id=eq.main_meta');
+  if(!verify || !verify[0]?.data?.total){
+    throw new Error('Verificación fallida — el snapshot no quedó en Supabase');
+  }
+  console.log(`[snapshot] ✓ verificado, ${verify[0].data.total} chunks en Supabase`);
 }
 
 async function loadSnapshot(){
   try{
-    // Load all chunks ordered by index
-    const rows = await supaGet('dashboard_snapshot', 'id=like.main_%25&order=id.asc');
-    if(!rows || rows.length===0){
-      // Try legacy single-row format
+    // Read metadata first
+    const meta = await supaGet('dashboard_snapshot','id=eq.main_meta');
+    if(!meta || !meta[0]?.data?.total){
+      console.log('[snapshot] no hay metadata, intentando legacy...');
       const legacy = await supaGet('dashboard_snapshot','id=eq.main');
       if(!legacy||!legacy[0]?.data) return false;
       return applySnapshotData(legacy[0].data);
     }
-    // Reassemble chunks
-    const sorted = rows.sort((a,b)=>{
-      const ai=parseInt(a.id.split('_')[1]||0);
-      const bi=parseInt(b.id.split('_')[1]||0);
-      return ai-bi;
-    });
+    const total = meta[0].data.total;
+    console.log(`[snapshot] cargando ${total} chunk(s)...`);
+
+    // Load all chunks in parallel
+    const chunkIds = Array.from({length:total},(_,i)=>`main_${i}`).join(',');
+    const rows = await supaGet('dashboard_snapshot',`id=in.(${chunkIds})&order=id.asc`);
+    if(!rows || rows.length !== total){
+      console.error(`[snapshot] esperaba ${total} chunks, recibió ${rows?.length}`);
+      return false;
+    }
+
+    // Sort and reassemble
+    const sorted = rows.sort((a,b)=>(a.data.index||0)-(b.data.index||0));
     const str = sorted.map(r=>r.data.chunk||'').join('');
     if(!str) return false;
+
+    console.log(`[snapshot] ✓ ${str.length} chars reconstituidos`);
     const d = JSON.parse(str);
     return applySnapshotData(d);
-  } catch(e){ console.error('[snapshot] error al cargar:', e); return false; }
+  } catch(e){
+    console.error('[snapshot] error al cargar:', e);
+    return false;
+  }
 }
 
 function applySnapshotData(d){
@@ -1162,7 +1194,9 @@ function applySnapshotData(d){
   window._bal   = d.bal   || null;
   window._bdd25 = d.bdd25 || null;
   window._ppto  = d.ppto  || null;
-  return !!(window._bdd && window._ant && window._inv);
+  const ok = !!(window._bdd && window._ant && window._inv);
+  console.log('[snapshot] applySnapshotData →', ok ? '✓ OK' : '✗ faltan datos clave');
+  return ok;
 }
 
 // ── AUTH / USERS ─────────────────────────────────────────────────
@@ -1365,10 +1399,14 @@ function procesarDatos(){
       // Guardar snapshot en Supabase para gerentes
       const rd=document.getElementById('report-date');
       const origTxt=rd.textContent;
-      rd.textContent='⏳ Publicando…';
+      rd.textContent='⏳ Publicando en Supabase…';
       saveSnapshot()
-        .then(()=>{ rd.textContent=origTxt+' · ✓ Publicado en Supabase'; })
-        .catch((e)=>{ rd.textContent=origTxt+' · ⚠ Error: '+e.message; console.error(e); });
+        .then(()=>{ rd.textContent=origTxt+' · ✓ Publicado'; })
+        .catch((e)=>{
+          rd.textContent='⚠ Error al publicar: '+e.message;
+          console.error('[saveSnapshot]',e);
+          alert('Error al guardar en Supabase:\n'+e.message+'\n\nRevisa la consola del navegador (F12) para más detalles.');
+        });
     }catch(e){alert('Error: '+e.message);console.error(e);}
     finally{document.getElementById('loading').style.display='none';}
   },80);
