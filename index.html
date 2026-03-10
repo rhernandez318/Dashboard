@@ -651,6 +651,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 // ═══════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════
+const CHUNK_SIZE = 350000; // chars per Supabase snapshot chunk
 const F={inventario:null,antiguedad:null,bdd:null,balance:null,bdd25:null,ppto:null};
 const CH={};
 const TODAY=new Date(2026,2,4);
