@@ -423,7 +423,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
       <div class="ccard"><h4>Ingresos por Línea</h4><div class="cwrap"><canvas id="ch-ing2"></canvas></div></div>
       <div class="ccard"><h4>Estructura de Costos</h4><div class="cwrap"><canvas id="ch-cost"></canvas></div></div>
     </div>
-    <div class="tcard"><div class="thead2"><h4 id="edo-title">📊 Estado de Resultados</h4></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="tcard"><div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="edo-title">📊 Estado de Resultados</h4><button onclick="exportTableExcel("tbl-edo","Estado_Resultados")" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4" id="wrap-indicadores"><div class="thead2"><h4 id="ind-title">📊 Indicadores por Unidad<span class="hint" id="ind-seg-hint"></span></h4></div><div class="tscroll"><table id="tbl-indicadores"><thead><tr></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4" id="wrap-margen-seg">
       <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -464,6 +464,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
             oninput="filterRefTable()"
             style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:5px 10px;border-radius:6px;width:220px;font-family:'Inter',sans-serif">
           <span id="seg-ref-status" style="font-size:10px;color:var(--text-muted)"></span>
+          <button onclick="exportTableExcel("tbl-seg-ref","Cartera_Referencias")" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button>
         </div>
       </div>
       <div class="tscroll">
@@ -494,7 +495,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <div class="tcard"><div class="thead2"><h4>📦 Detalle por Segmento<span class="hint">· toca fila para filtrar</span></h4></div><div class="tscroll"><table id="tbl-inv-s"><thead><tr><th>Segmento</th><th>Unidades</th><th>Valor</th><th>$/Und</th><th>Días Prom</th><th>Días Máx</th><th>Alerta</th></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4"><div class="thead2"><h4>📅 Antigüedad por Rango</h4></div><div style="padding:14px 17px;" id="inv-aging-bars"></div></div>
     <div class="tcard mt4">
-      <div class="thead2"><h4>🔑 Unidades más vencidas<span class="hint" id="inv-uni-hint"> · top 25</span></h4></div>
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4>🔑 Unidades más vencidas<span class="hint" id="inv-uni-hint"> · top 25</span></h4><button onclick="exportTableExcel("tbl-inv-uni","Inventario_Unidades")" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
       <div class="tscroll"><table id="tbl-inv-uni">
         <thead><tr>
           <th>#</th><th>Segmento</th><th>Modelo</th><th>Año</th>
@@ -598,7 +599,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
     <!-- P&L Table -->
     <div class="tcard mt4">
-      <div class="thead2"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4></div>
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4><button onclick="exportTableExcel("tbl-fc-edo","Forecast_EdoResultados")" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
       <div class="tscroll"><table id="tbl-fc-edo">
         <thead><tr>
           <th>Concepto</th><th style="text-align:right">Forecast</th>
@@ -1057,7 +1058,35 @@ function fCxPpto(){
 function fAnt(){let d=window._ant;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
 function fInv(){let d=window._inv;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
 
-// Debounce helper for comment inputs
+// ── EXPORT TO EXCEL ─────────────────────────────────────────────
+function exportTableExcel(tableId, filename){
+  const tbl = document.getElementById(tableId);
+  if(!tbl){ alert('Tabla no encontrada'); return; }
+  try{
+    // Build data array from table headers + rows, stripping HTML tags
+    const strip = s => String(s||'').replace(/<[^>]+>/g,'').replace(/&amp;/g,'&')
+                        .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').trim();
+    const headers = [...tbl.querySelectorAll('thead tr th')].map(th=>strip(th.innerHTML));
+    const rowData = [...tbl.querySelectorAll('tbody tr')].map(tr=>
+      [...tr.querySelectorAll('td')].map(td=>{
+        // If cell has an input, use input value
+        const inp = td.querySelector('input');
+        if(inp) return inp.value||'';
+        return strip(td.innerHTML);
+      })
+    );
+    const data = [headers, ...rowData];
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    // Auto column widths
+    const colWidths = headers.map((_,ci)=>({
+      wch: Math.max(headers[ci].length, ...rowData.map(r=>(r[ci]||'').toString().length), 10)
+    }));
+    ws['!cols'] = colWidths;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, filename.substring(0,31));
+    XLSX.writeFile(wb, `${filename}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  } catch(e){ alert('Error al exportar: '+e.message); }
+}
 const _debounceTimers = {};
 function debounced(key, fn, ms=800){
   clearTimeout(_debounceTimers[key]);
@@ -2053,14 +2082,18 @@ function renderInvTable(inv){
 async function renderInvUnidades(inv){
   const BKT_COLOR={'Por Vencer':'#10b981','1-30 días':'#3b82f6','31-60 días':'#f59e0b',
     '61-90 días':'#f97316','91-120 días':'#ef4444','+120 días':'#7c3aed'};
-  // Sort by antigüedad desc, take top 25
-  const rows=[...inv].sort((a,b)=>b.antiguedad-a.antiguedad).slice(0,25);
+  // Si hay filtro activo (segmento o bucket) mostrar todos; sin filtro top 25
+  const hasFilter = !!(activeSeg || activeBucket);
+  const rows = [...inv].sort((a,b)=>b.antiguedad-a.antiguedad);
+  const display = hasFilter ? rows : rows.slice(0,25);
   const hint=document.getElementById('inv-uni-hint');
   if(hint){
     const parts=[];
     if(activeSeg)parts.push(activeSeg);
     if(activeBucket)parts.push(activeBucket);
-    hint.textContent=` · top 25${parts.length?' | '+parts.join(' + '):''}`;
+    hint.textContent = hasFilter
+      ? ` · ${display.length} unidades | ${parts.join(' + ')}`
+      : ` · top 25`;
   }
   const alerta=d=>{
     if(d>360)return'<span style="color:#7c3aed;font-weight:700">⚠ +360d</span>';
@@ -2070,10 +2103,10 @@ async function renderInvUnidades(inv){
     return'<span style="color:#94a3b8">—</span>';
   };
   await loadInvComments();
-  const activeVins = new Set(rows.map(r=>r.vin).filter(Boolean));
+  const activeVins = new Set(display.map(r=>r.vin).filter(Boolean));
 
-  document.querySelector('#tbl-inv-uni tbody').innerHTML=rows.length
-    ?rows.map((r,i)=>{
+  document.querySelector('#tbl-inv-uni tbody').innerHTML=display.length
+    ?display.map((r,i)=>{
       const saved = (_invComments[r.vin]?.comment||'').replace(/"/g,'&quot;');
       return `<tr>
         <td style="color:var(--text-muted);font-size:11px">${i+1}</td>
