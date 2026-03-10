@@ -3252,6 +3252,21 @@ async function runForecast(manual=false){
       ippRawRows: ippBancos.map(b=>({banco:b.banco, rawRows:b.rawRows||[]})),
       mes, tasa
     };
+  } else if(_fcCache.slim){
+    // Slim cache (loaded from Supabase) — bySeg/bySegDist pre-aggregated, no raw ventas
+    ventas = null;
+    const tasaDiaria = tasa/100/365;
+    ippBancos = (_fcCache.ippRawRows||[]).map(({banco, rawRows})=>{
+      const map={};
+      rawRows.forEach(r=>{
+        const interes = r.interesFixed !== null
+          ? r.interesFixed
+          : r.saldo * tasaDiaria * diasMes;
+        ippAccum(map, r.seg, r.dist, r.saldo, interes);
+      });
+      return {...ippFlatten(banco, map), rawRows};
+    });
+    console.log('[forecast] slim cache, segs:', Object.keys(_fcCache.bySeg||{}).length, 'bancos:', ippBancos.map(b=>b.banco));
   } else {
     // Rebuild from cache rawRows with current tasa/diasMes
     ventas    = _fcCache.ventas;
@@ -3260,8 +3275,8 @@ async function runForecast(manual=false){
       const map={};
       rawRows.forEach(r=>{
         const interes = r.interesFixed !== null
-          ? r.interesFixed                        // Banorte: fixed interest
-          : r.saldo * tasaDiaria * diasMes;       // others: recalculate
+          ? r.interesFixed
+          : r.saldo * tasaDiaria * diasMes;
         ippAccum(map, r.seg, r.dist, r.saldo, interes);
       });
       return {...ippFlatten(banco, map), rawRows};
@@ -3269,21 +3284,37 @@ async function runForecast(manual=false){
     console.log('[forecast] cache recalculado, ventas:', ventas.length, 'bancos:', ippBancos.map(b=>b.banco));
   }
 
-  // ── 2. Apply segment + society filters to ventas ──────────────
+  // ── 2. Apply segment + society filters ──────────────────────
   const fcSegFilter = activeFcSeg || null;
-  let ventasFilt = ventas;
-  if(activeSoc) ventasFilt = ventasFilt.filter(v => div2soc(String(v.dist||'')) === activeSoc);
-  if(fcSegFilter) ventasFilt = ventasFilt.filter(v => v.seg === fcSegFilter);
-
-  // Group by segment
-  const bySeg = {};
-  ventasFilt.forEach(v => {
-    if(!bySeg[v.seg]) bySeg[v.seg] = {und:0,rev:0,costo:0,ub:0};
-    bySeg[v.seg].und++;
-    bySeg[v.seg].rev   += v.precio;
-    bySeg[v.seg].costo += v.costo;
-    bySeg[v.seg].ub    += v.ub;
-  });
+  // Build bySeg from either raw ventas or slim pre-aggregated data
+  let bySeg;
+  if(ventas){
+    // Full ventas array available — filter then aggregate
+    let ventasFilt = ventas;
+    if(activeSoc) ventasFilt = ventasFilt.filter(v => div2soc(String(v.dist||'')) === activeSoc);
+    if(fcSegFilter) ventasFilt = ventasFilt.filter(v => v.seg === fcSegFilter);
+    bySeg = {};
+    ventasFilt.forEach(v => {
+      if(!bySeg[v.seg]) bySeg[v.seg] = {und:0,rev:0,costo:0,ub:0};
+      bySeg[v.seg].und++;
+      bySeg[v.seg].rev   += v.precio;
+      bySeg[v.seg].costo += v.costo;
+      bySeg[v.seg].ub    += v.ub;
+    });
+  } else {
+    // Slim cache — apply filters to bySegDist then re-aggregate
+    let rows = _fcCache.bySegDist||[];
+    if(activeSoc) rows = rows.filter(r => div2soc(String(r.dist||'')) === activeSoc);
+    if(fcSegFilter) rows = rows.filter(r => r.seg === fcSegFilter);
+    bySeg = {};
+    rows.forEach(r => {
+      if(!bySeg[r.seg]) bySeg[r.seg] = {und:0,rev:0,costo:0,ub:0};
+      bySeg[r.seg].und   += r.und;
+      bySeg[r.seg].rev   += r.rev;
+      bySeg[r.seg].costo += r.costo;
+      bySeg[r.seg].ub    += r.ub;
+    });
+  }
   const segRows = Object.entries(bySeg).sort((a,b) => b[1].rev - a[1].rev);
   const ippTotal = ippBancos.reduce((s,b)=>s+b.total,0);
   const ippSaldo = ippBancos.reduce((s,b)=>s+b.saldo,0);
@@ -3604,26 +3635,60 @@ async function runForecast(manual=false){
 // ═══════════════════════════════════════════
 async function saveFcSnapshot(){
   if(!_fcCache){ console.warn('[fc_snapshot] _fcCache vacío, no se guarda'); return; }
-  fcStatus('💾 Guardando forecast en Supabase…', 'var(--text-dim)');
-  const payload = {
-    fcCache:  _fcCache,
+
+  // Yield so the browser can paint before blocking with JSON.stringify
+  fcStatus('💾 Serializando forecast…', 'var(--text-dim)');
+  await new Promise(r=>setTimeout(r,50));
+
+  // Build a SLIM payload: store only aggregated bySeg + IPP rawRows
+  // NOT the full ventas array (can be thousands of rows, too large)
+  const slim = {
     fcConfig: Object.keys(_fcConfig).length ? _fcConfig : null,
     fcMes:    document.getElementById('fc-mes')?.value  || null,
     fcTasa:   document.getElementById('fc-tasa')?.value || null,
-    savedAt:  Date.now()
+    savedAt:  Date.now(),
+    // bySeg: aggregated totals per segment (no filter) — rebuilt from ventas
+    bySeg: (()=>{
+      const map = {};
+      (_fcCache.ventas||[]).forEach(v=>{
+        if(!map[v.seg]) map[v.seg]={und:0,rev:0,costo:0,ub:0};
+        map[v.seg].und++;
+        map[v.seg].rev   += v.precio;
+        map[v.seg].costo += v.costo;
+        map[v.seg].ub    += v.ub;
+      });
+      return map;
+    })(),
+    // bySegDist: for soc filter — aggregated per seg+dist
+    bySegDist: (()=>{
+      const map = {};
+      (_fcCache.ventas||[]).forEach(v=>{
+        const k = v.seg+'|'+v.dist;
+        if(!map[k]) map[k]={seg:v.seg,dist:v.dist,und:0,rev:0,costo:0,ub:0};
+        map[k].und++;
+        map[k].rev   += v.precio;
+        map[k].costo += v.costo;
+        map[k].ub    += v.ub;
+      });
+      return Object.values(map);
+    })(),
+    // IPP raw rows for recalculation
+    ippRawRows: _fcCache.ippRawRows || []
   };
-  const str = JSON.stringify(payload);
+
+  const str = JSON.stringify(slim);
   const totalChunks = Math.ceil(str.length / CHUNK_SIZE);
-  console.log(`[fc_snapshot] guardando ${totalChunks} chunk(s), ${str.length} chars, ventas: ${_fcCache?.ventas?.length}`);
+  console.log(`[fc_snapshot] payload slim: ${str.length} chars, ${totalChunks} chunk(s)`);
+  fcStatus(`💾 Guardando forecast… (${(str.length/1024).toFixed(0)}KB)`, 'var(--text-dim)');
+  await new Promise(r=>setTimeout(r,30));
+
   try{
-    // Save meta first
     await supaUpsert('dashboard_snapshot', {
       id: 'fc_meta',
-      data: {total: totalChunks, savedAt: Date.now(), savedBy: _currentUser?.username},
+      data: {total: totalChunks, slim: true, savedAt: Date.now(), savedBy: _currentUser?.username},
       updated_by: _currentUser?.username,
       updated_at: new Date().toISOString()
     });
-    // Save each chunk
     for(let i=0; i<totalChunks; i++){
       const chunk = str.slice(i*CHUNK_SIZE, (i+1)*CHUNK_SIZE);
       fcStatus(`💾 Guardando forecast… ${i+1}/${totalChunks}`, 'var(--text-dim)');
@@ -3633,18 +3698,12 @@ async function saveFcSnapshot(){
         updated_by: _currentUser?.username,
         updated_at: new Date().toISOString()
       });
-      console.log(`[fc_snapshot] chunk ${i+1}/${totalChunks} OK`);
     }
-    // Verify
-    const verify = await supaGet('dashboard_snapshot','id=eq.fc_meta');
-    if(!verify || verify[0]?.data?.total !== totalChunks){
-      throw new Error('Verificación fallida: fc_meta no coincide');
-    }
-    fcStatus(`✅ Forecast guardado (${totalChunks} chunk(s), ${_fcCache?.ventas?.length} ventas)`, '#00d4aa');
-    console.log(`[fc_snapshot] ✓ verificado OK`);
+    fcStatus(`✅ Forecast guardado — ${Object.keys(slim.bySeg||{}).length} segmentos`, '#00d4aa');
+    console.log('[fc_snapshot] ✓ guardado OK');
   } catch(e){
     fcStatus(`❌ Error guardando forecast: ${e.message}`, '#ef4444');
-    console.error('[fc_snapshot] ERROR al guardar:', e);
+    console.error('[fc_snapshot] ERROR:', e);
     alert('Error al guardar el forecast en Supabase:\n' + e.message);
     throw e;
   }
@@ -3670,12 +3729,24 @@ async function loadFcSnapshot(){
       chunks.push(row[0].data.chunk);
     }
     const d = JSON.parse(chunks.join(''));
-    _fcCache = d.fcCache || null;
+    // Support both slim format (bySeg/bySegDist) and legacy format (fcCache)
+    if(d.bySeg){
+      // Slim format: reconstruct _fcCache from aggregated data
+      _fcCache = {
+        ventas: null,       // raw rows not stored (too large)
+        bySeg: d.bySeg,
+        bySegDist: d.bySegDist || [],
+        ippRawRows: d.ippRawRows || [],
+        slim: true          // flag: runForecast will use bySeg instead of parsing ventas
+      };
+    } else {
+      _fcCache = d.fcCache || null;
+    }
     if(d.fcConfig) _fcConfig = {...d.fcConfig};
     if(d.fcMes){  const m=document.getElementById('fc-mes');  if(m) m.value=d.fcMes;  }
     if(d.fcTasa){ const t=document.getElementById('fc-tasa'); if(t) t.value=d.fcTasa; }
-    console.log('[fc_snapshot] ✓ cargado OK — ventas:', _fcCache?.ventas?.length,
-      'ippBancos:', _fcCache?.ippRawRows?.length, 'fcConfig:', JSON.stringify(_fcConfig));
+    console.log('[fc_snapshot] ✓ cargado OK — slim:', !!d.bySeg,
+      'segs:', Object.keys(d.bySeg||{}).length, 'ippBancos:', _fcCache?.ippRawRows?.length);
     return !!_fcCache;
   } catch(e){
     console.error('[fc_snapshot] error al cargar:', e);
