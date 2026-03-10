@@ -2877,8 +2877,6 @@ function handleFcFile(type, input){
     const btnEl = document.getElementById('fc-btn-'+type);
     if(btnEl) btnEl.classList.add('loaded');
     runForecast();
-    // Save snapshot so gerentes see updated forecast
-    if(_currentUser?.role==='admin') saveSnapshot().catch(e=>console.warn('[snapshot fc]',e));
   };
   reader.onerror = () => fcStatus(`❌ Error leyendo ${file.name}`, '#ef4444');
   reader.readAsArrayBuffer(file);
@@ -3240,7 +3238,7 @@ function fcStatus(msg, color='var(--text-dim)'){
   if(el) el.innerHTML=`<span style="color:${color}">${msg}</span>`;
 }
 
-function runForecast(manual=false){
+async function runForecast(manual=false){
   buildFcSegCombo();
   const mes    = +document.getElementById('fc-mes').value || 3;
   const tasa   = +document.getElementById('fc-tasa').value || 12.5;
@@ -3612,6 +3610,12 @@ function runForecast(manual=false){
   // Done
   const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
   fcStatus(`✓ Forecast calculado — ${totUnd} unidades · Ingresos: ${fC(grandTotRev)} · MC: ${fC(grandUtMC)}${ippMsg}`, '#00d4aa');
+
+  // Persist forecast for gerentes whenever admin calculates
+  if(_currentUser?.role === 'admin'){
+    try{ await saveSnapshot(); }
+    catch(e){ console.warn('[snapshot fc]', e); }
+  }
 
   } catch(err){
     fcStatus('❌ Error JS: ' + err.message + ' (línea ~' + (err.stack||'').split('\n').slice(0,2).join(' | ') + ')', '#ef4444');
