@@ -423,7 +423,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
       <div class="ccard"><h4>Ingresos por Línea</h4><div class="cwrap"><canvas id="ch-ing2"></canvas></div></div>
       <div class="ccard"><h4>Estructura de Costos</h4><div class="cwrap"><canvas id="ch-cost"></canvas></div></div>
     </div>
-    <div class="tcard"><div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="edo-title">📊 Estado de Resultados</h4><button onclick="exportTableExcel("tbl-edo","Estado_Resultados")" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="tcard"><div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="edo-title">📊 Estado de Resultados</h4><button onclick="exportTableExcel('tbl-edo','Estado_Resultados')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4" id="wrap-indicadores"><div class="thead2"><h4 id="ind-title">📊 Indicadores por Unidad<span class="hint" id="ind-seg-hint"></span></h4></div><div class="tscroll"><table id="tbl-indicadores"><thead><tr></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4" id="wrap-margen-seg">
       <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -464,7 +464,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
             oninput="filterRefTable()"
             style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:5px 10px;border-radius:6px;width:220px;font-family:'Inter',sans-serif">
           <span id="seg-ref-status" style="font-size:10px;color:var(--text-muted)"></span>
-          <button onclick="exportTableExcel("tbl-seg-ref","Cartera_Referencias")" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button>
+          <button onclick="exportTableExcel('tbl-seg-ref','Cartera_Referencias')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button>
         </div>
       </div>
       <div class="tscroll">
@@ -495,7 +495,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <div class="tcard"><div class="thead2"><h4>📦 Detalle por Segmento<span class="hint">· toca fila para filtrar</span></h4></div><div class="tscroll"><table id="tbl-inv-s"><thead><tr><th>Segmento</th><th>Unidades</th><th>Valor</th><th>$/Und</th><th>Días Prom</th><th>Días Máx</th><th>Alerta</th></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4"><div class="thead2"><h4>📅 Antigüedad por Rango</h4></div><div style="padding:14px 17px;" id="inv-aging-bars"></div></div>
     <div class="tcard mt4">
-      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4>🔑 Unidades más vencidas<span class="hint" id="inv-uni-hint"> · top 25</span></h4><button onclick="exportTableExcel("tbl-inv-uni","Inventario_Unidades")" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4>🔑 Unidades más vencidas<span class="hint" id="inv-uni-hint"> · top 25</span></h4><button onclick="exportTableExcel('tbl-inv-uni','Inventario_Unidades')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
       <div class="tscroll"><table id="tbl-inv-uni">
         <thead><tr>
           <th>#</th><th>Segmento</th><th>Modelo</th><th>Año</th>
@@ -599,7 +599,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
     <!-- P&L Table -->
     <div class="tcard mt4">
-      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4><button onclick="exportTableExcel("tbl-fc-edo","Forecast_EdoResultados")" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4><button onclick="exportTableExcel('tbl-fc-edo','Forecast_EdoResultados')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
       <div class="tscroll"><table id="tbl-fc-edo">
         <thead><tr>
           <th>Concepto</th><th style="text-align:right">Forecast</th>
