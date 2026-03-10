@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=e1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard Ejecutivo — Seguimiento Mensual</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -2911,13 +2911,15 @@ function parseFcBanorte(data, _tasa, _dias){
   const iDist= hdr.findIndex(h=>h==='DISTRIBUIDORA');
   const iSeg = hdr.findIndex(h=>h==='SEGMENTO');
   const map={};
+  const rawRows=[];
   raw.slice(1).forEach(row=>{
     if(!row||!row[iInt]) return;
     const interes = +(row[iInt]||0);
     if(interes<=0) return;
     ippAccum(map, row[iSeg], row[iDist], 0, interes);
+    rawRows.push({seg:normSeg(row[iSeg]),dist:normDist(row[iDist]),saldo:0,interesFixed:interes});
   });
-  return ippFlatten('Banorte', map);
+  return {...ippFlatten('Banorte', map), rawRows};
 }
 
 // ─── Parse IPP Santander ───────────────────────────────────────
@@ -2932,14 +2934,16 @@ function parseFcSantander(data, tasaAnual, diasMes){
   const iSeg  = hdr.findIndex(h=>h==='segmento');
   const tasaDiaria = tasaAnual/100/365;
   const map={};
+  const rawRows=[];
   raw.slice(1).forEach(row=>{
     if(!row) return;
     const saldo = +(row[iSaldo]||0);
     if(saldo<=0) return;
     const interes = saldo * tasaDiaria * diasMes;
     ippAccum(map, row[iSeg], row[iDist], saldo, interes);
+    rawRows.push({seg:normSeg(row[iSeg]),dist:normDist(row[iDist]),saldo,interesFixed:null});
   });
-  return ippFlatten('Santander', map);
+  return {...ippFlatten('Santander', map), rawRows};
 }
 
 // ─── Parse IPP BBVA ────────────────────────────────────────────
@@ -2958,6 +2962,7 @@ function parseFcBBVA(data, tasaAnual, diasMes){
   const iSeg  = hdr0.findIndex(h=>h==='SEGMENTO');
   const tasaDiaria = tasaAnual/100/365;
   const map={};
+  const rawRows=[];
   raw.slice(1).forEach(row=>{
     if(!row) return;
     // Skip sub-header rows (no numeric IMPORTE)
@@ -2965,8 +2970,9 @@ function parseFcBBVA(data, tasaAnual, diasMes){
     if(saldo<=0) return;
     const interes = saldo * tasaDiaria * diasMes;
     ippAccum(map, row[iSeg], row[iDist], saldo, interes);
+    rawRows.push({seg:normSeg(row[iSeg]),dist:normDist(row[iDist]),saldo,interesFixed:null});
   });
-  return ippFlatten('BBVA', map);
+  return {...ippFlatten('BBVA', map), rawRows};
 }
 
 // ─── Parse IPP Daimler ─────────────────────────────────────────
@@ -2987,14 +2993,16 @@ function parseFcDaimler(data, tasaAnual, diasMes){
   const iSeg  = hdr.findIndex(h=>h==='segmento');
   const tasaDiaria = tasaAnual/100/365;
   const map={};
+  const rawRows=[];
   raw.slice(hdrIdx+1).forEach(row=>{
     if(!row) return;
     const saldo = +(row[iSaldo]||0);
     if(saldo<=0) return;
     const interes = saldo * tasaDiaria * diasMes;
     ippAccum(map, row[iSeg], row[iDist], saldo, interes);
+    rawRows.push({seg:normSeg(row[iSeg]),dist:normDist(row[iDist]),saldo,interesFixed:null});
   });
-  return ippFlatten('Daimler', map);
+  return {...ippFlatten('Daimler', map), rawRows};
 }
 
 
@@ -3160,13 +3168,27 @@ function runForecast(manual=false){
     if(FC.santander)ippBancos.push(parseFcSantander(FC.santander,tasa, diasMes));
     if(FC.bbva)     ippBancos.push(parseFcBBVA(FC.bbva,         tasa, diasMes));
     if(FC.daimler)  ippBancos.push(parseFcDaimler(FC.daimler,   tasa, diasMes));
-    // Save parsed cache (JSON-safe, much smaller than raw bytes)
-    _fcCache = { ventas, ippBancos, mes, tasa };
+    // Save parsed cache — store rawRows (JSON-safe) so tasa/mes can be recalculated
+    _fcCache = {
+      ventas,
+      ippRawRows: ippBancos.map(b=>({banco:b.banco, rawRows:b.rawRows||[]})),
+      mes, tasa
+    };
   } else {
-    // Use pre-parsed cache from snapshot
+    // Rebuild from cache rawRows with current tasa/diasMes
     ventas    = _fcCache.ventas;
-    ippBancos = _fcCache.ippBancos;
-    console.log('[forecast] usando cache parseado, ventas:', ventas.length, 'ipp bancos:', ippBancos.length);
+    const tasaDiaria = tasa/100/365;
+    ippBancos = (_fcCache.ippRawRows||[]).map(({banco, rawRows})=>{
+      const map={};
+      rawRows.forEach(r=>{
+        const interes = r.interesFixed !== null
+          ? r.interesFixed                        // Banorte: fixed interest
+          : r.saldo * tasaDiaria * diasMes;       // others: recalculate
+        ippAccum(map, r.seg, r.dist, r.saldo, interes);
+      });
+      return {...ippFlatten(banco, map), rawRows};
+    });
+    console.log('[forecast] cache recalculado, ventas:', ventas.length, 'bancos:', ippBancos.map(b=>b.banco));
   }
 
   // ── 2. Apply segment + society filters to ventas ──────────────
@@ -3185,6 +3207,7 @@ function runForecast(manual=false){
     bySeg[v.seg].ub    += v.ub;
   });
   const segRows = Object.entries(bySeg).sort((a,b) => b[1].rev - a[1].rev);
+  const ippTotal = ippBancos.reduce((s,b)=>s+b.total,0);
   const ippSaldo = ippBancos.reduce((s,b)=>s+b.saldo,0);
   // IPP by segment — filter by society and segment
   const ippBySeg={};
