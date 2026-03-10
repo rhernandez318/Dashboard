@@ -3485,45 +3485,11 @@ function runForecast(manual=false){
   }
 
 
-  const gvLabel = hayIPP ? '🏷️ Gastos de Venta (Ppto − Plan Piso + IPP Real)' : '🏷️ Gastos de Venta — del Presupuesto';
-  html += sepRow(gvLabel);
-  html += totRow('TOTAL GASTOS DE VENTA', totGVreal, hasPpto?ppGV:null);
-  html += totRow('★ UTILIDAD CONTRIBUCIÓN', grandUtMC, hasPpto?ppMC:null);
-  html += pctRow('% Margen Contribución', grandUtMC, grandTotRev, ppMC, ppRev);
-
-
-  // Renglón informativo Plan Piso (no genera nueva línea de utilidad)
-  const ippLabel = hayIPP ? '🚗 Plan Piso — Intereses bancarios (real)'
-                          : '🚗 Plan Piso — del Presupuesto (referencia)';
-  html += sepRow(ippLabel);
-  html += dataRow(hayIPP ? 'IPP real bancario' : 'Plan Piso presupuesto',
-                  totIPPinfo, hasPpto ? ppTotalPP : null,
-                  {indent:true, color:'#f59e0b'});
-
-  if(!fcSegFilter){
-    html += sepRow('🏢 Gastos Indirectos — del Presupuesto');
-    html += dataRow('Gastos Administración', totGI, hasPpto?ppGI:null, {indent:true, color:'#f59e0b'});
-    html += totRow('★ UTILIDAD OPERACIÓN', grandUtOp, hasPpto?ppOp:null);
-    html += pctRow('% Margen Operación', grandUtOp, grandTotRev, ppOp, ppRev);
-
-    html += sepRow('📊 Otros Ingresos / Gastos — del Presupuesto');
-    html += dataRow('Otros neto (intereses, FX, etc.)', ppOtros, hasPpto?ppOtros:null, {indent:true, color:'#94a3b8'});
-    const utAIT = grandUtOp - ppOtros;
-    const ppUAITval = ppOp - ppOtros;
-    html += totRow('★ UTILIDAD ANTES DE IMPUESTOS', utAIT, hasPpto?ppUAITval:null);
-    html += pctRow('% UAIT', utAIT, grandTotRev, ppUAITval, ppRev);
-  }
-
   document.querySelector('#tbl-fc-edo thead tr').innerHTML =
     `<th>Concepto</th><th style="text-align:right">Forecast ${NAMES[mes-1]}</th>`+
     (hasPpto?`<th style="text-align:right">Presupuesto</th><th style="text-align:right">Var $</th><th style="text-align:right">Var %</th>`
             :`<th colspan="3" style="color:#475569">Presupuesto — carga archivo</th>`);
   document.querySelector('#tbl-fc-edo tbody').innerHTML = html;
-
-  // ── 7. Margen por segmento forecast ──────────────────────────
-  function colored(v){return`<span style="color:${v>=0?'var(--green)':'var(--red)'};font-weight:700">${fC(v)}</span>`;}
-  function pf(n,d){return d?((n/d)*100).toFixed(1)+'%':'—';}
-  function pill(v,d){return`<span class="pill ${v>=0?'pg':'pr'}">${pf(v,d)}</span>`;}
 
   // ── 7. Margen por segmento (config-driven) ────────────────────────────────
   function colored(v){return`<span style="color:${v>=0?'var(--green)':'var(--red)'};font-weight:700">${fC(v)}</span>`;}
