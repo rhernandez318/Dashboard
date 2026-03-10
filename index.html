@@ -2089,7 +2089,7 @@ async function renderInvUnidades(inv){
         <td><input type="text" value="${saved}"
           placeholder="Agregar comentario…"
           data-vin="${r.vin}"
-          oninput="debounced('inv_'+this.dataset.vin, ()=>saveInvComment(this.dataset.vin, this.value))"
+          oninput="if(this.value.trim())_invComments[this.dataset.vin]={comment:this.value.trim(),ts:Date.now()};else delete _invComments[this.dataset.vin];debounced('inv_'+this.dataset.vin, ()=>saveInvComment(this.dataset.vin, this.value))"
           style="width:100%;background:var(--surface2);border:1px solid var(--border);
                  color:var(--text);font-size:11px;padding:4px 8px;border-radius:5px;
                  font-family:'Inter',sans-serif;outline:none"
@@ -3078,7 +3078,7 @@ async function buildRefTable(){
       <td><input type="text" value="${saved.replace(/"/g,'&quot;')}"
         placeholder="Agregar comentario…"
         data-ref="${r.ref}"
-        oninput="debounced('ref_'+this.dataset.ref, ()=>saveRefComment(this.dataset.ref, this.value))"
+        oninput="if(this.value.trim())_refComments[this.dataset.ref]={comment:this.value.trim(),ts:Date.now()};else delete _refComments[this.dataset.ref];debounced('ref_'+this.dataset.ref, ()=>saveRefComment(this.dataset.ref, this.value))"
         style="width:100%;background:var(--surface2);border:1px solid var(--border);
                color:var(--text);font-size:11px;padding:4px 8px;border-radius:5px;
                font-family:'Inter',sans-serif;outline:none"
