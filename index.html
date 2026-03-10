@@ -3355,69 +3355,29 @@ function runForecast(manual=false){
   const grandTotUB    = allSegRows.reduce((s,[,d])=>s+d.ub,   0);
   const grandTotUnd   = allSegRows.reduce((s,[,d])=>s+d.und,  0);
 
-  // GV = always from ppto (all non-admin segments), replacing PP with real IPP if loaded
+  // GV = ppto (respeta filtro de segmento y sociedad), reemplaza PP con IPP real si está cargado
   const segsGVppto = [...new Set(
-    cxP.filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg)
+    cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN'
+                        &&(!fcSegFilter||r.seg===fcSegFilter)).map(r=>r.seg)
   )];
   function ippPorSeg(seg){ return hayIPP ? (ippBySeg[normSeg(seg)]?.interes||0) : 0; }
   function gvForecast(seg){ return pptoGv(seg) + ippPorSeg(seg); }
   let totGVreal = 0; segsGVppto.forEach(seg=>{ totGVreal += gvForecast(seg); });
   const totIPPinfo = hayIPP ? ippTotalFilt : segsGVppto.reduce((s,seg)=>s+pptoPP(seg),0);
-  const totGI    = pptoGi();
+  const totGI    = fcSegFilter ? 0 : pptoGi();
   const grandUtMC = grandTotUB - totGVreal;
   const grandUtOp = grandUtMC  - totGI;
 
   // Unidades: only from forecast-source segments
   const totUnd = allSegRows.filter(([,d])=>d.src==='forecast').reduce((s,[,d])=>s+d.und,0);
 
-  // Fórmula: sin IPP → GV = ppto completo | con IPP → GV = ppto − PP ppto + IPP calculado
-  const segsGVppto = [...new Set(
-    cxP.filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg)
-  )];
-  function ippPorSeg(seg){ return hayIPP ? (ippBySeg[normSeg(seg)]?.interes||0) : 0; }
-  function gvForecast(seg){ return pptoGv(seg) + ippPorSeg(seg); }
-  // pptoGv ya excluye PP cuando hayIPP=true, así que: gvForecast = (ppto−PP) + IPP real ✓
-  //                                                o: gvForecast = ppto completo (sin IPP) ✓
-  let totGVreal = 0; segsGVppto.forEach(seg=>{ totGVreal += gvForecast(seg); });
-  // IPP informativo para el renglón de referencia
-  const totIPPinfo = hayIPP ? ippTotalFilt : segsGVppto.reduce((s,seg)=>s+pptoPP(seg),0);
-  const totGI    = pptoGi();
-
-  // ── Segmentos con presupuesto de ingresos pero SIN ventas en FC ──
-  // (ej. Refacciones, Taller, Alliance, HYP) — se agregan con valores de presupuesto
-  const segsConVentas = new Set(segRows.map(([s])=>s));
-  const cxPmes = cxPfilt(cxP).filter(r=>r.periodo===mes);
-  const segsPptoOnly = fcSegFilter
-    ? (segsConVentas.has(fcSegFilter) ? [] : [fcSegFilter])  // filtro activo pero sin ventas → mostrar ese seg
-    : [...new Set(
-        cxPmes.filter(r=>r.ctaTipo==='4'&&r.seg&&r.seg!=='ADMINISTRACIÓN'&&!segsConVentas.has(r.seg))
-              .map(r=>r.seg)
-      )].sort();
-
-  const pptoOnlyRows = segsPptoOnly.map(seg=>{
-    const rev  = -cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
-    const cost =  cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
-    const ub   = rev - cost;
-    return [seg, {und:0, rev, costo:cost, ub, pptoOnly:true}];
-  }).filter(([,d])=>d.rev>0);
-
-  // Add ppto-only totals to grand totals
-  const pptoOnlyTotRev   = pptoOnlyRows.reduce((s,[,d])=>s+d.rev,0);
-  const pptoOnlyTotCosto = pptoOnlyRows.reduce((s,[,d])=>s+d.costo,0);
-  const pptoOnlyTotUB    = pptoOnlyRows.reduce((s,[,d])=>s+d.ub,0);
-
-  const grandTotRev   = totRev   + pptoOnlyTotRev;
-  const grandTotCosto = totCosto + pptoOnlyTotCosto;
-  const grandTotUB    = utBruta  + pptoOnlyTotUB;
-  const grandUtMC     = grandTotUB - totGVreal;
-  const grandUtOp     = grandUtMC - totGI;
   const ppRev    = -cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
   const ppCost   =  cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
   const ppUB     = ppRev - ppCost;
-  const ppTotalPP= cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&isPlanPiso(r.cuenta))
-                     .reduce((a,r)=>a+r.importe,0);
-  const ppGV     = cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN')
-                     .reduce((a,r)=>a+r.importe,0);  // ppto GV completo (incl PP)
+  const ppTotalPP= cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&isPlanPiso(r.cuenta)
+                     &&(!fcSegFilter||r.seg===fcSegFilter)).reduce((a,r)=>a+r.importe,0);
+  const ppGV     = cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN'
+                     &&(!fcSegFilter||r.seg===fcSegFilter)).reduce((a,r)=>a+r.importe,0);
   const ppGI     = pptoGi();
   const ppMC     = ppUB - ppGV;
   const ppOp     = ppMC - ppGI;
