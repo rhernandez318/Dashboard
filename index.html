@@ -1416,7 +1416,13 @@ async function applySession(user){
     const rd=document.getElementById('report-date');
     rd.textContent='⏳ Cargando último reporte…';
     let ok = false;
-    try{ ok = await loadSnapshot(); } catch(e){ console.error('[loadSnapshot]',e); rd.textContent='Error: '+e.message; }
+    for(let attempt=1; attempt<=2; attempt++){
+      try{ ok = await loadSnapshot(); if(ok) break; } catch(e){
+        console.warn('[loadSnapshot] intento '+attempt+' fallido:',e);
+        if(attempt===1){ rd.textContent='⏳ Reintentando…'; await new Promise(r=>setTimeout(r,2000)); }
+        else { rd.textContent='Error: '+e.message; }
+      }
+    }
     if(ok){
       rd.textContent='⏳ Construyendo dashboard…';
       await new Promise(r=>setTimeout(r,50));
@@ -1543,7 +1549,7 @@ function renderUsersTable(){
 // ═══════════════════════════════════════════
 function procesarDatos(){
   document.getElementById('loading').style.display='flex';
-  setTimeout(()=>{
+  setTimeout(async ()=>{
     try{
       window._inv=parseInv(F.inventario);
       window._ant=parseAnt(F.antiguedad);
@@ -1565,6 +1571,27 @@ function procesarDatos(){
       const rd=document.getElementById('report-date');
       const origTxt=rd.textContent;
       rd.textContent='⏳ Publicando en Supabase…';
+      // Si no hay forecast en memoria, intentar rescatar el fcCache existente en Supabase
+      // para no borrarlo al subir nuevos archivos BDD sin subir forecast
+      if(!_fcCache && !FC.ventas){
+        try{
+          const meta = await supaGet('dashboard_snapshot','id=eq.main_meta');
+          if(meta && meta[0]?.data?.total > 0){
+            const total = meta[0].data.total;
+            const chunks = [];
+            for(let i=0;i<total;i++){
+              const row = await supaGet('dashboard_snapshot',`id=eq.main_${i}`);
+              if(row && row[0]?.data?.chunk) chunks.push(row[0].data.chunk);
+              else break;
+            }
+            if(chunks.length===total){
+              const prev = JSON.parse(chunks.join(''));
+              if(prev.fcCache){ _fcCache=prev.fcCache; console.log('[procesarDatos] fcCache rescatado del snapshot previo'); }
+              if(prev.fcConfig && Object.keys(prev.fcConfig||{}).length) _fcConfig={...prev.fcConfig};
+            }
+          }
+        } catch(e){ console.warn('[procesarDatos] no se pudo rescatar fcCache:',e); }
+      }
       saveSnapshot()
         .then(()=>{ rd.textContent=origTxt+' · ✓ Publicado'; })
         .catch((e)=>{
@@ -2850,6 +2877,8 @@ function handleFcFile(type, input){
     const btnEl = document.getElementById('fc-btn-'+type);
     if(btnEl) btnEl.classList.add('loaded');
     runForecast();
+    // Save snapshot so gerentes see updated forecast
+    if(_currentUser?.role==='admin') saveSnapshot().catch(e=>console.warn('[snapshot fc]',e));
   };
   reader.onerror = () => fcStatus(`❌ Error leyendo ${file.name}`, '#ef4444');
   reader.readAsArrayBuffer(file);
@@ -3584,10 +3613,6 @@ function runForecast(manual=false){
   const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
   fcStatus(`✓ Forecast calculado — ${totUnd} unidades · Ingresos: ${fC(grandTotRev)} · MC: ${fC(grandUtMC)}${ippMsg}`, '#00d4aa');
 
-  // Auto-save snapshot so gerentes see the updated forecast
-  if(_currentUser?.role === 'admin'){
-    saveSnapshot().catch(e => console.warn('[snapshot fc]', e));
-  }
   } catch(err){
     fcStatus('❌ Error JS: ' + err.message + ' (línea ~' + (err.stack||'').split('\n').slice(0,2).join(' | ') + ')', '#ef4444');
     console.error('[runForecast] ERROR:', err);
