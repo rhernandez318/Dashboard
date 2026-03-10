@@ -54,6 +54,9 @@ header h1 span{color:var(--accent);}
 body.role-gerente #upload-section,
 body.role-gerente #btn-reload,
 body.role-gerente #btn-process{display:none!important;}
+body.role-gerente #fc-upload-ventas,
+body.role-gerente #fc-upload-ipp,
+body.role-gerente #fc-config-wrap{display:none!important;}
 
 /* Upload */
 #upload-section{padding:40px 26px;display:flex;flex-direction:column;align-items:center;gap:24px;}
@@ -556,14 +559,14 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
         <!-- Calcular -->
         <button onclick="runForecast(true)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:6px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🚀 Calcular Forecast</button>
         <!-- Upload ventas -->
-        <label style="position:relative;overflow:hidden;cursor:pointer">
+        <label id="fc-upload-ventas" style="position:relative;overflow:hidden;cursor:pointer">
           <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('ventas',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
           <span id="fc-btn-ventas" style="display:flex;align-items:center;gap:5px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#f59e0b;font-size:10px;font-weight:600;padding:5px 12px;border-radius:6px;white-space:nowrap">
             📂 Ventas Estimadas <span id="fc-st-ventas" style="opacity:.6">— sin cargar</span>
           </span>
         </label>
         <!-- IPP files -->
-        <div style="display:flex;gap:5px;flex-wrap:wrap">
+        <div id="fc-upload-ipp" style="display:flex;gap:5px;flex-wrap:wrap">
           <label style="position:relative;overflow:hidden;cursor:pointer">
             <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('banorte',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
             <span class="ipp-btn" id="fc-btn-banorte">🏦 Banorte <span id="fc-st-banorte" class="ipp-st">—</span></span>
