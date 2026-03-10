@@ -3212,13 +3212,13 @@ function runForecast(manual=false){
   // IPP by segment — filter by society and segment
   const ippBySeg={};
   ippBancos.forEach(b=>{
-    b.rows.forEach(r=>{
-      if(activeSoc && div2soc(r.dist)!==activeSoc) return;
+    (b.rows||[]).forEach(r=>{
+      if(activeSoc && r.dist && div2soc(r.dist)!==activeSoc) return;
       const segKey = normSeg(r.seg);
       if(!ippBySeg[segKey]) ippBySeg[segKey]={saldo:0,interes:0,count:0};
-      ippBySeg[segKey].saldo   += r.saldo;
-      ippBySeg[segKey].interes += r.interes;
-      ippBySeg[segKey].count   += r.count;
+      ippBySeg[segKey].saldo   += (r.saldo||0);
+      ippBySeg[segKey].interes += (r.interes||0);
+      ippBySeg[segKey].count   += (r.count||0);
     });
   });
   const ippTotalFilt = fcSegFilter
