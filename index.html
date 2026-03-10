@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=e1.0">
 <title>Dashboard Ejecutivo — Seguimiento Mensual</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -664,7 +664,7 @@ function handleFile(type,input){
     // Refresh EDO comparisons if dashboard already loaded
     if(document.getElementById('dashboard').style.display!=='none'){
       if(type==='bdd25'&&window._bdd){window._bdd25=parseBDD(F.bdd25);buildEdo(currentPer);}
-      if(type==='ppto'&&window._bdd){window._ppto=parsePpto(F.ppto);buildEdo(currentPer);if(FC.ventas)runForecast();}
+      if(type==='ppto'&&window._bdd){window._ppto=parsePpto(F.ppto);buildEdo(currentPer);if(FC.ventas||_fcCache)runForecast();}
     }
   };
   reader.readAsArrayBuffer(file);
@@ -1024,7 +1024,7 @@ function setSoc(soc,btn){
   activeSeg=null; activeBucket=null; _syncFilterBar();
   refreshAll();
   if(window._bdd)buildStatic();
-  if(FC.ventas)runForecast();
+  if(FC.ventas||_fcCache)runForecast();
 }
 function _syncFilterBar(){
   const hs=!!activeSeg,hb=!!activeBucket;
@@ -1181,14 +1181,10 @@ async function saveSnapshot(){
              ISR_ACC: window._bal.ISR_ACC} : null,
     bdd25: window._bdd25 || null,
     ppto:  window._ppto  || null,
-    // Forecast: save parsed data (not raw ArrayBuffers)
-    fcVentas:    FC.ventas    ? Array.from(new Uint8Array(FC.ventas))    : null,
-    fcBanorte:   FC.banorte   ? Array.from(new Uint8Array(FC.banorte))   : null,
-    fcSantander: FC.santander ? Array.from(new Uint8Array(FC.santander)) : null,
-    fcBbva:      FC.bbva      ? Array.from(new Uint8Array(FC.bbva))      : null,
-    fcDaimler:   FC.daimler   ? Array.from(new Uint8Array(FC.daimler))   : null,
-    fcMes:       document.getElementById('fc-mes')?.value  || null,
-    fcTasa:      document.getElementById('fc-tasa')?.value || null,
+    // Forecast: save parsed cache (JSON-safe, much smaller than raw Excel bytes)
+    fcCache: _fcCache || null,
+    fcMes:   document.getElementById('fc-mes')?.value  || null,
+    fcTasa:  document.getElementById('fc-tasa')?.value || null,
     savedAt: Date.now()
   };
   const str = JSON.stringify(payload);
@@ -1306,19 +1302,10 @@ function applySnapshotData(d){
     window._bal = null;
   }
 
-  // Restore forecast files
-  function toArrayBuffer(arr){ if(!arr)return null; return new Uint8Array(arr).buffer; }
-  FC.ventas    = toArrayBuffer(d.fcVentas);
-  FC.banorte   = toArrayBuffer(d.fcBanorte);
-  FC.santander = toArrayBuffer(d.fcSantander);
-  FC.bbva      = toArrayBuffer(d.fcBbva);
-  FC.daimler   = toArrayBuffer(d.fcDaimler);
-  if(d.fcMes){
-    const m = document.getElementById('fc-mes'); if(m) m.value = d.fcMes;
-  }
-  if(d.fcTasa){
-    const t = document.getElementById('fc-tasa'); if(t) t.value = d.fcTasa;
-  }
+  // Restore forecast cache (parsed data, JSON-safe)
+  _fcCache = d.fcCache || null;
+  if(d.fcMes){  const m=document.getElementById('fc-mes');  if(m) m.value=d.fcMes;  }
+  if(d.fcTasa){ const t=document.getElementById('fc-tasa'); if(t) t.value=d.fcTasa; }
 
   const ok = !!(window._bdd && window._ant && window._inv);
   console.log('[snapshot] applySnapshotData →', ok?'✓ OK':'✗ faltan datos',
@@ -1392,7 +1379,7 @@ async function applySession(user){
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
-        if(FC.ventas){ console.log('[build] lanzando runForecast...'); runForecast(); }
+        if(FC.ventas||_fcCache){ console.log('[build] lanzando runForecast...'); runForecast(); }
         document.getElementById('upload-section').style.display='none';
         document.getElementById('dashboard').style.display='block';
         document.getElementById('soc-bar').style.display='flex';
@@ -1419,7 +1406,7 @@ async function applySession(user){
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
-        if(FC.ventas){ console.log('[build] lanzando runForecast...'); runForecast(); }
+        if(FC.ventas||_fcCache){ console.log('[build] lanzando runForecast...'); runForecast(); }
         document.getElementById('upload-section').style.display='none';
         document.getElementById('dashboard').style.display='block';
         document.getElementById('soc-bar').style.display='flex';
@@ -1455,6 +1442,7 @@ async function doLogout(){
   window._bal=null; window._bdd25=null; window._ppto=null;
   _invComments={}; _invCommentsLoaded=false;
   _refComments={}; _refCommentsLoaded=false;
+  _fcCache=null;
   document.body.classList.remove('role-admin','role-gerente');
   document.getElementById('user-badge').style.display='none';
   const hdrBtn2=document.getElementById('btn-usuarios-hdr'); if(hdrBtn2) hdrBtn2.style.display='none';
@@ -1552,7 +1540,7 @@ function procesarDatos(){
       document.getElementById('btn-reload').style.display='inline-block';
       document.getElementById('report-date').textContent='Al '+TODAY.toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
       document.getElementById('fecha-analisis').textContent=TODAY.toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
-      if(FC.ventas) runForecast();
+      if(FC.ventas||_fcCache) runForecast();
       // Guardar snapshot en Supabase para gerentes
       const rd=document.getElementById('report-date');
       const origTxt=rd.textContent;
@@ -2823,6 +2811,8 @@ function setPeriodo(p,btn){
 // FORECAST — State
 // ═══════════════════════════════════════════════════════════════
 const FC = {ventas:null, banorte:null, santander:null, bbva:null, daimler:null};
+// Cache of parsed FC data (JSON-safe, saved in snapshot instead of raw bytes)
+let _fcCache = null;  // {ventas:[], ippBancos:[], mes, tasa}
 const DIAS_MES = [31,28,31,30,31,30,31,31,30,31,30,31];
 
 function handleFcFile(type, input){
@@ -3134,7 +3124,7 @@ function filterRefTable(){
 
 function setFcSeg(val){
   activeFcSeg = val || null;
-  if(FC.ventas) runForecast();
+  if(FC.ventas||_fcCache) runForecast();
 }
 
 function fcStatus(msg, color='var(--text-dim)'){
@@ -3151,24 +3141,39 @@ function runForecast(manual=false){
   document.getElementById('fc-edo-title').textContent = `🔮 Estado de Resultados Estimado — ${NAMES[mes-1]}`;
 
   // ── 1. Ventas estimadas ──────────────────────────────────────
-  if(!FC.ventas){
+  if(!FC.ventas && !_fcCache){
     fcStatus('⚠️ Carga el archivo de Ventas Estimadas para generar el forecast','#f59e0b');
     return;
   }
   fcStatus('⏳ Calculando…','var(--text-dim)');
   try{
-  const ventas = parseFcVentas(FC.ventas);
-  if(!ventas.length){
-    fcStatus('❌ No se encontraron ventas válidas en el archivo. Verifica columnas: Segmento, Precio Unitario, Utilidad Bruta','#ef4444');
-    return;
+  // Use cached parsed data if raw bytes not available (e.g. after loading from Supabase)
+  let ventas, ippBancos;
+  if(FC.ventas){
+    ventas = parseFcVentas(FC.ventas);
+    if(!ventas.length){
+      fcStatus('❌ No se encontraron ventas válidas en el archivo. Verifica columnas: Segmento, Precio Unitario, Utilidad Bruta','#ef4444');
+      return;
+    }
+    ippBancos = [];
+    if(FC.banorte)  ippBancos.push(parseFcBanorte(FC.banorte,   tasa, diasMes));
+    if(FC.santander)ippBancos.push(parseFcSantander(FC.santander,tasa, diasMes));
+    if(FC.bbva)     ippBancos.push(parseFcBBVA(FC.bbva,         tasa, diasMes));
+    if(FC.daimler)  ippBancos.push(parseFcDaimler(FC.daimler,   tasa, diasMes));
+    // Save parsed cache (JSON-safe, much smaller than raw bytes)
+    _fcCache = { ventas, ippBancos, mes, tasa };
+  } else {
+    // Use pre-parsed cache from snapshot
+    ventas    = _fcCache.ventas;
+    ippBancos = _fcCache.ippBancos;
+    console.log('[forecast] usando cache parseado, ventas:', ventas.length, 'ipp bancos:', ippBancos.length);
   }
 
   // ── 2. Apply segment + society filters to ventas ──────────────
+  const fcSegFilter = activeFcSeg || null;
   let ventasFilt = ventas;
-  if(activeSoc){
-    ventasFilt = ventasFilt.filter(v => div2soc(String(v.dist||'')) === activeSoc);
-  }
-  if(activeFcSeg) ventasFilt = ventasFilt.filter(v => v.seg === activeFcSeg);
+  if(activeSoc) ventasFilt = ventasFilt.filter(v => div2soc(String(v.dist||'')) === activeSoc);
+  if(fcSegFilter) ventasFilt = ventasFilt.filter(v => v.seg === fcSegFilter);
 
   // Group by segment
   const bySeg = {};
@@ -3180,15 +3185,6 @@ function runForecast(manual=false){
     bySeg[v.seg].ub    += v.ub;
   });
   const segRows = Object.entries(bySeg).sort((a,b) => b[1].rev - a[1].rev);
-
-  // ── 3. Parse IPP FIRST (so hayIPP is known before GV calc) ──────
-  const fcSegFilter = activeFcSeg || null;  // needed by ippTotalFilt below
-  const ippBancos = [];
-  if(FC.banorte)  ippBancos.push(parseFcBanorte(FC.banorte,   tasa, diasMes));
-  if(FC.santander)ippBancos.push(parseFcSantander(FC.santander,tasa, diasMes));
-  if(FC.bbva)     ippBancos.push(parseFcBBVA(FC.bbva,         tasa, diasMes));
-  if(FC.daimler)  ippBancos.push(parseFcDaimler(FC.daimler,   tasa, diasMes));
-  const ippTotal = ippBancos.reduce((s,b)=>s+b.total,0);
   const ippSaldo = ippBancos.reduce((s,b)=>s+b.saldo,0);
   // IPP by segment — filter by society and segment
   const ippBySeg={};
