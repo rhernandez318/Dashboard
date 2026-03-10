@@ -56,7 +56,8 @@ body.role-gerente #btn-reload,
 body.role-gerente #btn-process{display:none!important;}
 body.role-gerente #fc-upload-ventas,
 body.role-gerente #fc-upload-ipp,
-body.role-gerente #fc-config-wrap{display:none!important;}
+body.role-gerente #fc-config-wrap,
+body.role-gerente #fc-btn-calcular{display:none!important;}
 
 /* Upload */
 #upload-section{padding:40px 26px;display:flex;flex-direction:column;align-items:center;gap:24px;}
@@ -557,7 +558,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
           </select>
         </div>
         <!-- Calcular -->
-        <button onclick="runForecast(true)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:6px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🚀 Calcular Forecast</button>
+        <button id="fc-btn-calcular" onclick="runForecast(true)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:6px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🚀 Calcular Forecast</button>
         <!-- Upload ventas -->
         <label id="fc-upload-ventas" style="position:relative;overflow:hidden;cursor:pointer">
           <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('ventas',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
@@ -608,7 +609,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
           <tbody id="fc-config-body"></tbody>
         </table>
         <div style="margin-top:10px;display:flex;gap:8px">
-          <button onclick="runForecast(true)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif">✓ Aplicar y Recalcular</button>
+          <button id="fc-btn-aplicar" onclick="runForecast(true)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif">✓ Aplicar y Recalcular</button>
           <span style="font-size:10px;color:var(--text-muted);align-self:center">Los cambios se guardan en el navegador y en Supabase</span>
         </div>
       </div>
@@ -1199,9 +1200,10 @@ async function saveSnapshot(){
     bdd25: window._bdd25 || null,
     ppto:  window._ppto  || null,
     // Forecast: save parsed cache (JSON-safe, much smaller than raw Excel bytes)
-    fcCache: _fcCache || null,
-    fcMes:   document.getElementById('fc-mes')?.value  || null,
-    fcTasa:  document.getElementById('fc-tasa')?.value || null,
+    fcCache:  _fcCache  || null,
+    fcConfig: Object.keys(_fcConfig).length ? _fcConfig : null,
+    fcMes:    document.getElementById('fc-mes')?.value  || null,
+    fcTasa:   document.getElementById('fc-tasa')?.value || null,
     savedAt: Date.now()
   };
   const str = JSON.stringify(payload);
@@ -1319,8 +1321,9 @@ function applySnapshotData(d){
     window._bal = null;
   }
 
-  // Restore forecast cache (parsed data, JSON-safe)
+  // Restore forecast cache and config
   _fcCache = d.fcCache || null;
+  if(d.fcConfig) _fcConfig = {...d.fcConfig};
   if(d.fcMes){  const m=document.getElementById('fc-mes');  if(m) m.value=d.fcMes;  }
   if(d.fcTasa){ const t=document.getElementById('fc-tasa'); if(t) t.value=d.fcTasa; }
 
@@ -1459,7 +1462,7 @@ async function doLogout(){
   window._bal=null; window._bdd25=null; window._ppto=null;
   _invComments={}; _invCommentsLoaded=false;
   _refComments={}; _refCommentsLoaded=false;
-  _fcCache=null;
+  _fcCache=null; _fcConfig={};
   document.body.classList.remove('role-admin','role-gerente');
   document.getElementById('user-badge').style.display='none';
   const hdrBtn2=document.getElementById('btn-usuarios-hdr'); if(hdrBtn2) hdrBtn2.style.display='none';
@@ -3580,6 +3583,11 @@ function runForecast(manual=false){
   // Done
   const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
   fcStatus(`✓ Forecast calculado — ${totUnd} unidades · Ingresos: ${fC(grandTotRev)} · MC: ${fC(grandUtMC)}${ippMsg}`, '#00d4aa');
+
+  // Auto-save snapshot so gerentes see the updated forecast
+  if(_currentUser?.role === 'admin'){
+    saveSnapshot().catch(e => console.warn('[snapshot fc]', e));
+  }
   } catch(err){
     fcStatus('❌ Error JS: ' + err.message + ' (línea ~' + (err.stack||'').split('\n').slice(0,2).join(' | ') + ')', '#ef4444');
     console.error('[runForecast] ERROR:', err);
