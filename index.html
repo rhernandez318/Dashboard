@@ -2821,7 +2821,8 @@ function handleFcFile(type, input){
   const reader = new FileReader();
   reader.onload = e => {
     FC[type] = new Uint8Array(e.target.result);
-    console.log('[IPP loaded]', type, 'size='+FC[type].length, 'hayIPP=', !!(FC.banorte||FC.santander||FC.bbva||FC.daimler));
+    _fcCache = null; // invalidate cache so new file is fully re-parsed
+    console.log('[FC loaded]', type, 'size='+FC[type].length);
     const stEl = document.getElementById('fc-st-'+type);
     if(stEl) stEl.textContent = '✓ ' + file.name.substring(0,20);
     const btnEl = document.getElementById('fc-btn-'+type);
@@ -3283,7 +3284,31 @@ function runForecast(manual=false){
   const utMC     = utBruta - totGVreal;
   const utOp     = utMC - totGI;
 
-  // Presupuesto comparison (ppGV siempre incluye PP para comparación correcta)
+  // ── Segmentos con presupuesto de ingresos pero SIN ventas en FC ──
+  // (ej. Refacciones, Taller) — se agregan con valores de presupuesto
+  const segsConVentas = new Set(segRows.map(([s])=>s));
+  const segsPptoOnly = [...new Set(
+    cxP.filter(r=>r.periodo===mes&&r.ctaTipo==='4'&&r.seg&&r.seg!=='ADMINISTRACIÓN'&&!segsConVentas.has(r.seg))
+       .map(r=>r.seg)
+  )].sort();
+  // Build ppto-only entries
+  const pptoOnlyRows = segsPptoOnly.map(seg=>{
+    const rev  = -cxP.filter(r=>r.seg===seg&&r.periodo===mes&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
+    const cost =  cxP.filter(r=>r.seg===seg&&r.periodo===mes&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
+    const ub   = rev - cost;
+    return [seg, {und:0, rev, costo:cost, ub, pptoOnly:true}];
+  }).filter(([,d])=>d.rev>0);
+
+  // Add ppto-only totals to grand totals
+  const pptoOnlyTotRev   = pptoOnlyRows.reduce((s,[,d])=>s+d.rev,0);
+  const pptoOnlyTotCosto = pptoOnlyRows.reduce((s,[,d])=>s+d.costo,0);
+  const pptoOnlyTotUB    = pptoOnlyRows.reduce((s,[,d])=>s+d.ub,0);
+
+  const grandTotRev   = totRev   + pptoOnlyTotRev;
+  const grandTotCosto = totCosto + pptoOnlyTotCosto;
+  const grandTotUB    = utBruta  + pptoOnlyTotUB;
+  const grandUtMC     = grandTotUB - totGVreal;
+  const grandUtOp     = grandUtMC - totGI;
   const ppRev    = -cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
   const ppCost   =  cxPfilt(cxP).filter(r=>r.periodo===mes&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
   const ppUB     = ppRev - ppCost;
@@ -3300,12 +3325,12 @@ function runForecast(manual=false){
   // ── 5. Render KPIs ───────────────────────────────────────────
   const hasPpto = cxP.length > 0;
   document.getElementById('fc-kpi').innerHTML = [
-    {l:'Unidades Est.',   v: totUnd,     fmt:'u', cls:'ct'},
-    {l:'Ingresos Est.',   v: totRev,     fmt:'m', cls:'ct'},
-    {l:'Ut. Bruta Est.',  v: utBruta,    fmt:'m', cls:'cg', sub: totRev?(utBruta/totRev*100).toFixed(1)+'%':''},
-    {l:'IPP '+(hayIPP?'Real':'Ppto'),    v: totIPPinfo, fmt:'m', cls:'ca'},
-    {l:'MC Estimada',     v: utMC,       fmt:'m', cls:utMC>=0?'cg':'cr', sub: totRev?(utMC/totRev*100).toFixed(1)+'%':''},
-    {l:'Ut. Operación',   v: utOp,       fmt:'m', cls:utOp>=0?'cg':'cr', sub: totRev?(utOp/totRev*100).toFixed(1)+'%':''},
+    {l:'Unidades Est.',   v: totUnd,       fmt:'u', cls:'ct'},
+    {l:'Ingresos Est.',   v: grandTotRev,  fmt:'m', cls:'ct'},
+    {l:'Ut. Bruta Est.',  v: grandTotUB,   fmt:'m', cls:'cg', sub: grandTotRev?(grandTotUB/grandTotRev*100).toFixed(1)+'%':''},
+    {l:'IPP '+(hayIPP?'Real':'Ppto'),      v: totIPPinfo, fmt:'m', cls:'ca'},
+    {l:'MC Estimada',     v: grandUtMC,    fmt:'m', cls:grandUtMC>=0?'cg':'cr', sub: grandTotRev?(grandUtMC/grandTotRev*100).toFixed(1)+'%':''},
+    {l:'Ut. Operación',   v: grandUtOp,    fmt:'m', cls:grandUtOp>=0?'cg':'cr', sub: grandTotRev?(grandUtOp/grandTotRev*100).toFixed(1)+'%':''},
   ].map(k=>`<div class="kcard ${k.cls}">
     <div class="klabel">${k.l}</div>
     <div class="kval">${k.fmt==='u' ? k.v.toLocaleString('es-MX') : fmtM(k.v)}</div>
@@ -3364,13 +3389,22 @@ function runForecast(manual=false){
     <td style="color:#94a3b8">${ppUndN!=null?ppUndN.toLocaleString('es-MX'):'—'}</td>
     ${ppUndN!=null?`<td style="color:${totUnd>=ppUndN?'#00d4aa':'#ef4444'}">${totUnd>ppUndN?'+':''}${(totUnd-ppUndN).toLocaleString('es-MX')}</td><td>—</td>`:'<td colspan="2" style="color:#475569">—</td>'}</tr>`;
 
-  html += sepRow('💰 Ingresos (ventas estimadas)');
-  html += totRow('TOTAL INGRESOS', totRev, hasPpto?ppRev:null);
+  html += sepRow('💰 Ingresos (ventas est. + ppto servicios)');
+  segRows.forEach(([seg, d]) => {
+    html += dataRow(seg, d.rev, hasPpto ? -cxP.filter(r=>r.seg===seg&&r.periodo===mes&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0)||null : null, {indent:true});
+  });
+  if(pptoOnlyRows.length){
+    html += `<tr><td colspan="5" style="padding:2px 12px 2px 22px;font-size:10px;color:#f59e0b;font-style:italic">— Presupuesto (sin ventas en archivo) —</td></tr>`;
+    pptoOnlyRows.forEach(([seg, d]) => {
+      html += dataRow(seg+' (ppto)', d.rev, d.rev, {indent:true, color:'#94a3b8'});
+    });
+  }
+  html += totRow('TOTAL INGRESOS', grandTotRev, hasPpto?ppRev:null);
 
-  html += sepRow('📦 Costo de Ventas (del archivo ventas)');
-  html += totRow('TOTAL COSTO DE VENTAS', totCosto, hasPpto?ppCost:null);
-  html += totRow('★ UTILIDAD BRUTA', utBruta, hasPpto?ppUB:null);
-  html += pctRow('% Margen Bruto', utBruta, totRev, ppUB, ppRev);
+  html += sepRow('📦 Costo de Ventas');
+  html += totRow('TOTAL COSTO DE VENTAS', grandTotCosto, hasPpto?ppCost:null);
+  html += totRow('★ UTILIDAD BRUTA', grandTotUB, hasPpto?ppUB:null);
+  html += pctRow('% Margen Bruto', grandTotUB, grandTotRev, ppUB, ppRev);
 
   const gvLabel = hayIPP ? '🏷️ Gastos de Venta (Ppto − Plan Piso + IPP Real)' : '🏷️ Gastos de Venta — del Presupuesto';
   html += sepRow(gvLabel);
@@ -3389,8 +3423,8 @@ function runForecast(manual=false){
       <td colspan="2"></td></tr>`;
   });
   html += totRow('TOTAL GASTOS DE VENTA', totGVreal, hasPpto?ppGV:null);
-  html += totRow('★ UTILIDAD CONTRIBUCIÓN', utMC, hasPpto?ppMC:null);
-  html += pctRow('% Margen Contribución', utMC, totRev, ppMC, ppRev);
+  html += totRow('★ UTILIDAD CONTRIBUCIÓN', grandUtMC, hasPpto?ppMC:null);
+  html += pctRow('% Margen Contribución', grandUtMC, grandTotRev, ppMC, ppRev);
 
   // Renglón informativo Plan Piso (no genera nueva línea de utilidad)
   const ippLabel = hayIPP ? '🚗 Plan Piso — Intereses bancarios (real)'
@@ -3403,15 +3437,15 @@ function runForecast(manual=false){
   if(!fcSegFilter){
     html += sepRow('🏢 Gastos Indirectos — del Presupuesto');
     html += dataRow('Gastos Administración', totGI, hasPpto?ppGI:null, {indent:true, color:'#f59e0b'});
-    html += totRow('★ UTILIDAD OPERACIÓN', utOp, hasPpto?ppOp:null);
-    html += pctRow('% Margen Operación', utOp, totRev, ppOp, ppRev);
+    html += totRow('★ UTILIDAD OPERACIÓN', grandUtOp, hasPpto?ppOp:null);
+    html += pctRow('% Margen Operación', grandUtOp, grandTotRev, ppOp, ppRev);
 
     html += sepRow('📊 Otros Ingresos / Gastos — del Presupuesto');
     html += dataRow('Otros neto (intereses, FX, etc.)', ppOtros, hasPpto?ppOtros:null, {indent:true, color:'#94a3b8'});
-    const utAIT = utOp - ppOtros;
+    const utAIT = grandUtOp - ppOtros;
     const ppUAITval = ppOp - ppOtros;
     html += totRow('★ UTILIDAD ANTES DE IMPUESTOS', utAIT, hasPpto?ppUAITval:null);
-    html += pctRow('% UAIT', utAIT, totRev, ppUAITval, ppRev);
+    html += pctRow('% UAIT', utAIT, grandTotRev, ppUAITval, ppRev);
   }
 
   document.querySelector('#tbl-fc-edo thead tr').innerHTML =
@@ -3442,15 +3476,30 @@ function runForecast(manual=false){
         <td>${colored(mc)}</td>
         <td>${pill(mc,d.rev)}</td></tr>`;
     }),
+    ...pptoOnlyRows.map(([seg, d]) => {
+      const gv = gvForecast(seg);
+      const mc = d.ub - gv;
+      return `<tr style="opacity:.75;font-style:italic">
+        <td>${sb(seg,true)} <span style="font-size:9px;color:#f59e0b">ppto</span></td>
+        <td style="text-align:right;color:#94a3b8">—</td>
+        <td style="color:#94a3b8">${fC(d.rev)}</td>
+        <td style="color:#94a3b8">${fC(d.costo)}</td>
+        <td>${colored(d.ub)}</td>
+        <td>${pill(d.ub,d.rev)}</td>
+        <td style="color:#f59e0b">${gv?fC(gv):'—'}</td>
+        <td style="color:#f59e0b">—</td>
+        <td>${colored(mc)}</td>
+        <td>${pill(mc,d.rev)}</td></tr>`;
+    }),
     (()=>{
-      const tMC = utBruta - totGVreal;
+      const tMC = grandTotUB - totGVreal;
       return`<tr style="border-top:2px solid rgba(0,212,170,.25);font-weight:700;background:rgba(0,212,170,.05)">
         <td>TOTAL</td><td style="text-align:right">${totUnd}</td>
-        <td>${fC(totRev)}</td><td>${fC(totCosto)}</td>
-        <td>${colored(utBruta)}</td><td>${pill(utBruta,totRev)}</td>
+        <td>${fC(grandTotRev)}</td><td>${fC(grandTotCosto)}</td>
+        <td>${colored(grandTotUB)}</td><td>${pill(grandTotUB,grandTotRev)}</td>
         <td style="color:#f59e0b">${fC(totGVreal)}</td>
         <td style="color:#f59e0b">${fC(totIPPinfo)}</td>
-        <td>${colored(tMC)}</td><td>${pill(tMC,totRev)}</td></tr>`;
+        <td>${colored(tMC)}</td><td>${pill(tMC,grandTotRev)}</td></tr>`;
     })()
   ].join('');
 
