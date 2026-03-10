@@ -3590,8 +3590,7 @@ async function runForecast(manual=false, _saveAfter=false){
 
   // Save FC snapshot only when called from a file upload or manual trigger, not on login restore
   if(_currentUser?.role === 'admin' && _saveAfter){
-    try{ await saveFcSnapshot(); }
-    catch(e){ console.warn('[fc_snapshot]', e); }
+    await saveFcSnapshot();  // errors are shown via fcStatus + alert inside saveFcSnapshot
   }
 
   } catch(err){
@@ -3605,7 +3604,8 @@ async function runForecast(manual=false, _saveAfter=false){
 // FORECAST SNAPSHOT (separate row — never overwritten by BDD saves)
 // ═══════════════════════════════════════════
 async function saveFcSnapshot(){
-  if(!_fcCache) return;
+  if(!_fcCache){ console.warn('[fc_snapshot] _fcCache vacío, no se guarda'); return; }
+  fcStatus('💾 Guardando forecast en Supabase…', 'var(--text-dim)');
   const payload = {
     fcCache:  _fcCache,
     fcConfig: Object.keys(_fcConfig).length ? _fcConfig : null,
@@ -3615,35 +3615,59 @@ async function saveFcSnapshot(){
   };
   const str = JSON.stringify(payload);
   const totalChunks = Math.ceil(str.length / CHUNK_SIZE);
-  // Save meta
-  await supaUpsertChecked('dashboard_snapshot', {
-    id: 'fc_meta',
-    data: {total: totalChunks, savedAt: Date.now(), savedBy: _currentUser?.username},
-    updated_by: _currentUser?.username,
-    updated_at: new Date().toISOString()
-  });
-  // Save chunks
-  for(let i=0; i<totalChunks; i++){
-    const chunk = str.slice(i*CHUNK_SIZE, (i+1)*CHUNK_SIZE);
-    await supaUpsertChecked('dashboard_snapshot', {
-      id: `fc_${i}`,
-      data: {chunk, index: i, total: totalChunks},
+  console.log(`[fc_snapshot] guardando ${totalChunks} chunk(s), ${str.length} chars, ventas: ${_fcCache?.ventas?.length}`);
+  try{
+    // Save meta first
+    await supaUpsert('dashboard_snapshot', {
+      id: 'fc_meta',
+      data: {total: totalChunks, savedAt: Date.now(), savedBy: _currentUser?.username},
       updated_by: _currentUser?.username,
       updated_at: new Date().toISOString()
     });
+    // Save each chunk
+    for(let i=0; i<totalChunks; i++){
+      const chunk = str.slice(i*CHUNK_SIZE, (i+1)*CHUNK_SIZE);
+      fcStatus(`💾 Guardando forecast… ${i+1}/${totalChunks}`, 'var(--text-dim)');
+      await supaUpsert('dashboard_snapshot', {
+        id: `fc_${i}`,
+        data: {chunk, index: i, total: totalChunks},
+        updated_by: _currentUser?.username,
+        updated_at: new Date().toISOString()
+      });
+      console.log(`[fc_snapshot] chunk ${i+1}/${totalChunks} OK`);
+    }
+    // Verify
+    const verify = await supaGet('dashboard_snapshot','id=eq.fc_meta');
+    if(!verify || verify[0]?.data?.total !== totalChunks){
+      throw new Error('Verificación fallida: fc_meta no coincide');
+    }
+    fcStatus(`✅ Forecast guardado (${totalChunks} chunk(s), ${_fcCache?.ventas?.length} ventas)`, '#00d4aa');
+    console.log(`[fc_snapshot] ✓ verificado OK`);
+  } catch(e){
+    fcStatus(`❌ Error guardando forecast: ${e.message}`, '#ef4444');
+    console.error('[fc_snapshot] ERROR al guardar:', e);
+    alert('Error al guardar el forecast en Supabase:\n' + e.message);
+    throw e;
   }
-  console.log(`[fc_snapshot] ✓ guardado ${totalChunks} chunk(s), ${str.length} chars`);
 }
 
 async function loadFcSnapshot(){
   try{
+    console.log('[fc_snapshot] cargando...');
     const meta = await supaGet('dashboard_snapshot','id=eq.fc_meta');
-    if(!meta || !meta[0]?.data?.total){ return false; }
+    if(!meta || !meta[0]?.data?.total){
+      console.log('[fc_snapshot] sin fc_meta en Supabase — no hay forecast guardado');
+      return false;
+    }
     const total = meta[0].data.total;
+    console.log(`[fc_snapshot] fc_meta OK, total chunks: ${total}`);
     const chunks = [];
     for(let i=0; i<total; i++){
       const row = await supaGet('dashboard_snapshot', `id=eq.fc_${i}`);
-      if(!row || !row[0]?.data?.chunk){ return false; }
+      if(!row || !row[0]?.data?.chunk){
+        console.error(`[fc_snapshot] chunk fc_${i} faltante`);
+        return false;
+      }
       chunks.push(row[0].data.chunk);
     }
     const d = JSON.parse(chunks.join(''));
@@ -3651,10 +3675,11 @@ async function loadFcSnapshot(){
     if(d.fcConfig) _fcConfig = {...d.fcConfig};
     if(d.fcMes){  const m=document.getElementById('fc-mes');  if(m) m.value=d.fcMes;  }
     if(d.fcTasa){ const t=document.getElementById('fc-tasa'); if(t) t.value=d.fcTasa; }
-    console.log('[fc_snapshot] ✓ cargado, ventas:', _fcCache?.ventas?.length, 'ippBancos:', _fcCache?.ippRawRows?.length);
+    console.log('[fc_snapshot] ✓ cargado OK — ventas:', _fcCache?.ventas?.length,
+      'ippBancos:', _fcCache?.ippRawRows?.length, 'fcConfig:', JSON.stringify(_fcConfig));
     return !!_fcCache;
   } catch(e){
-    console.warn('[fc_snapshot] error al cargar:', e);
+    console.error('[fc_snapshot] error al cargar:', e);
     return false;
   }
 }
