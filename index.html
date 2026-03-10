@@ -558,7 +558,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
           </select>
         </div>
         <!-- Calcular -->
-        <button id="fc-btn-calcular" onclick="runForecast(true, true)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:6px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🚀 Calcular Forecast</button>
+        <button id="fc-btn-calcular" onclick="runForecast(true).then(()=>saveFcSnapshot())" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:6px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">🚀 Calcular Forecast</button>
         <!-- Upload ventas -->
         <label id="fc-upload-ventas" style="position:relative;overflow:hidden;cursor:pointer">
           <input type="file" accept=".xlsx,.xls" onchange="handleFcFile('ventas',this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%">
@@ -609,7 +609,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
           <tbody id="fc-config-body"></tbody>
         </table>
         <div style="margin-top:10px;display:flex;gap:8px">
-          <button id="fc-btn-aplicar" onclick="runForecast(true, true)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif">✓ Aplicar y Recalcular</button>
+          <button id="fc-btn-aplicar" onclick="runForecast(true).then(()=>saveFcSnapshot())" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-weight:700;font-size:11px;padding:5px 14px;border:none;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif">✓ Aplicar y Recalcular</button>
           <span style="font-size:10px;color:var(--text-muted);align-self:center">Los cambios se guardan en el navegador y en Supabase</span>
         </div>
       </div>
@@ -2845,7 +2845,7 @@ function handleFcFile(type, input){
   const file = input.files[0]; if(!file) return;
   fcStatus(`⏳ Leyendo ${file.name.substring(0,25)}…`, 'var(--text-dim)');
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     FC[type] = new Uint8Array(e.target.result);
     _fcCache = null; // invalidate cache so new file is fully re-parsed
     console.log('[FC loaded]', type, 'size='+FC[type].length);
@@ -2853,7 +2853,8 @@ function handleFcFile(type, input){
     if(stEl) stEl.textContent = '✓ ' + file.name.substring(0,20);
     const btnEl = document.getElementById('fc-btn-'+type);
     if(btnEl) btnEl.classList.add('loaded');
-    runForecast(false, true);  // save after — new file loaded
+    await runForecast(false);
+    await saveFcSnapshot();
   };
   reader.onerror = () => fcStatus(`❌ Error leyendo ${file.name}`, '#ef4444');
   reader.readAsArrayBuffer(file);
@@ -3215,7 +3216,7 @@ function fcStatus(msg, color='var(--text-dim)'){
   if(el) el.innerHTML=`<span style="color:${color}">${msg}</span>`;
 }
 
-async function runForecast(manual=false, _saveAfter=false){
+async function runForecast(manual=false){
   buildFcSegCombo();
   const mes    = +document.getElementById('fc-mes').value || 3;
   const tasa   = +document.getElementById('fc-tasa').value || 12.5;
@@ -3588,10 +3589,7 @@ async function runForecast(manual=false, _saveAfter=false){
   const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
   fcStatus(`✓ Forecast calculado — ${totUnd} unidades · Ingresos: ${fC(grandTotRev)} · MC: ${fC(grandUtMC)}${ippMsg}`, '#00d4aa');
 
-  // Save FC snapshot only when called from a file upload or manual trigger, not on login restore
-  if(_currentUser?.role === 'admin' && _saveAfter){
-    await saveFcSnapshot();  // errors are shown via fcStatus + alert inside saveFcSnapshot
-  }
+
 
   } catch(err){
     fcStatus('❌ Error JS: ' + err.message + ' (línea ~' + (err.stack||'').split('\n').slice(0,2).join(' | ') + ')', '#ef4444');
