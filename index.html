@@ -1199,11 +1199,6 @@ async function saveSnapshot(){
              ISR_ACC: window._bal.ISR_ACC} : null,
     bdd25: window._bdd25 || null,
     ppto:  window._ppto  || null,
-    // Forecast: save parsed cache (JSON-safe, much smaller than raw Excel bytes)
-    fcCache:  _fcCache  || null,
-    fcConfig: Object.keys(_fcConfig).length ? _fcConfig : null,
-    fcMes:    document.getElementById('fc-mes')?.value  || null,
-    fcTasa:   document.getElementById('fc-tasa')?.value || null,
     savedAt: Date.now()
   };
   const str = JSON.stringify(payload);
@@ -1399,6 +1394,7 @@ async function applySession(user){
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
+        await loadFcSnapshot();
         if(FC.ventas||_fcCache){ console.log('[build] lanzando runForecast...'); runForecast(); }
         document.getElementById('upload-section').style.display='none';
         document.getElementById('dashboard').style.display='block';
@@ -1432,6 +1428,7 @@ async function applySession(user){
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
+        await loadFcSnapshot();
         if(FC.ventas||_fcCache){ console.log('[build] lanzando runForecast...'); runForecast(); }
         document.getElementById('upload-section').style.display='none';
         document.getElementById('dashboard').style.display='block';
@@ -1566,6 +1563,7 @@ function procesarDatos(){
       document.getElementById('btn-reload').style.display='inline-block';
       document.getElementById('report-date').textContent='Al '+TODAY.toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
       document.getElementById('fecha-analisis').textContent=TODAY.toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+      await loadFcSnapshot();
       if(FC.ventas||_fcCache) runForecast();
       // Guardar snapshot en Supabase para gerentes
       const rd=document.getElementById('report-date');
@@ -3590,10 +3588,10 @@ async function runForecast(manual=false, _saveAfter=false){
   const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
   fcStatus(`✓ Forecast calculado — ${totUnd} unidades · Ingresos: ${fC(grandTotRev)} · MC: ${fC(grandUtMC)}${ippMsg}`, '#00d4aa');
 
-  // Save snapshot only when called from a file upload or manual trigger, not on login restore
+  // Save FC snapshot only when called from a file upload or manual trigger, not on login restore
   if(_currentUser?.role === 'admin' && _saveAfter){
-    try{ await saveSnapshot(); }
-    catch(e){ console.warn('[snapshot fc]', e); }
+    try{ await saveFcSnapshot(); }
+    catch(e){ console.warn('[fc_snapshot]', e); }
   }
 
   } catch(err){
@@ -3602,6 +3600,64 @@ async function runForecast(manual=false, _saveAfter=false){
   }
 }
 
+
+// ═══════════════════════════════════════════
+// FORECAST SNAPSHOT (separate row — never overwritten by BDD saves)
+// ═══════════════════════════════════════════
+async function saveFcSnapshot(){
+  if(!_fcCache) return;
+  const payload = {
+    fcCache:  _fcCache,
+    fcConfig: Object.keys(_fcConfig).length ? _fcConfig : null,
+    fcMes:    document.getElementById('fc-mes')?.value  || null,
+    fcTasa:   document.getElementById('fc-tasa')?.value || null,
+    savedAt:  Date.now()
+  };
+  const str = JSON.stringify(payload);
+  const totalChunks = Math.ceil(str.length / CHUNK_SIZE);
+  // Save meta
+  await supaUpsertChecked('dashboard_snapshot', {
+    id: 'fc_meta',
+    data: {total: totalChunks, savedAt: Date.now(), savedBy: _currentUser?.username},
+    updated_by: _currentUser?.username,
+    updated_at: new Date().toISOString()
+  });
+  // Save chunks
+  for(let i=0; i<totalChunks; i++){
+    const chunk = str.slice(i*CHUNK_SIZE, (i+1)*CHUNK_SIZE);
+    await supaUpsertChecked('dashboard_snapshot', {
+      id: `fc_${i}`,
+      data: {chunk, index: i, total: totalChunks},
+      updated_by: _currentUser?.username,
+      updated_at: new Date().toISOString()
+    });
+  }
+  console.log(`[fc_snapshot] ✓ guardado ${totalChunks} chunk(s), ${str.length} chars`);
+}
+
+async function loadFcSnapshot(){
+  try{
+    const meta = await supaGet('dashboard_snapshot','id=eq.fc_meta');
+    if(!meta || !meta[0]?.data?.total){ return false; }
+    const total = meta[0].data.total;
+    const chunks = [];
+    for(let i=0; i<total; i++){
+      const row = await supaGet('dashboard_snapshot', `id=eq.fc_${i}`);
+      if(!row || !row[0]?.data?.chunk){ return false; }
+      chunks.push(row[0].data.chunk);
+    }
+    const d = JSON.parse(chunks.join(''));
+    _fcCache = d.fcCache || null;
+    if(d.fcConfig) _fcConfig = {...d.fcConfig};
+    if(d.fcMes){  const m=document.getElementById('fc-mes');  if(m) m.value=d.fcMes;  }
+    if(d.fcTasa){ const t=document.getElementById('fc-tasa'); if(t) t.value=d.fcTasa; }
+    console.log('[fc_snapshot] ✓ cargado, ventas:', _fcCache?.ventas?.length, 'ippBancos:', _fcCache?.ippRawRows?.length);
+    return !!_fcCache;
+  } catch(e){
+    console.warn('[fc_snapshot] error al cargar:', e);
+    return false;
+  }
+}
 // ═══════════════════════════════════════════
 // PAGE INIT
 // ═══════════════════════════════════════════
