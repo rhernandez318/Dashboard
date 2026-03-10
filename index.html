@@ -3576,7 +3576,7 @@ function runForecast(manual=false){
 
   // Done
   const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
-  fcStatus(`✓ Forecast calculado — ${ventas.length} unidades · Ingresos: ${fC(totRev)} · MC: ${fC(utMC)}${ippMsg}`, '#00d4aa');
+  fcStatus(`✓ Forecast calculado — ${totUnd} unidades · Ingresos: ${fC(grandTotRev)} · MC: ${fC(grandUtMC)}${ippMsg}`, '#00d4aa');
   } catch(err){
     fcStatus('❌ Error JS: ' + err.message + ' (línea ~' + (err.stack||'').split('\n').slice(0,2).join(' | ') + ')', '#ef4444');
     console.error('[runForecast] ERROR:', err);
