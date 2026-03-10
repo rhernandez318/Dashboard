@@ -551,14 +551,6 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
           <span style="font-size:10px;color:var(--text-dim);font-family:'Inter',sans-serif">Segmento:</span>
           <select id="fc-seg-select" onchange="setFcSeg(this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 8px;border-radius:6px;font-family:'Inter',sans-serif;cursor:pointer">
             <option value="">Todos</option>
-            <option value="TRACTO">Tracto</option>
-            <option value="PASAJE">Pasaje</option>
-            <option value="CARGA">Carga</option>
-            <option value="SEMIREMOLQUES">Semiremolques</option>
-            <option value="FL360">FL360</option>
-            <option value="VEHICULOS SEMINUEVOS">Veh. Seminuevos</option>
-            <option value="REFACCIONES">Refacciones</option>
-            <option value="TALLER">Taller</option>
           </select>
         </div>
         <!-- Calcular -->
@@ -664,7 +656,7 @@ function handleFile(type,input){
     // Refresh EDO comparisons if dashboard already loaded
     if(document.getElementById('dashboard').style.display!=='none'){
       if(type==='bdd25'&&window._bdd){window._bdd25=parseBDD(F.bdd25);buildEdo(currentPer);}
-      if(type==='ppto'&&window._bdd){window._ppto=parsePpto(F.ppto);buildEdo(currentPer);if(FC.ventas||_fcCache)runForecast();}
+      if(type==='ppto'&&window._bdd){window._ppto=parsePpto(F.ppto);buildEdo(currentPer);buildFcSegCombo();if(FC.ventas||_fcCache)runForecast();}
     }
   };
   reader.readAsArrayBuffer(file);
@@ -3131,6 +3123,20 @@ function filterRefTable(){
   });
 }
 
+function buildFcSegCombo(){
+  const sel = document.getElementById('fc-seg-select');
+  if(!sel || !window._ppto) return;
+  // All segments with budget revenue, excl ADMINISTRACIÓN, sorted
+  const segs = [...new Set(
+    (window._ppto.cuentas||[])
+      .filter(r=>r.ctaTipo==='4' && r.seg && r.seg!=='ADMINISTRACIÓN')
+      .map(r=>r.seg)
+  )].sort();
+  const cur = activeFcSeg;
+  sel.innerHTML = '<option value="">Todos</option>' +
+    segs.map(s=>`<option value="${s}" ${cur===s?'selected':''}>${s}</option>`).join('');
+}
+
 function setFcSeg(val){
   activeFcSeg = val || null;
   if(FC.ventas||_fcCache) runForecast();
@@ -3142,6 +3148,7 @@ function fcStatus(msg, color='var(--text-dim)'){
 }
 
 function runForecast(manual=false){
+  buildFcSegCombo();
   const mes    = +document.getElementById('fc-mes').value || 3;
   const tasa   = +document.getElementById('fc-tasa').value || 12.5;
   const diasMes = DIAS_MES[mes-1] || 30;
@@ -3285,16 +3292,19 @@ function runForecast(manual=false){
   const utOp     = utMC - totGI;
 
   // ── Segmentos con presupuesto de ingresos pero SIN ventas en FC ──
-  // (ej. Refacciones, Taller) — se agregan con valores de presupuesto
+  // (ej. Refacciones, Taller, Alliance, HYP) — se agregan con valores de presupuesto
   const segsConVentas = new Set(segRows.map(([s])=>s));
-  const segsPptoOnly = [...new Set(
-    cxP.filter(r=>r.periodo===mes&&r.ctaTipo==='4'&&r.seg&&r.seg!=='ADMINISTRACIÓN'&&!segsConVentas.has(r.seg))
-       .map(r=>r.seg)
-  )].sort();
-  // Build ppto-only entries
+  const cxPmes = cxPfilt(cxP).filter(r=>r.periodo===mes);
+  const segsPptoOnly = fcSegFilter
+    ? (segsConVentas.has(fcSegFilter) ? [] : [fcSegFilter])  // filtro activo pero sin ventas → mostrar ese seg
+    : [...new Set(
+        cxPmes.filter(r=>r.ctaTipo==='4'&&r.seg&&r.seg!=='ADMINISTRACIÓN'&&!segsConVentas.has(r.seg))
+              .map(r=>r.seg)
+      )].sort();
+
   const pptoOnlyRows = segsPptoOnly.map(seg=>{
-    const rev  = -cxP.filter(r=>r.seg===seg&&r.periodo===mes&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
-    const cost =  cxP.filter(r=>r.seg===seg&&r.periodo===mes&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
+    const rev  = -cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
+    const cost =  cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
     const ub   = rev - cost;
     return [seg, {und:0, rev, costo:cost, ub, pptoOnly:true}];
   }).filter(([,d])=>d.rev>0);
