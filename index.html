@@ -2071,7 +2071,6 @@ async function renderInvUnidades(inv){
   };
   await loadInvComments();
   const activeVins = new Set(rows.map(r=>r.vin).filter(Boolean));
-  await pruneInvComments(activeVins);
 
   document.querySelector('#tbl-inv-uni tbody').innerHTML=rows.length
     ?rows.map((r,i)=>{
@@ -3049,8 +3048,6 @@ async function buildRefTable(){
     if(r.diasVenc > byRef[r.ref].diasVenc) byRef[r.ref].diasVenc = r.diasVenc;
   });
   const refRows = Object.values(byRef).sort((a,b)=>b.diasVenc-a.diasVenc||b.saldo-a.saldo);
-  const activeRefs = new Set(refRows.map(r=>r.ref));
-  await pruneRefComments(activeRefs);
 
   function fmtFecha(d){
     if(!d) return '—';
