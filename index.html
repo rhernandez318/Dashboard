@@ -4141,11 +4141,11 @@ function buildWaterfall(){
   const mbR = revR > 0 ? gpR / revR : 0;  // actual
   const mbC = revC > 0 ? gpC / revC : 0;  // comp
 
-  // UC por unidad del comparativo
-  const ucPorUnd_C = undC > 0 ? ucComp / undC : 0;
+  // Utilidad Bruta por unidad del comparativo
+  const gpPorUnd_C = undC > 0 ? gpC / undC : 0;
 
   // Bridge formulas
-  const varVol    = (undR - undC) * ucPorUnd_C;
+  const varVol    = (undR - undC) * gpPorUnd_C;
   const varPrecio = (ppu_R - ppu_C) * undR * mbR;
   const varMargen = undR * ppu_C * (mbR - mbC);
   const varGastos = -(gvR - gvC);  // lower GV = favorable
