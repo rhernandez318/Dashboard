@@ -3673,7 +3673,36 @@ async function runForecast(manual=false){
     ippWrap.style.display='none';
   }
 
-  // Done
+  // Done — store final P&L totals in _fcCache so Avance tab can read them directly
+  // Also store per-segment units for the units table
+  const _undBySeg = {};
+  allSegRows.forEach(([seg,d])=>{ _undBySeg[seg] = d.und||0; });
+
+  // GV per seg (no filter) for Avance tab
+  const _gvBySeg = {};
+  segsGVppto.forEach(seg=>{ _gvBySeg[seg] = gvForecast(seg); });
+
+  // ppOtros (cuentas 7)
+  const _ppOtros = -cxP.filter(r=>r.periodo===mes&&r.ctaTipo==='7').reduce((a,r)=>a+r.importe,0);
+
+  _fcCache.fcTotals = {
+    mes,
+    rev:   grandTotRev,
+    costo: grandTotCosto,
+    ub:    grandTotUB,
+    gv:    totGVreal,
+    gi:    pptoGi(),
+    utMC:  grandUtMC,
+    utOp:  grandUtOp,
+    otros: _ppOtros,
+    uait:  grandUtOp + _ppOtros,
+    und:   totUnd,
+    undBySeg: _undBySeg,
+    gvBySeg:  _gvBySeg,
+    segsInForecast: segsToShow,  // all segments included in this calculation
+    segRows: Object.fromEntries(allSegRows.map(([s,d])=>[s,d])),  // per-seg totals
+  };
+
   const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
   fcStatus(`✓ Forecast calculado — ${totUnd} unidades · Ingresos: ${fC(grandTotRev)} · MC: ${fC(grandUtMC)}${ippMsg}`, '#00d4aa');
   // Refresh Avance tab if it's visible
@@ -3815,149 +3844,75 @@ async function loadFcSnapshot(){
 // ═══════════════════════════════════════════
 // AVANCE VS FORECAST
 // ═══════════════════════════════════════════
-let _avfSeg = null; // segment filter for avance tab
+let _avfSeg = null;
 
 function buildAvance(){
   const nodata  = document.getElementById('avf-nodata');
   const content = document.getElementById('avf-content');
-  if(!_fcCache || !window._bdd){
+
+  // Need both fcTotals (from runForecast) and BDD real data
+  const ft = _fcCache?.fcTotals;
+  if(!ft || !window._bdd){
     nodata.style.display='block'; content.style.display='none'; return;
   }
   nodata.style.display='none'; content.style.display='block';
 
-  // Populate segment selector from bySeg keys
-  const avfSel = document.getElementById('avf-seg-select');
-  if(avfSel){
-    const segs = Object.keys(_fcCache.bySeg||{}).sort();
-    avfSel.innerHTML = '<option value="">Todos los segmentos</option>' +
-      segs.map(s=>`<option value="${s}" ${_avfSeg===s?'selected':''}>${s}</option>`).join('');
-  }
-
   const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio',
     'Julio','Agosto','Sep','Oct','Nov','Dic'];
-  const mes      = +document.getElementById('fc-mes').value || 3;
+  const mes      = ft.mes;  // use the month the forecast was calculated for
   const mesLabel = NAMES[mes-1] || ('Mes '+mes);
   document.getElementById('avf-period-label').textContent = '— ' + mesLabel;
   document.getElementById('avf-edo-title').textContent =
     '📊 Estado de Resultados — Real vs Forecast · ' + mesLabel +
     (_avfSeg ? ' · ' + _avfSeg : '');
 
-  // ── Rebuild ippBancos from rawRows (same as runForecast else-slim branch) ──
-  const tasa       = +document.getElementById('fc-tasa').value || 12.5;
-  const DIAS_MES_A = [31,28,31,30,31,30,31,31,30,31,30,31];
-  const diasMes    = DIAS_MES_A[mes-1] || 30;
-  const tasaDiaria = tasa / 100 / 365;
-  const ippBancos  = (_fcCache.ippRawRows||[]).map(({banco, rawRows})=>{
-    const map={};
-    (rawRows||[]).forEach(r=>{
-      const interes = r.interesFixed!==null ? r.interesFixed : r.saldo*tasaDiaria*diasMes;
-      ippAccum(map, r.seg, r.dist, r.saldo, interes);
-    });
-    return {...ippFlatten(banco, map), rawRows};
-  });
-  const hayIPP = ippBancos.length > 0;
-
-  // IPP by segment (no soc filter for avance — show full picture)
-  const ippBySeg={};
-  ippBancos.forEach(b=>{
-    (b.rows||[]).forEach(r=>{
-      const segKey=normSeg(r.seg);
-      if(!ippBySeg[segKey]) ippBySeg[segKey]={saldo:0,interes:0,count:0};
-      ippBySeg[segKey].interes += (r.interes||0);
-      ippBySeg[segKey].saldo   += (r.saldo||0);
-    });
-  });
-  const ippTotalFilt = _avfSeg
-    ? (ippBySeg[normSeg(_avfSeg)]?.interes||0)
-    : Object.values(ippBySeg).reduce((s,v)=>s+v.interes,0);
-
-  // ── bySeg: from slim cache or full ventas ───────────────────────────────
-  // Slim: _fcCache.bySeg (all segs, no filter applied)
-  // Filter by _avfSeg if set
-  const fcBySeg = _fcCache.bySeg || {};
-  const segRowsAll = Object.entries(fcBySeg);
-  const fcRowMap = Object.fromEntries(
-    _avfSeg ? segRowsAll.filter(([s])=>s===_avfSeg) : segRowsAll
-  );
-
-  // ── Presupuesto data (same as runForecast) ───────────────────────────────
-  const cxP = fCxPpto();
-  const cxPmes = (_avfSeg
-    ? cxP.filter(r=>r.seg===_avfSeg||r.seg==='ADMINISTRACIÓN')
-    : cxP
-  ).filter(r=>r.periodo===mes);
-
-  // Plan piso detection
-  const ppPisoCuentas = new Set(
-    cxP.filter(r=>r.ctaTipo==='6'&&r.cuenta&&(
-      r.cuenta.toLowerCase().includes('plan piso')||
-      r.cuenta.toLowerCase().includes('plan de piso')||
-      r.cuenta.toLowerCase().includes('intereses pp')||
-      r.cuenta.toLowerCase().includes('ipp')))
-    .map(r=>r.cuenta)
-  );
-  function isPP(c){ return ppPisoCuentas.size>0
-    ? ppPisoCuentas.has(c)
-    : (c||'').toLowerCase().includes('plan piso')||(c||'').toLowerCase().includes('ipp');
+  // ── Populate segment selector ────────────────────────────────────────────
+  const avfSel = document.getElementById('avf-seg-select');
+  if(avfSel){
+    const segs = Object.keys(ft.segRows||{}).sort();
+    avfSel.innerHTML = '<option value="">Todos los segmentos</option>' +
+      segs.map(s=>`<option value="${s}" ${_avfSeg===s?'selected':''}>${s}</option>`).join('');
   }
 
-  // allPptoSegs for this mes (filtered by _avfSeg)
-  const allPptoSegs = [...new Set(
-    cxPmes.filter(r=>r.ctaTipo==='4'&&r.seg&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg)
-  )].sort();
-  const segsToShow = _avfSeg
-    ? (allPptoSegs.includes(_avfSeg) ? [_avfSeg] : [])
-    : allPptoSegs;
-
-  // allSegRows: same config-driven logic as runForecast
-  const allSegRows = segsToShow.map(seg=>{
-    const src = getFcSource(seg);
-    if(src==='forecast'){
-      const fc = fcRowMap[seg];
-      return [seg,{und:fc?.und||0,rev:fc?.rev||0,costo:fc?.costo||0,ub:fc?.ub||0,src:'forecast'}];
-    } else {
-      const rev  = -cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
-      const cost =  cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
-      return [seg,{und:0,rev,costo:cost,ub:rev-cost,src:'ppto'}];
-    }
-  });
-
-  const fcTotRev   = allSegRows.reduce((s,[,d])=>s+d.rev,  0);
-  const fcTotCosto = allSegRows.reduce((s,[,d])=>s+d.costo,0);
-  const fcTotUB    = allSegRows.reduce((s,[,d])=>s+d.ub,   0);
-  const fcTotUnd   = allSegRows.filter(([,d])=>d.src==='forecast').reduce((s,[,d])=>s+d.und,0);
-
-  // GV forecast (same logic as runForecast)
-  function pptoGvSeg(seg){
-    return cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='6'&&(hayIPP?!isPP(r.cuenta):true))
-                 .reduce((a,r)=>a+r.importe,0);
+  // ── Forecast totals (directly from runForecast result) ───────────────────
+  let fcRev, fcCosto, fcUB, fcGV, fcGI, fcUtMC, fcUtOp, fcOtros, fcUAIT, fcUnd;
+  if(_avfSeg && ft.segRows?.[_avfSeg]){
+    const sr = ft.segRows[_avfSeg];
+    fcRev   = sr.rev;
+    fcCosto = sr.costo;
+    fcUB    = sr.ub;
+    fcGV    = ft.gvBySeg?.[_avfSeg] || 0;
+    fcGI    = 0; // no admin when filtering a segment
+    fcUtMC  = fcUB - fcGV;
+    fcUtOp  = fcUtMC;
+    fcOtros = 0;
+    fcUAIT  = fcUtMC;
+    fcUnd   = ft.undBySeg?.[_avfSeg] || 0;
+  } else {
+    fcRev   = ft.rev;
+    fcCosto = ft.costo;
+    fcUB    = ft.ub;
+    fcGV    = ft.gv;
+    fcGI    = ft.gi;
+    fcUtMC  = ft.utMC;
+    fcUtOp  = ft.utOp;
+    fcOtros = ft.otros;
+    fcUAIT  = ft.uait;
+    fcUnd   = ft.und;
   }
-  function ippPorSeg(seg){ return hayIPP ? (ippBySeg[normSeg(seg)]?.interes||0) : 0; }
-  const segsGVppto = [...new Set(
-    cxPmes.filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg)
-  )];
-  let fcTotGV = 0;
-  segsGVppto.forEach(seg=>{ fcTotGV += pptoGvSeg(seg) + ippPorSeg(seg); });
-  const fcTotGI  = _avfSeg ? 0
-    : cxPmes.filter(r=>r.seg==='ADMINISTRACIÓN'&&r.ctaTipo==='6').reduce((a,r)=>a+r.importe,0);
-  const fcUtMC   = fcTotUB  - fcTotGV;
-  const fcUtOp   = fcUtMC   - fcTotGI;
-  const fcOtros  = -cxPmes.filter(r=>r.ctaTipo==='7').reduce((a,r)=>a+r.importe,0);
-  const fcUAIT   = fcUtOp + fcOtros;
 
-  // ── Real values ──────────────────────────────────────────────────────────
+  // ── Real values for the same month ───────────────────────────────────────
   const cx = fCx();
   function sumR(tipo, seg){
     return cx.filter(r=>r.periodo===mes&&r.ctaTipo===tipo&&(!seg||r.seg===seg))
              .reduce((a,r)=>a+r.importe,0);
   }
-  // When segment filter active: real GV only for that segment
+  const segsGV = Object.keys(ft.gvBySeg||{});
   const realRev   = _avfSeg ? -sumR('4',_avfSeg) : -sumR('4',null);
   const realCosto = _avfSeg ?  sumR('5',_avfSeg) :  sumR('5',null);
   const realGP    = realRev - realCosto;
-  const realGV    = _avfSeg
-    ? sumR('6',_avfSeg)
-    : segsGVppto.reduce((s,seg)=>s+sumR('6',seg), 0);
+  const realGV    = _avfSeg ? sumR('6',_avfSeg)
+                             : segsGV.reduce((s,seg)=>s+sumR('6',seg),0);
   const realGI    = _avfSeg ? 0 : sumR('6','ADMINISTRACIÓN');
   const realUtMC  = realGP - realGV;
   const realUtOp  = realUtMC - realGI;
@@ -3966,17 +3921,11 @@ function buildAvance(){
 
   // ── Unidades ─────────────────────────────────────────────────────────────
   const allUnd = window._bdd?.unidades||[];
-  const realUnd = allUnd.filter(r=>r.periodo===mes&&(!_avfSeg||r.segmento===_avfSeg))
-                        .reduce((a,r)=>a+r.unidades,0);
-
-  // Units table — all segments union
   const realUndBySeg = {};
   allUnd.filter(r=>r.periodo===mes).forEach(r=>{
     realUndBySeg[r.segmento]=(realUndBySeg[r.segmento]||0)+r.unidades;
   });
-  const fcUndBySeg = Object.fromEntries(
-    Object.entries(fcBySeg).map(([s,d])=>[s, d.und||0])
-  );
+  const fcUndBySeg = ft.undBySeg||{};
   const undSegs = [...new Set([
     ...Object.keys(realUndBySeg),
     ...Object.keys(fcUndBySeg)
@@ -4025,12 +3974,12 @@ function buildAvance(){
     const lc=opts.lc?`color:${opts.lc};`:'';
     const units=opts.units;
     const realStr=units?real.toLocaleString('es-MX'):fC(real);
-    const fcStr=units?`<span style="color:#94a3b8">${fc.toLocaleString('es-MX')}</span>`
+    const fcStr=units?`<span style="color:#94a3b8">${typeof fc==='number'?fc.toLocaleString('es-MX'):'—'}</span>`
                      :`<span style="color:#94a3b8">${fC(fc)}</span>`;
     const varHtml=units
       ? (()=>{ const d=real-fc,col=d>=0?'#00d4aa':'#ef4444',pct=fc?(real/fc*100):null;
-               return `<td><span style="color:${col}">${d>=0?'+':''}${d}</span></td>`+
-                      `<td><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(0)+'%':'—'}</span></td>`; })()
+               return `<td style="text-align:right"><span style="color:${col}">${d>=0?'+':''}${d}</span></td>`+
+                      `<td style="text-align:right"><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(0)+'%':'—'}</span></td>`; })()
       : varTds(real,fc);
     return`<tr style="${bold}${bg}">
       <td class="tdn" style="${lc}${opts.indent?'padding-left:22px;':''}">${label}</td>
@@ -4051,29 +4000,31 @@ function buildAvance(){
       <td colspan="2"></td></tr>`;
   }
 
+  const realUnd = allUnd.filter(r=>r.periodo===mes&&(!_avfSeg||r.segmento===_avfSeg))
+                        .reduce((a,r)=>a+r.unidades,0);
   let plHtml='';
   plHtml+=sep2('📦 Volumen');
-  plHtml+=plRow('Unidades vendidas',realUnd,fcTotUnd,{bold:true,units:true});
+  plHtml+=plRow('Unidades vendidas',realUnd,fcUnd,{bold:true,units:true});
   plHtml+=sep2('💰 Ingresos');
-  plHtml+=subtot('TOTAL INGRESOS',realRev,fcTotRev);
+  plHtml+=subtot('TOTAL INGRESOS',realRev,fcRev);
   plHtml+=sep2('📦 Costo de Ventas');
-  plHtml+=subtotE('TOTAL COSTO DE VENTAS',realCosto,fcTotCosto);
-  plHtml+=subtot('★ UTILIDAD BRUTA',realGP,fcTotUB);
-  plHtml+=pctPL('% Margen Bruto',realGP,realRev,fcTotUB,fcTotRev);
+  plHtml+=subtotE('TOTAL COSTO DE VENTAS',realCosto,fcCosto);
+  plHtml+=subtot('★ UTILIDAD BRUTA',realGP,fcUB);
+  plHtml+=pctPL('% Margen Bruto',realGP,realRev,fcUB,fcRev);
   plHtml+=sep2('🏷️ Gastos de Venta');
-  plHtml+=subtotE('TOTAL GASTOS DE VENTA',realGV,fcTotGV,'#f59e0b');
+  plHtml+=subtotE('TOTAL GASTOS DE VENTA',realGV,fcGV,'#f59e0b');
   plHtml+=subtot('★ UTILIDAD CONTRIBUCIÓN',realUtMC,fcUtMC);
-  plHtml+=pctPL('% Margen Contribución',realUtMC,realRev,fcUtMC,fcTotRev);
+  plHtml+=pctPL('% Margen Contribución',realUtMC,realRev,fcUtMC,fcRev);
   if(!_avfSeg){
     plHtml+=sep2('🏢 Gastos Administración');
-    plHtml+=subtotE('Gastos Administración',realGI,fcTotGI,'#f59e0b');
+    plHtml+=subtotE('Gastos Administración',realGI,fcGI,'#f59e0b');
     plHtml+=subtot('★ UTILIDAD OPERACIÓN',realUtOp,fcUtOp);
-    plHtml+=pctPL('% Margen Operación',realUtOp,realRev,fcUtOp,fcTotRev);
+    plHtml+=pctPL('% Margen Operación',realUtOp,realRev,fcUtOp,fcRev);
     if(fcOtros||realOtros){
       plHtml+=sep2('📊 Otros neto');
       plHtml+=plRow('Otros Ingresos / (Gastos)',realOtros,fcOtros,{indent:true});
       plHtml+=subtot('★ UTILIDAD ANTES DE IMPUESTOS',realUAIT,fcUAIT);
-      plHtml+=pctPL('% UAIT / Ingresos',realUAIT,realRev,fcUAIT,fcTotRev);
+      plHtml+=pctPL('% UAIT / Ingresos',realUAIT,realRev,fcUAIT,fcRev);
     }
   }
   document.getElementById('tbody-avf-edo').innerHTML=plHtml;
@@ -4083,6 +4034,7 @@ function setAvfSeg(val){
   _avfSeg=val||null;
   buildAvance();
 }
+
 
 // ═══════════════════════════════════════════
 // PAGE INIT
