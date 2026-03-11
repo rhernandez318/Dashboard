@@ -4172,29 +4172,29 @@ function buildWaterfall(){
 
   svg.setAttribute('height', H);
 
-  // Compute running totals (waterfall positions)
+  // ── Compute floating bar positions ──────────────────────────────────────
+  // running = accumulator starting at ucComp, ending at ucR
   const COLORS = { pos:'#00d4aa', neg:'#ef4444', base:'#3b82f6' };
-  let running = ucR;
+  let running = ucComp;
   const rects = bars.map((b, i) => {
-    let top, bottom;
+    let floatBase, floatTop;  // floatBase = bottom of bar, floatTop = top of bar (in data units)
     if(b.isTotal){
-      top    = Math.min(0, b.value);
-      bottom = Math.max(0, b.value);
-      // For last bar, reset running
-      if(i === bars.length - 1) running = ucComp;
+      // Total bars always draw from 0
+      floatBase = Math.min(0, b.value);
+      floatTop  = Math.max(0, b.value);
     } else {
-      const prev = running;
-      running += b.value;
-      top    = Math.min(prev, running);
-      bottom = Math.max(prev, running);
+      // Floating bar: starts at current running, moves by b.value
+      floatBase = Math.min(running, running + b.value);
+      floatTop  = Math.max(running, running + b.value);
+      running  += b.value;
     }
-    return { ...b, top, bottom, x: PAD.left + i * barGap + (barGap - barW) / 2 };
+    return { ...b, floatBase, floatTop, x: PAD.left + i * barGap + (barGap - barW) / 2 };
   });
 
-  // Y scale
-  const allVals = rects.flatMap(r => [r.top, r.bottom]);
-  let yMin = Math.min(0, ...allVals);
-  let yMax = Math.max(0, ...allVals);
+  // ── Y scale ──────────────────────────────────────────────────────────────
+  const allVals = rects.flatMap(r => [r.floatBase, r.floatTop, 0]);
+  let yMin = Math.min(...allVals);
+  let yMax = Math.max(...allVals);
   const yRange = yMax - yMin || 1;
   const yPad = yRange * 0.18;
   yMin -= yPad; yMax += yPad;
@@ -4210,98 +4210,72 @@ function buildWaterfall(){
     return s + '$' + abs.toFixed(0);
   };
 
-  // Build SVG
   let svgHtml = '';
 
-  // Grid lines
+  // ── Grid lines ───────────────────────────────────────────────────────────
   const tickCount = 5;
   for(let i = 0; i <= tickCount; i++){
     const v = yMin + (yMax - yMin) * i / tickCount;
     const y = yScale(v);
-    const isMid = Math.abs(v) < (yMax - yMin) * 0.05;
-    svgHtml += `<line x1="${PAD.left}" y1="${y.toFixed(1)}" x2="${W - PAD.right}" y2="${y.toFixed(1)}"
-      stroke="${isMid ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.06)'}"
-      stroke-width="${isMid ? 1.5 : 1}" stroke-dasharray="${isMid ? '' : '4,4'}"/>`;
-    svgHtml += `<text x="${PAD.left - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end"
+    const isZero = Math.abs(v) < (yMax - yMin) * 0.04;
+    svgHtml += `<line x1="${PAD.left}" y1="${y.toFixed(1)}" x2="${W-PAD.right}" y2="${y.toFixed(1)}"
+      stroke="${isZero?'rgba(255,255,255,.25)':'rgba(255,255,255,.06)'}"
+      stroke-width="${isZero?1.5:1}" stroke-dasharray="${isZero?'':'4,4'}"/>`;
+    svgHtml += `<text x="${PAD.left-6}" y="${(y+4).toFixed(1)}" text-anchor="end"
       fill="#64748b" font-size="10" font-family="IBM Plex Mono,monospace">${fM(v)}</text>`;
   }
 
-  // Connectors (dashed lines between bars)
+  // ── Connectors: horizontal line at the "handoff" level between bars ──────
+  // The handoff level after bar i = floatTop of bar i if value>=0, floatBase if value<0
+  // For total bars: handoff = bar value (the top of the filled area)
+  let handoffLevel = ucComp; // after first total bar
   for(let i = 0; i < rects.length - 1; i++){
-    const r = rects[i]; const r2 = rects[i+1];
-    const connY = r.isTotal ? yScale(r.value) : yScale(rects.slice(0,i+1).reduce((s,b)=>b.isTotal?b.value:s+b.value, ucR) + (r.isTotal ? 0 : 0));
-    // Use the "end" of bar i as connector
-    const endY = r.isTotal ? yScale(r.value) : yScale(
-      i === 0 ? ucR :
-      rects.slice(1, i+1).reduce((s, b) => s + (b.isTotal ? 0 : b.value), ucR)
-    );
-    // Simplified: connect right edge of bar top to left edge of next
-    const barEndY = rects[i].isTotal
-      ? yScale(rects[i].value)
-      : yScale(
-          rects.slice(0, i+1).reduce((acc, b, j) => j === 0 ? b.value : acc + (b.isTotal ? 0 : b.value), 0)
-        );
-    svgHtml += `<line x1="${(r.x + barW).toFixed(1)}" y1="${barEndY.toFixed(1)}"
-      x2="${(r2.x).toFixed(1)}" y2="${barEndY.toFixed(1)}"
-      stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>`;
-  }
-
-  // Fix connectors — simple running total approach
-  svgHtml = svgHtml.replace(/<line x1.*stroke-dasharray="4,3".*\/>/g, ''); // clear bad connectors
-  let run2 = ucComp;
-  for(let i = 0; i < rects.length - 1; i++){
-    const r = rects[i];
+    const r  = rects[i];
     const r2 = rects[i+1];
-    const connY = r.isTotal ? yScale(r.value) : yScale(run2);
-    if(!r.isTotal) run2 += r.value;
-    svgHtml += `<line x1="${(r.x + barW).toFixed(1)}" y1="${connY.toFixed(1)}"
-      x2="${(r2.x).toFixed(1)}" y2="${connY.toFixed(1)}"
-      stroke="#334155" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+    // handoff = where the next bar should start from
+    if(r.isTotal){
+      handoffLevel = r.value;
+    } else {
+      handoffLevel = r.value >= 0 ? r.floatTop : r.floatBase;
+    }
+    const cy = yScale(handoffLevel);
+    svgHtml += `<line x1="${(r.x+barW).toFixed(1)}" y1="${cy.toFixed(1)}"
+      x2="${r2.x.toFixed(1)}" y2="${cy.toFixed(1)}"
+      stroke="#475569" stroke-width="1.5" stroke-dasharray="5,3"/>`;
   }
 
-  // Bars + labels
-  rects.forEach((r) => {
-    const yTop  = yScale(r.bottom);
-    const yBot  = yScale(r.top);
-    const barH  = Math.max(2, yBot - yTop);
+  // ── Bars ─────────────────────────────────────────────────────────────────
+  rects.forEach(r => {
+    const yTop = yScale(r.floatTop);
+    const yBot = yScale(r.floatBase);
+    const barH = Math.max(3, yBot - yTop);
     const color = COLORS[r.type];
-    const alpha = r.isTotal ? 'ff' : 'cc';
 
     svgHtml += `<rect x="${r.x.toFixed(1)}" y="${yTop.toFixed(1)}"
       width="${barW}" height="${barH.toFixed(1)}"
-      fill="${color}" rx="3" opacity="${r.isTotal ? 1 : 0.85}"/>`;
+      fill="${color}" rx="3" opacity="${r.isTotal?1:0.88}"/>`;
 
-    // Value label above/below bar
-    const valStr = r.isTotal ? fM(r.value) : (r.value >= 0 ? '+' : '') + fM(r.value);
-    const labelY = r.isTotal
-      ? yScale(r.value) - 8
-      : r.value >= 0 ? yTop - 8 : yBot + 14;
-    svgHtml += `<text x="${(r.x + barW/2).toFixed(1)}" y="${labelY.toFixed(1)}"
-      text-anchor="middle" fill="${r.isTotal ? '#e2e8f0' : color}"
-      font-size="10" font-weight="${r.isTotal ? 700 : 600}"
+    // Value label: above bar if positive/total, below if negative
+    const valStr = r.isTotal ? fM(r.value) : (r.value>=0?'+':'')+fM(r.value);
+    const lblAbove = r.isTotal ? (r.value >= 0) : (r.value >= 0);
+    const labelY = lblAbove ? yTop - 7 : yBot + 13;
+    svgHtml += `<text x="${(r.x+barW/2).toFixed(1)}" y="${labelY.toFixed(1)}"
+      text-anchor="middle" fill="${r.isTotal?'#e2e8f0':color}"
+      font-size="10" font-weight="${r.isTotal?700:600}"
       font-family="IBM Plex Mono,monospace">${valStr}</text>`;
 
-    // X label (multi-line)
+    // X axis labels (two lines)
     const lblY = H - PAD.bottom + 18;
-    const lines2 = r.label.split('\n');
-    lines2.forEach((ln, li) => {
-      svgHtml += `<text x="${(r.x + barW/2).toFixed(1)}" y="${(lblY + li * 13).toFixed(1)}"
+    r.label.split('\n').forEach((ln, li) => {
+      svgHtml += `<text x="${(r.x+barW/2).toFixed(1)}" y="${(lblY+li*13).toFixed(1)}"
         text-anchor="middle" fill="#94a3b8" font-size="10"
         font-family="Inter,sans-serif">${ln}</text>`;
     });
   });
 
-  // Zero line
-  svgHtml += `<line x1="${PAD.left}" y1="${y0.toFixed(1)}" x2="${W - PAD.right}" y2="${y0.toFixed(1)}"
+  // ── Zero baseline ─────────────────────────────────────────────────────────
+  svgHtml += `<line x1="${PAD.left}" y1="${y0.toFixed(1)}" x2="${W-PAD.right}" y2="${y0.toFixed(1)}"
     stroke="rgba(255,255,255,.3)" stroke-width="1"/>`;
-
-  // Title annotation: residual
-  const residual = ucR - (ucComp + varVol + varPrecio + varMargen + varGastos);
-  if(Math.abs(residual) > 1000){
-    svgHtml += `<text x="${W/2}" y="${PAD.top - 10}" text-anchor="middle"
-      fill="#64748b" font-size="9" font-family="Inter,sans-serif">
-      * Residual de interacción: ${fM(residual)}</text>`;
-  }
 
   svg.innerHTML = svgHtml;
   document.getElementById('wf-title').textContent =
