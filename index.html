@@ -645,6 +645,51 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
       </table></div>
     </div>
   </div>
+
+  <div class="tcontent" id="tab-avance">
+    <div class="shdr" style="flex-wrap:wrap;gap:8px;position:sticky;top:calc(var(--hh) + var(--tnav-h) + var(--sb-h));z-index:70;background:var(--bg);padding:10px 26px;margin:0 -26px 11px;border-bottom:1px solid var(--border)">
+      <div class="stitle" style="color:#22d3ee">📊 Avance vs Forecast <small id="avf-period-label" style="color:var(--text-muted)"></small></div>
+    </div>
+    <div id="avf-nodata" style="text-align:center;padding:60px 20px;color:var(--text-muted);font-size:13px">
+      Sin datos — genera el Forecast primero en la pestaña 🔮 Forecast
+    </div>
+    <div id="avf-content" style="display:none">
+      <div class="tcard">
+        <div class="thead2" style="display:flex;align-items:center;justify-content:space-between">
+          <h4>🚗 Avance de Unidades por Segmento</h4>
+          <button onclick="exportTableExcel('tbl-avf-und','Avance_vs_Forecast')" style="background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.3);color:#22d3ee;font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button>
+        </div>
+        <div class="tscroll">
+          <table id="tbl-avf-und" style="font-size:12px">
+            <thead><tr>
+              <th>Segmento</th><th style="text-align:right">Ventas Real</th>
+              <th style="text-align:right">Forecast</th><th style="text-align:right">Diferencia</th><th style="text-align:right">Avance</th>
+            </tr></thead>
+            <tbody id="tbody-avf-und"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:14px;padding:12px 16px;background:var(--surface2);border-radius:8px;display:flex;align-items:center;gap:16px">
+          <span style="font-size:12px;color:var(--text-dim);font-family:'Inter',sans-serif">Avance total unidades:</span>
+          <span id="avf-kpi-avance" style="font-size:26px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:#22d3ee">—</span>
+        </div>
+      </div>
+      <div class="tcard mt4">
+        <div class="thead2" style="display:flex;align-items:center;justify-content:space-between">
+          <h4 id="avf-edo-title">📊 Estado de Resultados — Real vs Forecast</h4>
+          <button onclick="exportTableExcel('tbl-avf-edo','Avance_PL')" style="background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.3);color:#22d3ee;font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button>
+        </div>
+        <div class="tscroll">
+          <table id="tbl-avf-edo">
+            <thead><tr>
+              <th>Concepto</th><th style="text-align:right">Real</th>
+              <th style="text-align:right">Forecast</th><th style="text-align:right">Var $</th><th style="text-align:right">Var %</th>
+            </tr></thead>
+            <tbody id="tbody-avf-edo"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -2797,6 +2842,7 @@ function showTab(tab,btn){
   document.getElementById('tab-'+tab).classList.add('active');
   btn.classList.add('active');
   if(tab==='usuarios') renderUsersTable();
+  if(tab==='avance') buildAvance();
 }
 function buildEdoSegCombo(){
   const sel=document.getElementById('edo-seg-select');
@@ -3620,6 +3666,8 @@ async function runForecast(manual=false){
   // Done
   const ippMsg = ippBancos.length ? ` · IPP: ${fC(ippTotal)} (${ippBancos.map(b=>b.banco).join(', ')})` : ' · Sin archivos IPP cargados';
   fcStatus(`✓ Forecast calculado — ${totUnd} unidades · Ingresos: ${fC(grandTotRev)} · MC: ${fC(grandUtMC)}${ippMsg}`, '#00d4aa');
+  // Refresh Avance tab if it's visible
+  if(document.getElementById('tab-avance')?.classList.contains('active')) buildAvance();
 
 
 
@@ -3752,6 +3800,244 @@ async function loadFcSnapshot(){
     console.error('[fc_snapshot] error al cargar:', e);
     return false;
   }
+}
+
+// ═══════════════════════════════════════════
+// AVANCE VS FORECAST
+// ═══════════════════════════════════════════
+function buildAvance(){
+  const nodata = document.getElementById('avf-nodata');
+  const content = document.getElementById('avf-content');
+  if(!_fcCache || !window._bdd){
+    nodata.style.display='block'; content.style.display='none'; return;
+  }
+  nodata.style.display='none'; content.style.display='block';
+
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+    'Julio','Agosto','Sep','Oct','Nov','Dic'];
+  const mes = +document.getElementById('fc-mes').value || 3;
+  const mesLabel = NAMES[mes-1] || ('Mes '+mes);
+
+  document.getElementById('avf-period-label').textContent = '— '+mesLabel;
+  document.getElementById('avf-edo-title').textContent = '📊 Estado de Resultados — Real vs Forecast · '+mesLabel;
+
+  // ── Forecast values (from _fcCache, no filters) ──────────────────────────
+  const fcBySeg = _fcCache.bySeg || {};     // {seg:{und,rev,costo,ub}}
+  const fcSegs  = Object.keys(fcBySeg).sort();
+
+  // Forecast P&L totals — mirrors runForecast allSegRows logic
+  const cxP   = fCxPpto ? fCxPpto() : [];
+  const cxPmes = cxP.filter(r=>r.periodo===mes);
+
+  // Determine which segs have ppto data
+  const allPptoSegs = [...new Set(cxPmes.filter(r=>r.ctaTipo==='4'&&r.seg&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg))].sort();
+
+  // Plan piso detection (same logic as runForecast)
+  const ppPisoCuentas = new Set(
+    cxP.filter(r=>r.ctaTipo==='6'&&r.cuenta&&(
+      r.cuenta.toLowerCase().includes('plan piso')||
+      r.cuenta.toLowerCase().includes('plan de piso')||
+      r.cuenta.toLowerCase().includes('intereses pp')||
+      r.cuenta.toLowerCase().includes('ipp')))
+    .map(r=>r.cuenta)
+  );
+  function isPP(cuenta){ return ppPisoCuentas.size>0
+    ? ppPisoCuentas.has(cuenta)
+    : (cuenta||'').toLowerCase().includes('plan piso')||(cuenta||'').toLowerCase().includes('ipp');
+  }
+  const hayIPP = (_fcCache.ippRawRows||[]).length > 0;
+  // IPP totals from ippRawRows (same recalc as runForecast)
+  const tasa     = +document.getElementById('fc-tasa').value || 12.5;
+  const DIAS_MES_AVF = [31,28,31,30,31,30,31,31,30,31,30,31];
+  const diasMes  = DIAS_MES_AVF[mes-1] || 30;
+  const tasaDiaria = tasa/100/365;
+  let fcIppTotal = 0;
+  (_fcCache.ippRawRows||[]).forEach(({rawRows})=>{
+    (rawRows||[]).forEach(r=>{
+      const interes = r.interesFixed!==null ? r.interesFixed : r.saldo*tasaDiaria*diasMes;
+      fcIppTotal += interes;
+    });
+  });
+
+  // allSegRows: use _fcConfig source per segment
+  const segsToShow = allPptoSegs.length ? allPptoSegs : fcSegs;
+  const allSegRows = segsToShow.map(seg=>{
+    const src = getFcSource(seg);
+    if(src==='forecast'){
+      const fc = fcBySeg[seg];
+      return [seg,{und:fc?.und||0,rev:fc?.rev||0,costo:fc?.costo||0,ub:fc?.ub||0}];
+    } else {
+      const rev  = -cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
+      const cost =  cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
+      return [seg,{und:0,rev,costo:cost,ub:rev-cost}];
+    }
+  });
+  const fcTotRev   = allSegRows.reduce((s,[,d])=>s+d.rev,0);
+  const fcTotCosto = allSegRows.reduce((s,[,d])=>s+d.costo,0);
+  const fcTotUB    = allSegRows.reduce((s,[,d])=>s+d.ub,0);
+  const fcTotUnd   = allSegRows.reduce((s,[,d])=>s+d.und,0);
+
+  // GV forecast = ppto GV (replacing PP with IPP if loaded)
+  const segsGV = [...new Set(cxPmes.filter(r=>r.ctaTipo==='6'&&r.seg&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg))];
+  function pptoGvSeg(seg){ return cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='6'&&(hayIPP?!isPP(r.cuenta):true)).reduce((a,r)=>a+r.importe,0); }
+  let fcTotGV = 0;
+  segsGV.forEach(seg=>{
+    const ppGv = pptoGvSeg(seg);
+    // Distribute IPP proportionally if slim (no per-seg IPP)
+    fcTotGV += ppGv;
+  });
+  if(hayIPP){
+    // Replace ppto PP with IPP total
+    const pptoPPtot = cxPmes.filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN'&&isPP(r.cuenta)).reduce((a,r)=>a+r.importe,0);
+    fcTotGV = fcTotGV + fcIppTotal; // already excluded ppto PP above
+  }
+  const fcTotGI  = cxPmes.filter(r=>r.seg==='ADMINISTRACIÓN'&&r.ctaTipo==='6').reduce((a,r)=>a+r.importe,0);
+  const fcUtMC   = fcTotUB - fcTotGV;
+  const fcUtOp   = fcUtMC  - fcTotGI;
+
+  // ── Real values for the same month ───────────────────────────────────────
+  const cx = fCx ? fCx() : [];
+  function sumR(tipo,seg){ return cx.filter(r=>r.periodo===mes&&r.ctaTipo===tipo&&(!seg||r.seg===seg)).reduce((a,r)=>a+r.importe,0); }
+  const realRev   = -sumR('4',null);
+  const realCosto =  sumR('5',null);
+  const realGP    = realRev - realCosto;
+  const realGV    = segsGV.reduce((s,seg)=>s+sumR('6',seg),0);
+  const realGI    =  sumR('6','ADMINISTRACIÓN');
+  const realUtMC  = realGP - realGV;
+  const realUtOp  = realUtMC - realGI;
+  const realOtros = -sumR('7',null);
+  const realUAIT  = realUtOp + realOtros;
+
+  // Forecast UAIT (add otros from ppto if available)
+  const fcOtros = -cxPmes.filter(r=>r.ctaTipo==='7').reduce((a,r)=>a+r.importe,0);
+  const fcUAIT  = fcUtOp + fcOtros;
+
+  // Real unidades for this month
+  const allUnidades = window._bdd?.unidades||[];
+  const realUnd = allUnidades.filter(r=>r.periodo===mes).reduce((a,r)=>a+r.unidades,0);
+
+  // ── Units table ───────────────────────────────────────────────────────────
+  const pptoundBySeg = {};
+  (window._ppto?.unidades||[]).filter(r=>r.periodo===mes).forEach(r=>{
+    pptoundBySeg[r.segmento]=(pptoundBySeg[r.segmento]||0)+r.unidades;
+  });
+  const realUndBySeg = {};
+  allUnidades.filter(r=>r.periodo===mes).forEach(r=>{
+    realUndBySeg[r.segmento]=(realUndBySeg[r.segmento]||0)+r.unidades;
+  });
+  const fcUndBySeg = {};
+  allSegRows.forEach(([seg,d])=>{ fcUndBySeg[seg]=(d.und||0); });
+  // Also pull from fcBySeg for segs not in allSegRows
+  Object.entries(fcBySeg).forEach(([seg,d])=>{ if(!fcUndBySeg[seg]) fcUndBySeg[seg]=d.und||0; });
+
+  // Merge segment list: union of real and forecast segments
+  const undSegs = [...new Set([...Object.keys(realUndBySeg),...Object.keys(fcUndBySeg)])].sort();
+
+  let undHtml='';
+  let sumReal=0, sumFc=0;
+  undSegs.forEach(seg=>{
+    const r = realUndBySeg[seg]||0;
+    const f = fcUndBySeg[seg]||0;
+    if(!r && !f) return;
+    sumReal+=r; sumFc+=f;
+    const diff=r-f;
+    const pct=f>0?((r/f)*100):null;
+    const col=r>=f?'#00d4aa':'#ef4444';
+    const pctStr=pct!=null?`<span class="pill ${r>=f?'pg':'pr'}">${pct.toFixed(0)}%</span>`:'—';
+    undHtml+=`<tr>
+      <td class="tdn">${seg}</td>
+      <td style="text-align:right;font-weight:600">${r}</td>
+      <td style="text-align:right;color:#94a3b8">${f}</td>
+      <td style="text-align:right"><span style="color:${col}">${diff>=0?'+':''}${diff}</span></td>
+      <td style="text-align:right">${pctStr}</td>
+    </tr>`;
+  });
+  // Total row
+  const totDiff=sumReal-sumFc;
+  const totPct=sumFc>0?((sumReal/sumFc)*100):null;
+  const totCol=sumReal>=sumFc?'#00d4aa':'#ef4444';
+  undHtml+=`<tr style="font-weight:800;border-top:2px solid rgba(34,211,238,.3);background:rgba(34,211,238,.05)">
+    <td class="tdn" style="color:#22d3ee">TOTAL</td>
+    <td style="text-align:right;color:#22d3ee">${sumReal}</td>
+    <td style="text-align:right;color:#94a3b8">${sumFc}</td>
+    <td style="text-align:right"><span style="color:${totCol}">${totDiff>=0?'+':''}${totDiff}</span></td>
+    <td style="text-align:right"><span class="pill ${sumReal>=sumFc?'pg':'pr'}">${totPct!=null?totPct.toFixed(0)+'%':'—'}</span></td>
+  </tr>`;
+  document.getElementById('tbody-avf-und').innerHTML=undHtml;
+  document.getElementById('avf-kpi-avance').textContent = totPct!=null ? totPct.toFixed(1)+'%' : '—';
+  document.getElementById('avf-kpi-avance').style.color = sumReal>=sumFc ? '#22d3ee' : '#ef4444';
+
+  // ── P&L table ─────────────────────────────────────────────────────────────
+  function fC2(v){ return v<0?`(${Math.abs(v).toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0})})`
+    :v.toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0}); }
+  function varCells(real,fc){
+    const diff=real-fc;
+    const pct=fc?((diff/Math.abs(fc))*100):null;
+    const col=diff>=0?'#00d4aa':'#ef4444';
+    const diffHtml=diff<0?`<span style="color:${col}">(${Math.abs(diff).toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0})})</span>`
+      :`<span style="color:${col}">${diff.toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0})}</span>`;
+    const pctHtml=pct!=null?`<span class="pill ${diff>=0?'pg':'pr'}">${diff>0?'+':''}${pct.toFixed(1)}%</span>`:'—';
+    return`<td style="text-align:right">${diffHtml}</td><td style="text-align:right">${pctHtml}</td>`;
+  }
+  function plRow(label,real,fc,opts={}){
+    const bold=opts.bold?'font-weight:700;':'';
+    const bg=opts.bg?`background:${opts.bg};`:'';
+    const lc=opts.lc?`color:${opts.lc};`:'';
+    const realFmt=opts.units?real.toLocaleString('es-MX'):fC2(real);
+    const fcFmt=opts.units?fc.toLocaleString('es-MX'):(`<span style="color:#94a3b8">${fC2(fc)}</span>`);
+    return`<tr style="${bold}${bg}">
+      <td class="tdn" style="${lc}${opts.indent?'padding-left:22px;':''}">${label}</td>
+      <td style="text-align:right">${realFmt}</td>
+      <td style="text-align:right">${fcFmt}</td>
+      ${varCells(real,fc)}
+    </tr>`;
+  }
+  function sep2(label){ return`<tr style="background:rgba(34,211,238,.03)"><td colspan="5" style="padding:4px 12px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`; }
+  function subtot(label,real,fc){
+    const pos=real>=0;
+    const bg=pos?'rgba(0,212,170,.07)':'rgba(239,68,68,.05)';
+    const lc=pos?'#00d4aa':'#ef4444';
+    return plRow(label,real,fc,{bold:true,bg,lc});
+  }
+  function subtotExp(label,real,fc,lc='#f97316'){ return plRow(label,real,fc,{bold:true,bg:'rgba(249,115,22,.05)',lc}); }
+  function pctPLrow(label,num,den,fcNum,fcDen){
+    function p(n,d){return d?((n/d)*100).toFixed(1)+'%':'—';}
+    return`<tr style="font-style:italic"><td style="padding-left:22px;font-size:10px;color:var(--text-muted)">${label}</td>
+      <td style="font-size:10px;color:var(--text-muted);text-align:right">${p(num,den)}</td>
+      <td style="font-size:10px;color:var(--text-muted);text-align:right">${p(fcNum,fcDen)}</td>
+      <td colspan="2"></td></tr>`;
+  }
+
+  let plHtml='';
+  plHtml+=sep2('📦 Volumen');
+  plHtml+=plRow('Unidades vendidas',realUnd,fcTotUnd,{bold:true,units:true});
+
+  plHtml+=sep2('💰 Ingresos');
+  plHtml+=subtot('TOTAL INGRESOS',realRev,fcTotRev);
+
+  plHtml+=sep2('📦 Costo de Ventas');
+  plHtml+=subtotExp('TOTAL COSTO DE VENTAS',realCosto,fcTotCosto,'#f97316');
+  plHtml+=subtot('★ UTILIDAD BRUTA',realGP,fcTotUB);
+  plHtml+=pctPLrow('% Margen Bruto',realGP,realRev,fcTotUB,fcTotRev);
+
+  plHtml+=sep2('🏷️ Gastos de Venta');
+  plHtml+=subtotExp('TOTAL GASTOS DE VENTA',realGV,fcTotGV,'#f59e0b');
+  plHtml+=subtot('★ UTILIDAD CONTRIBUCIÓN',realUtMC,fcUtMC);
+  plHtml+=pctPLrow('% Margen Contribución',realUtMC,realRev,fcUtMC,fcTotRev);
+
+  plHtml+=sep2('🏢 Gastos Administración');
+  plHtml+=subtotExp('Gastos Administración',realGI,fcTotGI,'#f59e0b');
+  plHtml+=subtot('★ UTILIDAD OPERACIÓN',realUtOp,fcUtOp);
+  plHtml+=pctPLrow('% Margen Operación',realUtOp,realRev,fcUtOp,fcTotRev);
+
+  if(fcOtros||realOtros){
+    plHtml+=sep2('📊 Otros neto');
+    plHtml+=plRow('Otros Ingresos / (Gastos)',realOtros,fcOtros);
+    plHtml+=subtot('★ UTILIDAD ANTES DE IMPUESTOS',realUAIT,fcUAIT);
+    plHtml+=pctPLrow('% UAIT / Ingresos',realUAIT,realRev,fcUAIT,fcTotRev);
+  }
+
+  document.getElementById('tbody-avf-edo').innerHTML=plHtml;
 }
 // ═══════════════════════════════════════════
 // PAGE INIT
