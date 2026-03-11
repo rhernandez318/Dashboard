@@ -87,10 +87,13 @@ body.role-gerente #fc-btn-calcular{display:none!important;}
   display:flex;gap:2px;padding:10px 26px 0;
   border-bottom:1px solid var(--border);margin-bottom:20px;
   position:sticky;top:var(--hh);z-index:90;
-  height:var(--tnav-h);
+  min-height:var(--tnav-h);
   background:var(--bg);
   box-shadow:0 4px 16px rgba(0,0,0,.35);
+  overflow-x:auto;overflow-y:hidden;
+  scrollbar-width:none;
 }
+.tnav::-webkit-scrollbar{display:none;}
 .tbtn{padding:8px 16px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-muted);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;margin-bottom:-1px;font-family:'Inter',sans-serif;}
 .tbtn.active{color:var(--accent);border-bottom-color:var(--accent);}
 .tbtn:hover:not(.active){color:var(--text-dim);}
@@ -340,6 +343,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <button class="tbtn" id="tab-btn-usuarios" onclick="showTab('usuarios',this)" style="display:none">👥 Usuarios</button>
     <button class="tbtn" onclick="showTab('inventario',this)">🏭 Inventario</button>
     <button class="tbtn" onclick="showTab('forecast',this)" style="color:#f59e0b;border-bottom-color:transparent">🔮 Forecast</button>
+    <button class="tbtn" id="tab-btn-avance" onclick="showTab('avance',this)" style="color:#22d3ee">📊 Avance vs FC</button>
   </div>
 
   <!-- SOCIETY FILTER BAR -->
@@ -3943,25 +3947,32 @@ function buildAvance(){
     const diff=r-f;
     const pct=f>0?((r/f)*100):null;
     const col=r>=f?'#00d4aa':'#ef4444';
+    const pctBar=pct!=null?Math.min(100,pct).toFixed(0):0;
     const pctStr=pct!=null?`<span class="pill ${r>=f?'pg':'pr'}">${pct.toFixed(0)}%</span>`:'—';
     undHtml+=`<tr>
       <td class="tdn">${seg}</td>
-      <td style="text-align:right;font-weight:600">${r}</td>
-      <td style="text-align:right;color:#94a3b8">${f}</td>
-      <td style="text-align:right"><span style="color:${col}">${diff>=0?'+':''}${diff}</span></td>
-      <td style="text-align:right">${pctStr}</td>
+      <td style="text-align:right;font-weight:600;font-family:'IBM Plex Mono',monospace">${r}</td>
+      <td style="text-align:right;color:#94a3b8;font-family:'IBM Plex Mono',monospace">${f}</td>
+      <td style="text-align:right"><span style="color:${col};font-family:'IBM Plex Mono',monospace;font-weight:600">${diff>=0?'+':''}${diff}</span></td>
+      <td style="text-align:right;min-width:80px">${pctStr}</td>
     </tr>`;
   });
-  // Total row
+  // TOTAL row
   const totDiff=sumReal-sumFc;
   const totPct=sumFc>0?((sumReal/sumFc)*100):null;
   const totCol=sumReal>=sumFc?'#00d4aa':'#ef4444';
-  undHtml+=`<tr style="font-weight:800;border-top:2px solid rgba(34,211,238,.3);background:rgba(34,211,238,.05)">
-    <td class="tdn" style="color:#22d3ee">TOTAL</td>
-    <td style="text-align:right;color:#22d3ee">${sumReal}</td>
-    <td style="text-align:right;color:#94a3b8">${sumFc}</td>
-    <td style="text-align:right"><span style="color:${totCol}">${totDiff>=0?'+':''}${totDiff}</span></td>
-    <td style="text-align:right"><span class="pill ${sumReal>=sumFc?'pg':'pr'}">${totPct!=null?totPct.toFixed(0)+'%':'—'}</span></td>
+  undHtml+=`<tr style="font-weight:800;border-top:2px solid rgba(34,211,238,.35);background:rgba(34,211,238,.06)">
+    <td class="tdn" style="color:#22d3ee;font-size:12px">TOTAL</td>
+    <td style="text-align:right;color:#22d3ee;font-family:'IBM Plex Mono',monospace">${sumReal}</td>
+    <td style="text-align:right;color:#94a3b8;font-family:'IBM Plex Mono',monospace">${sumFc}</td>
+    <td style="text-align:right"><span style="color:${totCol};font-family:'IBM Plex Mono',monospace;font-weight:700">${totDiff>=0?'+':''}${totDiff}</span></td>
+    <td style="text-align:right"><span class="pill ${sumReal>=sumFc?'pg':'pr'}" style="font-size:12px;padding:3px 10px">${totPct!=null?totPct.toFixed(0)+'%':'—'}</span></td>
+  </tr>
+  <tr style="background:rgba(34,211,238,.03)">
+    <td colspan="3" style="padding:10px 12px;font-size:11px;color:var(--text-muted)">Avance total</td>
+    <td colspan="2" style="text-align:right;padding:10px 12px">
+      <span style="font-size:20px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:${totCol}">${totPct!=null?totPct.toFixed(1)+'%':'—'}</span>
+    </td>
   </tr>`;
   document.getElementById('tbody-avf-und').innerHTML=undHtml;
   document.getElementById('avf-kpi-avance').textContent = totPct!=null ? totPct.toFixed(1)+'%' : '—';
