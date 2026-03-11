@@ -4155,12 +4155,12 @@ function buildWaterfall(){
 
   // ── Draw SVG waterfall ───────────────────────────────────────────────────
   const bars = [
-    { label: `UC Real\n(${t.modeLabel||''})`, value: ucR,        type: 'base',  isTotal: true  },
+    { label: `UC\n${compLabel}`,               value: ucComp,     type: 'base',  isTotal: true  },
     { label: 'Var.\nVolumen',                  value: varVol,     type: varVol    >= 0 ? 'pos' : 'neg' },
     { label: 'Var.\nPrecio',                   value: varPrecio,  type: varPrecio >= 0 ? 'pos' : 'neg' },
     { label: 'Var.\nMargen',                   value: varMargen,  type: varMargen >= 0 ? 'pos' : 'neg' },
     { label: 'Var.\nGastos',                   value: varGastos,  type: varGastos >= 0 ? 'pos' : 'neg' },
-    { label: `UC\n${compLabel}`,               value: ucComp,     type: 'base',  isTotal: true  },
+    { label: `UC Real\n(${t.modeLabel||''})`,  value: ucR,        type: 'base',  isTotal: true  },
   ];
 
   const svg    = document.getElementById('wf-svg');
@@ -4248,7 +4248,7 @@ function buildWaterfall(){
 
   // Fix connectors — simple running total approach
   svgHtml = svgHtml.replace(/<line x1.*stroke-dasharray="4,3".*\/>/g, ''); // clear bad connectors
-  let run2 = ucR;
+  let run2 = ucComp;
   for(let i = 0; i < rects.length - 1; i++){
     const r = rects[i];
     const r2 = rects[i+1];
