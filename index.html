@@ -653,6 +653,12 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
   <div class="tcontent" id="tab-avance">
     <div class="shdr" style="flex-wrap:wrap;gap:8px;position:sticky;top:calc(var(--hh) + var(--tnav-h) + var(--sb-h));z-index:70;background:var(--bg);padding:10px 26px;margin:0 -26px 11px;border-bottom:1px solid var(--border)">
       <div class="stitle" style="color:#22d3ee">📊 Avance vs Forecast <small id="avf-period-label" style="color:var(--text-muted)"></small></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:var(--text-dim);font-family:'Inter',sans-serif">Segmento:</span>
+        <select id="avf-seg-select" onchange="setAvfSeg(this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 8px;border-radius:6px;font-family:'Inter',sans-serif;cursor:pointer">
+          <option value="">Todos los segmentos</option>
+        </select>
+      </div>
     </div>
     <div id="avf-nodata" style="text-align:center;padding:60px 20px;color:var(--text-muted);font-size:13px">
       Sin datos — genera el Forecast primero en la pestaña 🔮 Forecast
@@ -3809,34 +3815,79 @@ async function loadFcSnapshot(){
 // ═══════════════════════════════════════════
 // AVANCE VS FORECAST
 // ═══════════════════════════════════════════
+let _avfSeg = null; // segment filter for avance tab
+
 function buildAvance(){
-  const nodata = document.getElementById('avf-nodata');
+  const nodata  = document.getElementById('avf-nodata');
   const content = document.getElementById('avf-content');
   if(!_fcCache || !window._bdd){
     nodata.style.display='block'; content.style.display='none'; return;
   }
   nodata.style.display='none'; content.style.display='block';
 
+  // Populate segment selector from bySeg keys
+  const avfSel = document.getElementById('avf-seg-select');
+  if(avfSel){
+    const segs = Object.keys(_fcCache.bySeg||{}).sort();
+    avfSel.innerHTML = '<option value="">Todos los segmentos</option>' +
+      segs.map(s=>`<option value="${s}" ${_avfSeg===s?'selected':''}>${s}</option>`).join('');
+  }
+
   const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio',
     'Julio','Agosto','Sep','Oct','Nov','Dic'];
-  const mes = +document.getElementById('fc-mes').value || 3;
+  const mes      = +document.getElementById('fc-mes').value || 3;
   const mesLabel = NAMES[mes-1] || ('Mes '+mes);
+  document.getElementById('avf-period-label').textContent = '— ' + mesLabel;
+  document.getElementById('avf-edo-title').textContent =
+    '📊 Estado de Resultados — Real vs Forecast · ' + mesLabel +
+    (_avfSeg ? ' · ' + _avfSeg : '');
 
-  document.getElementById('avf-period-label').textContent = '— '+mesLabel;
-  document.getElementById('avf-edo-title').textContent = '📊 Estado de Resultados — Real vs Forecast · '+mesLabel;
+  // ── Rebuild ippBancos from rawRows (same as runForecast else-slim branch) ──
+  const tasa       = +document.getElementById('fc-tasa').value || 12.5;
+  const DIAS_MES_A = [31,28,31,30,31,30,31,31,30,31,30,31];
+  const diasMes    = DIAS_MES_A[mes-1] || 30;
+  const tasaDiaria = tasa / 100 / 365;
+  const ippBancos  = (_fcCache.ippRawRows||[]).map(({banco, rawRows})=>{
+    const map={};
+    (rawRows||[]).forEach(r=>{
+      const interes = r.interesFixed!==null ? r.interesFixed : r.saldo*tasaDiaria*diasMes;
+      ippAccum(map, r.seg, r.dist, r.saldo, interes);
+    });
+    return {...ippFlatten(banco, map), rawRows};
+  });
+  const hayIPP = ippBancos.length > 0;
 
-  // ── Forecast values (from _fcCache, no filters) ──────────────────────────
-  const fcBySeg = _fcCache.bySeg || {};     // {seg:{und,rev,costo,ub}}
-  const fcSegs  = Object.keys(fcBySeg).sort();
+  // IPP by segment (no soc filter for avance — show full picture)
+  const ippBySeg={};
+  ippBancos.forEach(b=>{
+    (b.rows||[]).forEach(r=>{
+      const segKey=normSeg(r.seg);
+      if(!ippBySeg[segKey]) ippBySeg[segKey]={saldo:0,interes:0,count:0};
+      ippBySeg[segKey].interes += (r.interes||0);
+      ippBySeg[segKey].saldo   += (r.saldo||0);
+    });
+  });
+  const ippTotalFilt = _avfSeg
+    ? (ippBySeg[normSeg(_avfSeg)]?.interes||0)
+    : Object.values(ippBySeg).reduce((s,v)=>s+v.interes,0);
 
-  // Forecast P&L totals — mirrors runForecast allSegRows logic
-  const cxP   = fCxPpto ? fCxPpto() : [];
-  const cxPmes = cxP.filter(r=>r.periodo===mes);
+  // ── bySeg: from slim cache or full ventas ───────────────────────────────
+  // Slim: _fcCache.bySeg (all segs, no filter applied)
+  // Filter by _avfSeg if set
+  const fcBySeg = _fcCache.bySeg || {};
+  const segRowsAll = Object.entries(fcBySeg);
+  const fcRowMap = Object.fromEntries(
+    _avfSeg ? segRowsAll.filter(([s])=>s===_avfSeg) : segRowsAll
+  );
 
-  // Determine which segs have ppto data
-  const allPptoSegs = [...new Set(cxPmes.filter(r=>r.ctaTipo==='4'&&r.seg&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg))].sort();
+  // ── Presupuesto data (same as runForecast) ───────────────────────────────
+  const cxP = fCxPpto();
+  const cxPmes = (_avfSeg
+    ? cxP.filter(r=>r.seg===_avfSeg||r.seg==='ADMINISTRACIÓN')
+    : cxP
+  ).filter(r=>r.periodo===mes);
 
-  // Plan piso detection (same logic as runForecast)
+  // Plan piso detection
   const ppPisoCuentas = new Set(
     cxP.filter(r=>r.ctaTipo==='6'&&r.cuenta&&(
       r.cuenta.toLowerCase().includes('plan piso')||
@@ -3845,211 +3896,194 @@ function buildAvance(){
       r.cuenta.toLowerCase().includes('ipp')))
     .map(r=>r.cuenta)
   );
-  function isPP(cuenta){ return ppPisoCuentas.size>0
-    ? ppPisoCuentas.has(cuenta)
-    : (cuenta||'').toLowerCase().includes('plan piso')||(cuenta||'').toLowerCase().includes('ipp');
+  function isPP(c){ return ppPisoCuentas.size>0
+    ? ppPisoCuentas.has(c)
+    : (c||'').toLowerCase().includes('plan piso')||(c||'').toLowerCase().includes('ipp');
   }
-  const hayIPP = (_fcCache.ippRawRows||[]).length > 0;
-  // IPP totals from ippRawRows (same recalc as runForecast)
-  const tasa     = +document.getElementById('fc-tasa').value || 12.5;
-  const DIAS_MES_AVF = [31,28,31,30,31,30,31,31,30,31,30,31];
-  const diasMes  = DIAS_MES_AVF[mes-1] || 30;
-  const tasaDiaria = tasa/100/365;
-  let fcIppTotal = 0;
-  (_fcCache.ippRawRows||[]).forEach(({rawRows})=>{
-    (rawRows||[]).forEach(r=>{
-      const interes = r.interesFixed!==null ? r.interesFixed : r.saldo*tasaDiaria*diasMes;
-      fcIppTotal += interes;
-    });
-  });
 
-  // allSegRows: use _fcConfig source per segment
-  const segsToShow = allPptoSegs.length ? allPptoSegs : fcSegs;
+  // allPptoSegs for this mes (filtered by _avfSeg)
+  const allPptoSegs = [...new Set(
+    cxPmes.filter(r=>r.ctaTipo==='4'&&r.seg&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg)
+  )].sort();
+  const segsToShow = _avfSeg
+    ? (allPptoSegs.includes(_avfSeg) ? [_avfSeg] : [])
+    : allPptoSegs;
+
+  // allSegRows: same config-driven logic as runForecast
   const allSegRows = segsToShow.map(seg=>{
     const src = getFcSource(seg);
     if(src==='forecast'){
-      const fc = fcBySeg[seg];
-      return [seg,{und:fc?.und||0,rev:fc?.rev||0,costo:fc?.costo||0,ub:fc?.ub||0}];
+      const fc = fcRowMap[seg];
+      return [seg,{und:fc?.und||0,rev:fc?.rev||0,costo:fc?.costo||0,ub:fc?.ub||0,src:'forecast'}];
     } else {
       const rev  = -cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='4').reduce((a,r)=>a+r.importe,0);
       const cost =  cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='5').reduce((a,r)=>a+r.importe,0);
-      return [seg,{und:0,rev,costo:cost,ub:rev-cost}];
+      return [seg,{und:0,rev,costo:cost,ub:rev-cost,src:'ppto'}];
     }
   });
-  const fcTotRev   = allSegRows.reduce((s,[,d])=>s+d.rev,0);
+
+  const fcTotRev   = allSegRows.reduce((s,[,d])=>s+d.rev,  0);
   const fcTotCosto = allSegRows.reduce((s,[,d])=>s+d.costo,0);
-  const fcTotUB    = allSegRows.reduce((s,[,d])=>s+d.ub,0);
-  const fcTotUnd   = allSegRows.reduce((s,[,d])=>s+d.und,0);
+  const fcTotUB    = allSegRows.reduce((s,[,d])=>s+d.ub,   0);
+  const fcTotUnd   = allSegRows.filter(([,d])=>d.src==='forecast').reduce((s,[,d])=>s+d.und,0);
 
-  // GV forecast = ppto GV (replacing PP with IPP if loaded)
-  const segsGV = [...new Set(cxPmes.filter(r=>r.ctaTipo==='6'&&r.seg&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg))];
-  function pptoGvSeg(seg){ return cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='6'&&(hayIPP?!isPP(r.cuenta):true)).reduce((a,r)=>a+r.importe,0); }
-  let fcTotGV = 0;
-  segsGV.forEach(seg=>{
-    const ppGv = pptoGvSeg(seg);
-    // Distribute IPP proportionally if slim (no per-seg IPP)
-    fcTotGV += ppGv;
-  });
-  if(hayIPP){
-    // Replace ppto PP with IPP total
-    const pptoPPtot = cxPmes.filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN'&&isPP(r.cuenta)).reduce((a,r)=>a+r.importe,0);
-    fcTotGV = fcTotGV + fcIppTotal; // already excluded ppto PP above
+  // GV forecast (same logic as runForecast)
+  function pptoGvSeg(seg){
+    return cxPmes.filter(r=>r.seg===seg&&r.ctaTipo==='6'&&(hayIPP?!isPP(r.cuenta):true))
+                 .reduce((a,r)=>a+r.importe,0);
   }
-  const fcTotGI  = cxPmes.filter(r=>r.seg==='ADMINISTRACIÓN'&&r.ctaTipo==='6').reduce((a,r)=>a+r.importe,0);
-  const fcUtMC   = fcTotUB - fcTotGV;
-  const fcUtOp   = fcUtMC  - fcTotGI;
+  function ippPorSeg(seg){ return hayIPP ? (ippBySeg[normSeg(seg)]?.interes||0) : 0; }
+  const segsGVppto = [...new Set(
+    cxPmes.filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').map(r=>r.seg)
+  )];
+  let fcTotGV = 0;
+  segsGVppto.forEach(seg=>{ fcTotGV += pptoGvSeg(seg) + ippPorSeg(seg); });
+  const fcTotGI  = _avfSeg ? 0
+    : cxPmes.filter(r=>r.seg==='ADMINISTRACIÓN'&&r.ctaTipo==='6').reduce((a,r)=>a+r.importe,0);
+  const fcUtMC   = fcTotUB  - fcTotGV;
+  const fcUtOp   = fcUtMC   - fcTotGI;
+  const fcOtros  = -cxPmes.filter(r=>r.ctaTipo==='7').reduce((a,r)=>a+r.importe,0);
+  const fcUAIT   = fcUtOp + fcOtros;
 
-  // ── Real values for the same month ───────────────────────────────────────
-  const cx = fCx ? fCx() : [];
-  function sumR(tipo,seg){ return cx.filter(r=>r.periodo===mes&&r.ctaTipo===tipo&&(!seg||r.seg===seg)).reduce((a,r)=>a+r.importe,0); }
-  const realRev   = -sumR('4',null);
-  const realCosto =  sumR('5',null);
+  // ── Real values ──────────────────────────────────────────────────────────
+  const cx = fCx();
+  function sumR(tipo, seg){
+    return cx.filter(r=>r.periodo===mes&&r.ctaTipo===tipo&&(!seg||r.seg===seg))
+             .reduce((a,r)=>a+r.importe,0);
+  }
+  // When segment filter active: real GV only for that segment
+  const realRev   = _avfSeg ? -sumR('4',_avfSeg) : -sumR('4',null);
+  const realCosto = _avfSeg ?  sumR('5',_avfSeg) :  sumR('5',null);
   const realGP    = realRev - realCosto;
-  const realGV    = segsGV.reduce((s,seg)=>s+sumR('6',seg),0);
-  const realGI    =  sumR('6','ADMINISTRACIÓN');
+  const realGV    = _avfSeg
+    ? sumR('6',_avfSeg)
+    : segsGVppto.reduce((s,seg)=>s+sumR('6',seg), 0);
+  const realGI    = _avfSeg ? 0 : sumR('6','ADMINISTRACIÓN');
   const realUtMC  = realGP - realGV;
   const realUtOp  = realUtMC - realGI;
-  const realOtros = -sumR('7',null);
+  const realOtros = _avfSeg ? 0 : -sumR('7',null);
   const realUAIT  = realUtOp + realOtros;
 
-  // Forecast UAIT (add otros from ppto if available)
-  const fcOtros = -cxPmes.filter(r=>r.ctaTipo==='7').reduce((a,r)=>a+r.importe,0);
-  const fcUAIT  = fcUtOp + fcOtros;
+  // ── Unidades ─────────────────────────────────────────────────────────────
+  const allUnd = window._bdd?.unidades||[];
+  const realUnd = allUnd.filter(r=>r.periodo===mes&&(!_avfSeg||r.segmento===_avfSeg))
+                        .reduce((a,r)=>a+r.unidades,0);
 
-  // Real unidades for this month
-  const allUnidades = window._bdd?.unidades||[];
-  const realUnd = allUnidades.filter(r=>r.periodo===mes).reduce((a,r)=>a+r.unidades,0);
-
-  // ── Units table ───────────────────────────────────────────────────────────
-  const pptoundBySeg = {};
-  (window._ppto?.unidades||[]).filter(r=>r.periodo===mes).forEach(r=>{
-    pptoundBySeg[r.segmento]=(pptoundBySeg[r.segmento]||0)+r.unidades;
-  });
+  // Units table — all segments union
   const realUndBySeg = {};
-  allUnidades.filter(r=>r.periodo===mes).forEach(r=>{
+  allUnd.filter(r=>r.periodo===mes).forEach(r=>{
     realUndBySeg[r.segmento]=(realUndBySeg[r.segmento]||0)+r.unidades;
   });
-  const fcUndBySeg = {};
-  allSegRows.forEach(([seg,d])=>{ fcUndBySeg[seg]=(d.und||0); });
-  // Also pull from fcBySeg for segs not in allSegRows
-  Object.entries(fcBySeg).forEach(([seg,d])=>{ if(!fcUndBySeg[seg]) fcUndBySeg[seg]=d.und||0; });
+  const fcUndBySeg = Object.fromEntries(
+    Object.entries(fcBySeg).map(([s,d])=>[s, d.und||0])
+  );
+  const undSegs = [...new Set([
+    ...Object.keys(realUndBySeg),
+    ...Object.keys(fcUndBySeg)
+  ])].filter(s=>!_avfSeg||s===_avfSeg).sort();
 
-  // Merge segment list: union of real and forecast segments
-  const undSegs = [...new Set([...Object.keys(realUndBySeg),...Object.keys(fcUndBySeg)])].sort();
-
-  let undHtml='';
-  let sumReal=0, sumFc=0;
+  let undHtml='', sumReal=0, sumFc=0;
   undSegs.forEach(seg=>{
-    const r = realUndBySeg[seg]||0;
-    const f = fcUndBySeg[seg]||0;
-    if(!r && !f) return;
+    const r=realUndBySeg[seg]||0, f=fcUndBySeg[seg]||0;
+    if(!r&&!f) return;
     sumReal+=r; sumFc+=f;
-    const diff=r-f;
-    const pct=f>0?((r/f)*100):null;
+    const diff=r-f, pct=f>0?(r/f*100):null;
     const col=r>=f?'#00d4aa':'#ef4444';
-    const pctBar=pct!=null?Math.min(100,pct).toFixed(0):0;
     const pctStr=pct!=null?`<span class="pill ${r>=f?'pg':'pr'}">${pct.toFixed(0)}%</span>`:'—';
-    undHtml+=`<tr>
-      <td class="tdn">${seg}</td>
-      <td style="text-align:right;font-weight:600;font-family:'IBM Plex Mono',monospace">${r}</td>
-      <td style="text-align:right;color:#94a3b8;font-family:'IBM Plex Mono',monospace">${f}</td>
-      <td style="text-align:right"><span style="color:${col};font-family:'IBM Plex Mono',monospace;font-weight:600">${diff>=0?'+':''}${diff}</span></td>
-      <td style="text-align:right;min-width:80px">${pctStr}</td>
-    </tr>`;
+    undHtml+=`<tr><td class="tdn">${seg}</td>
+      <td style="text-align:right;font-weight:600">${r}</td>
+      <td style="text-align:right;color:#94a3b8">${f||'—'}</td>
+      <td style="text-align:right"><span style="color:${col}">${diff>=0?'+':''}${diff}</span></td>
+      <td style="text-align:right">${pctStr}</td></tr>`;
   });
-  // TOTAL row
-  const totDiff=sumReal-sumFc;
-  const totPct=sumFc>0?((sumReal/sumFc)*100):null;
+  const totDiff=sumReal-sumFc, totPct=sumFc>0?(sumReal/sumFc*100):null;
   const totCol=sumReal>=sumFc?'#00d4aa':'#ef4444';
-  undHtml+=`<tr style="font-weight:800;border-top:2px solid rgba(34,211,238,.35);background:rgba(34,211,238,.06)">
-    <td class="tdn" style="color:#22d3ee;font-size:12px">TOTAL</td>
-    <td style="text-align:right;color:#22d3ee;font-family:'IBM Plex Mono',monospace">${sumReal}</td>
-    <td style="text-align:right;color:#94a3b8;font-family:'IBM Plex Mono',monospace">${sumFc}</td>
-    <td style="text-align:right"><span style="color:${totCol};font-family:'IBM Plex Mono',monospace;font-weight:700">${totDiff>=0?'+':''}${totDiff}</span></td>
-    <td style="text-align:right"><span class="pill ${sumReal>=sumFc?'pg':'pr'}" style="font-size:12px;padding:3px 10px">${totPct!=null?totPct.toFixed(0)+'%':'—'}</span></td>
-  </tr>
-  <tr style="background:rgba(34,211,238,.03)">
-    <td colspan="3" style="padding:10px 12px;font-size:11px;color:var(--text-muted)">Avance total</td>
-    <td colspan="2" style="text-align:right;padding:10px 12px">
-      <span style="font-size:20px;font-weight:800;font-family:'IBM Plex Mono',monospace;color:${totCol}">${totPct!=null?totPct.toFixed(1)+'%':'—'}</span>
-    </td>
-  </tr>`;
+  undHtml+=`<tr style="font-weight:800;border-top:2px solid rgba(34,211,238,.3);background:rgba(34,211,238,.05)">
+    <td class="tdn" style="color:#22d3ee">TOTAL</td>
+    <td style="text-align:right;color:#22d3ee">${sumReal}</td>
+    <td style="text-align:right;color:#94a3b8">${sumFc}</td>
+    <td style="text-align:right"><span style="color:${totCol}">${totDiff>=0?'+':''}${totDiff}</span></td>
+    <td style="text-align:right"><span class="pill ${sumReal>=sumFc?'pg':'pr'}">${totPct!=null?totPct.toFixed(0)+'%':'—'}</span></td></tr>`;
   document.getElementById('tbody-avf-und').innerHTML=undHtml;
-  document.getElementById('avf-kpi-avance').textContent = totPct!=null ? totPct.toFixed(1)+'%' : '—';
-  document.getElementById('avf-kpi-avance').style.color = sumReal>=sumFc ? '#22d3ee' : '#ef4444';
+  const el=document.getElementById('avf-kpi-avance');
+  el.textContent=totPct!=null?totPct.toFixed(1)+'%':'—';
+  el.style.color=sumReal>=sumFc?'#22d3ee':'#ef4444';
 
   // ── P&L table ─────────────────────────────────────────────────────────────
-  function fC2(v){ return v<0?`(${Math.abs(v).toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0})})`
-    :v.toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0}); }
-  function varCells(real,fc){
-    const diff=real-fc;
-    const pct=fc?((diff/Math.abs(fc))*100):null;
-    const col=diff>=0?'#00d4aa':'#ef4444';
-    const diffHtml=diff<0?`<span style="color:${col}">(${Math.abs(diff).toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0})})</span>`
-      :`<span style="color:${col}">${diff.toLocaleString('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:0,maximumFractionDigits:0})}</span>`;
-    const pctHtml=pct!=null?`<span class="pill ${diff>=0?'pg':'pr'}">${diff>0?'+':''}${pct.toFixed(1)}%</span>`:'—';
-    return`<td style="text-align:right">${diffHtml}</td><td style="text-align:right">${pctHtml}</td>`;
+  function fC(v){ return '$'+(v/1e6).toFixed(2)+'M'; }
+  function varTds(real,fc){
+    const d=real-fc, pct=fc?d/Math.abs(fc)*100:null;
+    const col=d>=0?'#00d4aa':'#ef4444';
+    const dHtml=d<0?`<span style="color:${col}">(${fC(Math.abs(d))})</span>`
+                   :`<span style="color:${col}">${fC(d)}</span>`;
+    const pHtml=pct!=null?`<span class="pill ${d>=0?'pg':'pr'}">${d>0?'+':''}${pct.toFixed(1)}%</span>`:'—';
+    return`<td style="text-align:right">${dHtml}</td><td style="text-align:right">${pHtml}</td>`;
   }
   function plRow(label,real,fc,opts={}){
     const bold=opts.bold?'font-weight:700;':'';
     const bg=opts.bg?`background:${opts.bg};`:'';
     const lc=opts.lc?`color:${opts.lc};`:'';
-    const realFmt=opts.units?real.toLocaleString('es-MX'):fC2(real);
-    const fcFmt=opts.units?fc.toLocaleString('es-MX'):(`<span style="color:#94a3b8">${fC2(fc)}</span>`);
+    const units=opts.units;
+    const realStr=units?real.toLocaleString('es-MX'):fC(real);
+    const fcStr=units?`<span style="color:#94a3b8">${fc.toLocaleString('es-MX')}</span>`
+                     :`<span style="color:#94a3b8">${fC(fc)}</span>`;
+    const varHtml=units
+      ? (()=>{ const d=real-fc,col=d>=0?'#00d4aa':'#ef4444',pct=fc?(real/fc*100):null;
+               return `<td><span style="color:${col}">${d>=0?'+':''}${d}</span></td>`+
+                      `<td><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(0)+'%':'—'}</span></td>`; })()
+      : varTds(real,fc);
     return`<tr style="${bold}${bg}">
       <td class="tdn" style="${lc}${opts.indent?'padding-left:22px;':''}">${label}</td>
-      <td style="text-align:right">${realFmt}</td>
-      <td style="text-align:right">${fcFmt}</td>
-      ${varCells(real,fc)}
-    </tr>`;
+      <td style="text-align:right">${realStr}</td>
+      <td style="text-align:right">${fcStr}</td>${varHtml}</tr>`;
   }
-  function sep2(label){ return`<tr style="background:rgba(34,211,238,.03)"><td colspan="5" style="padding:4px 12px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`; }
-  function subtot(label,real,fc){
-    const pos=real>=0;
-    const bg=pos?'rgba(0,212,170,.07)':'rgba(239,68,68,.05)';
-    const lc=pos?'#00d4aa':'#ef4444';
-    return plRow(label,real,fc,{bold:true,bg,lc});
+  function sep2(lbl){ return`<tr style="background:rgba(34,211,238,.03)"><td colspan="5" style="padding:4px 12px;font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${lbl}</td></tr>`; }
+  function subtot(lbl,real,fc){
+    const pos=real>=0; const bg=pos?'rgba(0,212,170,.07)':'rgba(239,68,68,.05)'; const lc=pos?'#00d4aa':'#ef4444';
+    return plRow(lbl,real,fc,{bold:true,bg,lc});
   }
-  function subtotExp(label,real,fc,lc='#f97316'){ return plRow(label,real,fc,{bold:true,bg:'rgba(249,115,22,.05)',lc}); }
-  function pctPLrow(label,num,den,fcNum,fcDen){
-    function p(n,d){return d?((n/d)*100).toFixed(1)+'%':'—';}
-    return`<tr style="font-style:italic"><td style="padding-left:22px;font-size:10px;color:var(--text-muted)">${label}</td>
-      <td style="font-size:10px;color:var(--text-muted);text-align:right">${p(num,den)}</td>
-      <td style="font-size:10px;color:var(--text-muted);text-align:right">${p(fcNum,fcDen)}</td>
+  function subtotE(lbl,real,fc,lc='#f97316'){ return plRow(lbl,real,fc,{bold:true,bg:'rgba(249,115,22,.05)',lc}); }
+  function pctPL(lbl,rn,rd,fn,fd){
+    const p=(n,d)=>d?`${(n/d*100).toFixed(1)}%`:'—';
+    return`<tr style="font-style:italic"><td style="padding-left:22px;font-size:10px;color:var(--text-muted)">${lbl}</td>
+      <td style="font-size:10px;color:var(--text-muted);text-align:right">${p(rn,rd)}</td>
+      <td style="font-size:10px;color:var(--text-muted);text-align:right">${p(fn,fd)}</td>
       <td colspan="2"></td></tr>`;
   }
 
   let plHtml='';
   plHtml+=sep2('📦 Volumen');
   plHtml+=plRow('Unidades vendidas',realUnd,fcTotUnd,{bold:true,units:true});
-
   plHtml+=sep2('💰 Ingresos');
   plHtml+=subtot('TOTAL INGRESOS',realRev,fcTotRev);
-
   plHtml+=sep2('📦 Costo de Ventas');
-  plHtml+=subtotExp('TOTAL COSTO DE VENTAS',realCosto,fcTotCosto,'#f97316');
+  plHtml+=subtotE('TOTAL COSTO DE VENTAS',realCosto,fcTotCosto);
   plHtml+=subtot('★ UTILIDAD BRUTA',realGP,fcTotUB);
-  plHtml+=pctPLrow('% Margen Bruto',realGP,realRev,fcTotUB,fcTotRev);
-
+  plHtml+=pctPL('% Margen Bruto',realGP,realRev,fcTotUB,fcTotRev);
   plHtml+=sep2('🏷️ Gastos de Venta');
-  plHtml+=subtotExp('TOTAL GASTOS DE VENTA',realGV,fcTotGV,'#f59e0b');
+  plHtml+=subtotE('TOTAL GASTOS DE VENTA',realGV,fcTotGV,'#f59e0b');
   plHtml+=subtot('★ UTILIDAD CONTRIBUCIÓN',realUtMC,fcUtMC);
-  plHtml+=pctPLrow('% Margen Contribución',realUtMC,realRev,fcUtMC,fcTotRev);
-
-  plHtml+=sep2('🏢 Gastos Administración');
-  plHtml+=subtotExp('Gastos Administración',realGI,fcTotGI,'#f59e0b');
-  plHtml+=subtot('★ UTILIDAD OPERACIÓN',realUtOp,fcUtOp);
-  plHtml+=pctPLrow('% Margen Operación',realUtOp,realRev,fcUtOp,fcTotRev);
-
-  if(fcOtros||realOtros){
-    plHtml+=sep2('📊 Otros neto');
-    plHtml+=plRow('Otros Ingresos / (Gastos)',realOtros,fcOtros);
-    plHtml+=subtot('★ UTILIDAD ANTES DE IMPUESTOS',realUAIT,fcUAIT);
-    plHtml+=pctPLrow('% UAIT / Ingresos',realUAIT,realRev,fcUAIT,fcTotRev);
+  plHtml+=pctPL('% Margen Contribución',realUtMC,realRev,fcUtMC,fcTotRev);
+  if(!_avfSeg){
+    plHtml+=sep2('🏢 Gastos Administración');
+    plHtml+=subtotE('Gastos Administración',realGI,fcTotGI,'#f59e0b');
+    plHtml+=subtot('★ UTILIDAD OPERACIÓN',realUtOp,fcUtOp);
+    plHtml+=pctPL('% Margen Operación',realUtOp,realRev,fcUtOp,fcTotRev);
+    if(fcOtros||realOtros){
+      plHtml+=sep2('📊 Otros neto');
+      plHtml+=plRow('Otros Ingresos / (Gastos)',realOtros,fcOtros,{indent:true});
+      plHtml+=subtot('★ UTILIDAD ANTES DE IMPUESTOS',realUAIT,fcUAIT);
+      plHtml+=pctPL('% UAIT / Ingresos',realUAIT,realRev,fcUAIT,fcTotRev);
+    }
   }
-
   document.getElementById('tbody-avf-edo').innerHTML=plHtml;
 }
+
+function setAvfSeg(val){
+  _avfSeg=val||null;
+  buildAvance();
+}
+
 // ═══════════════════════════════════════════
 // PAGE INIT
 // ═══════════════════════════════════════════
