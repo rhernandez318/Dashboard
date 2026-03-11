@@ -432,6 +432,32 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
       <div class="ccard"><h4>Estructura de Costos</h4><div class="cwrap"><canvas id="ch-cost"></canvas></div></div>
     </div>
     <div class="tcard"><div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="edo-title">📊 Estado de Resultados</h4><button onclick="exportTableExcel('tbl-edo','Estado_Resultados')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
+
+    <!-- WATERFALL BRIDGE CHART -->
+    <div class="tcard mt4" id="wrap-waterfall">
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h4 id="wf-title">🌊 Puente de Utilidad Contribución</h4>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--text-muted);font-family:'Inter',sans-serif">Comparar vs:</span>
+          <button id="wf-btn-ppto" class="tbtn active" onclick="setWfMode('ppto',this)"
+            style="padding:4px 12px;font-size:10px;border-radius:6px;border:1px solid var(--border)">Presupuesto</button>
+          <button id="wf-btn-aa" class="tbtn" onclick="setWfMode('aa',this)"
+            style="padding:4px 12px;font-size:10px;border-radius:6px;border:1px solid var(--border)">Año Previo</button>
+        </div>
+      </div>
+      <div id="wf-nodata" style="text-align:center;padding:32px;color:var(--text-muted);font-size:12px">
+        Carga archivo de Presupuesto o Año Anterior para ver el análisis de variaciones
+      </div>
+      <div id="wf-content" style="display:none;padding:8px 0 4px">
+        <svg id="wf-svg" width="100%" style="display:block;overflow:visible"></svg>
+        <!-- Legend -->
+        <div style="display:flex;gap:16px;justify-content:center;margin-top:8px;font-size:10px;font-family:'Inter',sans-serif;flex-wrap:wrap">
+          <span><span style="display:inline-block;width:12px;height:12px;background:#00d4aa;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Favorable</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#ef4444;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Desfavorable</span>
+          <span><span style="display:inline-block;width:12px;height:12px;background:#3b82f6;border-radius:2px;margin-right:4px;vertical-align:middle"></span>Base</span>
+        </div>
+      </div>
+    </div>
     <div class="tcard mt4" id="wrap-indicadores"><div class="thead2"><h4 id="ind-title">📊 Indicadores por Unidad<span class="hint" id="ind-seg-hint"></span></h4></div><div class="tscroll"><table id="tbl-indicadores"><thead><tr></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4" id="wrap-margen-seg">
       <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -2436,6 +2462,19 @@ function buildEdo(p){
 
   document.querySelector('#tbl-edo tbody').innerHTML=html;
 
+  // ── Store computed totals for waterfall chart ────────────────
+  window._edoTotals = {
+    modeLabel, pers, edoSeg: edoSeg||null,
+    // Real
+    undReal, rev, cost, gp, gv, utMC,
+    // Ppto
+    undPpto, ppRev, ppCost, ppGp, ppGv, ppMC,
+    // Año anterior
+    und25, aaRev, aaCost, aaGp, aaGv, aaMC,
+    hasPpto: !!cxPpto, has25: !!cx25,
+  };
+  buildWaterfall();
+
   // ── Indicadores por Unidad (same filters, same period scope) ──
   buildIndicadores({
     modeLabel, pers, edoSeg, segFilter4,
@@ -4043,6 +4082,231 @@ function setAvfSeg(val){
 }
 
 
+
+// ═══════════════════════════════════════════
+// WATERFALL BRIDGE CHART
+// ═══════════════════════════════════════════
+let _wfMode = 'ppto'; // 'ppto' | 'aa'
+
+function setWfMode(mode, btn){
+  _wfMode = mode;
+  document.querySelectorAll('#wf-btn-ppto,#wf-btn-aa').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  buildWaterfall();
+}
+
+function buildWaterfall(){
+  const t = window._edoTotals;
+  const nodata  = document.getElementById('wf-nodata');
+  const content = document.getElementById('wf-content');
+  if(!t){ nodata && (nodata.style.display='block'); content && (content.style.display='none'); return; }
+
+  const usePpto = _wfMode === 'ppto';
+  const compLabel = usePpto ? 'Presupuesto' : 'Año Previo';
+
+  // Pick comparison dataset
+  const undComp = usePpto ? t.undPpto : t.und25;
+  const revComp = usePpto ? t.ppRev   : t.aaRev;
+  const gpComp  = usePpto ? t.ppGp    : t.aaGp;
+  const gvComp  = usePpto ? t.ppGv    : t.aaGv;
+  const ucComp  = usePpto ? t.ppMC    : t.aaMC;
+
+  // Check if comparison data exists
+  if(ucComp == null || revComp == null){
+    nodata.style.display='block';
+    nodata.textContent = usePpto
+      ? 'Carga el archivo de Presupuesto para ver variación vs Ppto'
+      : 'Carga el archivo de Año Anterior para ver variación vs Año Previo';
+    content.style.display='none'; return;
+  }
+  nodata.style.display='none'; content.style.display='block';
+
+  // ── Compute bridge components ─────────────────────────────────────────────
+  const undR = t.undReal  || 0;
+  const revR = t.rev      || 0;
+  const gpR  = t.gp       || 0;
+  const gvR  = t.gv       || 0;
+  const ucR  = t.utMC     || 0;   // Utilidad Contribución Real
+
+  const undC = undComp || 0;
+  const revC = revComp || 0;
+  const gpC  = gpComp  || 0;
+  const gvC  = gvComp  || 0;
+
+  // Precio promedio por unidad
+  const ppu_R = undR > 0 ? revR / undR : 0;
+  const ppu_C = undC > 0 ? revC / undC : 0;
+
+  // % Margen Bruto
+  const mbR = revR > 0 ? gpR / revR : 0;  // actual
+  const mbC = revC > 0 ? gpC / revC : 0;  // comp
+
+  // UC por unidad del comparativo
+  const ucPorUnd_C = undC > 0 ? ucComp / undC : 0;
+
+  // Bridge formulas
+  const varVol    = (undR - undC) * ucPorUnd_C;
+  const varPrecio = (ppu_R - ppu_C) * undR * mbR;
+  const varMargen = undR * ppu_C * (mbR - mbC);
+  const varGastos = -(gvR - gvC);  // lower GV = favorable
+
+  // Verify: ucR ≈ ucComp + varVol + varPrecio + varMargen + varGastos
+  // (small residual is normal due to interaction effects)
+
+  // ── Draw SVG waterfall ───────────────────────────────────────────────────
+  const bars = [
+    { label: `UC Real\n(${t.modeLabel||''})`, value: ucR,        type: 'base',  isTotal: true  },
+    { label: 'Var.\nVolumen',                  value: varVol,     type: varVol    >= 0 ? 'pos' : 'neg' },
+    { label: 'Var.\nPrecio',                   value: varPrecio,  type: varPrecio >= 0 ? 'pos' : 'neg' },
+    { label: 'Var.\nMargen',                   value: varMargen,  type: varMargen >= 0 ? 'pos' : 'neg' },
+    { label: 'Var.\nGastos',                   value: varGastos,  type: varGastos >= 0 ? 'pos' : 'neg' },
+    { label: `UC\n${compLabel}`,               value: ucComp,     type: 'base',  isTotal: true  },
+  ];
+
+  const svg    = document.getElementById('wf-svg');
+  const W      = svg.parentElement.clientWidth || 700;
+  const PAD    = { top: 60, right: 20, bottom: 70, left: 70 };
+  const H      = 320;
+  const barW   = Math.floor((W - PAD.left - PAD.right) / bars.length * 0.55);
+  const barGap = Math.floor((W - PAD.left - PAD.right) / bars.length);
+
+  svg.setAttribute('height', H);
+
+  // Compute running totals (waterfall positions)
+  const COLORS = { pos:'#00d4aa', neg:'#ef4444', base:'#3b82f6' };
+  let running = ucR;
+  const rects = bars.map((b, i) => {
+    let top, bottom;
+    if(b.isTotal){
+      top    = Math.min(0, b.value);
+      bottom = Math.max(0, b.value);
+      // For last bar, reset running
+      if(i === bars.length - 1) running = ucComp;
+    } else {
+      const prev = running;
+      running += b.value;
+      top    = Math.min(prev, running);
+      bottom = Math.max(prev, running);
+    }
+    return { ...b, top, bottom, x: PAD.left + i * barGap + (barGap - barW) / 2 };
+  });
+
+  // Y scale
+  const allVals = rects.flatMap(r => [r.top, r.bottom]);
+  let yMin = Math.min(0, ...allVals);
+  let yMax = Math.max(0, ...allVals);
+  const yRange = yMax - yMin || 1;
+  const yPad = yRange * 0.18;
+  yMin -= yPad; yMax += yPad;
+  const yScale = v => PAD.top + (1 - (v - yMin) / (yMax - yMin)) * (H - PAD.top - PAD.bottom);
+  const y0 = yScale(0);
+
+  // Format helper
+  const fM = v => {
+    const abs = Math.abs(v);
+    const s = v < 0 ? '-' : '';
+    if(abs >= 1e6) return s + '$' + (abs/1e6).toFixed(1) + 'M';
+    if(abs >= 1e3) return s + '$' + (abs/1e3).toFixed(0) + 'K';
+    return s + '$' + abs.toFixed(0);
+  };
+
+  // Build SVG
+  let svgHtml = '';
+
+  // Grid lines
+  const tickCount = 5;
+  for(let i = 0; i <= tickCount; i++){
+    const v = yMin + (yMax - yMin) * i / tickCount;
+    const y = yScale(v);
+    const isMid = Math.abs(v) < (yMax - yMin) * 0.05;
+    svgHtml += `<line x1="${PAD.left}" y1="${y.toFixed(1)}" x2="${W - PAD.right}" y2="${y.toFixed(1)}"
+      stroke="${isMid ? 'rgba(255,255,255,.25)' : 'rgba(255,255,255,.06)'}"
+      stroke-width="${isMid ? 1.5 : 1}" stroke-dasharray="${isMid ? '' : '4,4'}"/>`;
+    svgHtml += `<text x="${PAD.left - 6}" y="${(y + 4).toFixed(1)}" text-anchor="end"
+      fill="#64748b" font-size="10" font-family="IBM Plex Mono,monospace">${fM(v)}</text>`;
+  }
+
+  // Connectors (dashed lines between bars)
+  for(let i = 0; i < rects.length - 1; i++){
+    const r = rects[i]; const r2 = rects[i+1];
+    const connY = r.isTotal ? yScale(r.value) : yScale(rects.slice(0,i+1).reduce((s,b)=>b.isTotal?b.value:s+b.value, ucR) + (r.isTotal ? 0 : 0));
+    // Use the "end" of bar i as connector
+    const endY = r.isTotal ? yScale(r.value) : yScale(
+      i === 0 ? ucR :
+      rects.slice(1, i+1).reduce((s, b) => s + (b.isTotal ? 0 : b.value), ucR)
+    );
+    // Simplified: connect right edge of bar top to left edge of next
+    const barEndY = rects[i].isTotal
+      ? yScale(rects[i].value)
+      : yScale(
+          rects.slice(0, i+1).reduce((acc, b, j) => j === 0 ? b.value : acc + (b.isTotal ? 0 : b.value), 0)
+        );
+    svgHtml += `<line x1="${(r.x + barW).toFixed(1)}" y1="${barEndY.toFixed(1)}"
+      x2="${(r2.x).toFixed(1)}" y2="${barEndY.toFixed(1)}"
+      stroke="#334155" stroke-width="1" stroke-dasharray="4,3"/>`;
+  }
+
+  // Fix connectors — simple running total approach
+  svgHtml = svgHtml.replace(/<line x1.*stroke-dasharray="4,3".*\/>/g, ''); // clear bad connectors
+  let run2 = ucR;
+  for(let i = 0; i < rects.length - 1; i++){
+    const r = rects[i];
+    const r2 = rects[i+1];
+    const connY = r.isTotal ? yScale(r.value) : yScale(run2);
+    if(!r.isTotal) run2 += r.value;
+    svgHtml += `<line x1="${(r.x + barW).toFixed(1)}" y1="${connY.toFixed(1)}"
+      x2="${(r2.x).toFixed(1)}" y2="${connY.toFixed(1)}"
+      stroke="#334155" stroke-width="1.5" stroke-dasharray="5,3"/>`;
+  }
+
+  // Bars + labels
+  rects.forEach((r) => {
+    const yTop  = yScale(r.bottom);
+    const yBot  = yScale(r.top);
+    const barH  = Math.max(2, yBot - yTop);
+    const color = COLORS[r.type];
+    const alpha = r.isTotal ? 'ff' : 'cc';
+
+    svgHtml += `<rect x="${r.x.toFixed(1)}" y="${yTop.toFixed(1)}"
+      width="${barW}" height="${barH.toFixed(1)}"
+      fill="${color}" rx="3" opacity="${r.isTotal ? 1 : 0.85}"/>`;
+
+    // Value label above/below bar
+    const valStr = r.isTotal ? fM(r.value) : (r.value >= 0 ? '+' : '') + fM(r.value);
+    const labelY = r.isTotal
+      ? yScale(r.value) - 8
+      : r.value >= 0 ? yTop - 8 : yBot + 14;
+    svgHtml += `<text x="${(r.x + barW/2).toFixed(1)}" y="${labelY.toFixed(1)}"
+      text-anchor="middle" fill="${r.isTotal ? '#e2e8f0' : color}"
+      font-size="10" font-weight="${r.isTotal ? 700 : 600}"
+      font-family="IBM Plex Mono,monospace">${valStr}</text>`;
+
+    // X label (multi-line)
+    const lblY = H - PAD.bottom + 18;
+    const lines2 = r.label.split('\n');
+    lines2.forEach((ln, li) => {
+      svgHtml += `<text x="${(r.x + barW/2).toFixed(1)}" y="${(lblY + li * 13).toFixed(1)}"
+        text-anchor="middle" fill="#94a3b8" font-size="10"
+        font-family="Inter,sans-serif">${ln}</text>`;
+    });
+  });
+
+  // Zero line
+  svgHtml += `<line x1="${PAD.left}" y1="${y0.toFixed(1)}" x2="${W - PAD.right}" y2="${y0.toFixed(1)}"
+    stroke="rgba(255,255,255,.3)" stroke-width="1"/>`;
+
+  // Title annotation: residual
+  const residual = ucR - (ucComp + varVol + varPrecio + varMargen + varGastos);
+  if(Math.abs(residual) > 1000){
+    svgHtml += `<text x="${W/2}" y="${PAD.top - 10}" text-anchor="middle"
+      fill="#64748b" font-size="9" font-family="Inter,sans-serif">
+      * Residual de interacción: ${fM(residual)}</text>`;
+  }
+
+  svg.innerHTML = svgHtml;
+  document.getElementById('wf-title').textContent =
+    `🌊 Puente de Utilidad Contribución${t.edoSeg ? ' — ' + t.edoSeg : ''} — Real vs ${compLabel}`;
+}
 // ═══════════════════════════════════════════
 // PAGE INIT
 // ═══════════════════════════════════════════
