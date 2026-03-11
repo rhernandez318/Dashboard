@@ -3824,7 +3824,8 @@ async function loadFcSnapshot(){
         bySeg: d.bySeg,
         bySegDist: d.bySegDist || [],
         ippRawRows: d.ippRawRows || [],
-        slim: true          // flag: runForecast will use bySeg instead of parsing ventas
+        fcTotals: d.fcTotals || null,
+        slim: true
       };
     } else {
       _fcCache = d.fcCache || null;
@@ -3852,8 +3853,14 @@ function buildAvance(){
 
   // Need both fcTotals (from runForecast) and BDD real data
   const ft = _fcCache?.fcTotals;
-  if(!ft || !window._bdd){
-    nodata.style.display='block'; content.style.display='none'; return;
+  if(!window._bdd){
+    nodata.style.display='block'; nodata.textContent='Sin datos BDD — genera el dashboard primero';
+    content.style.display='none'; return;
+  }
+  if(!ft){
+    nodata.style.display='block';
+    nodata.textContent='Forecast no calculado — ve a la pestaña 🔮 Forecast y presiona Calcular';
+    content.style.display='none'; return;
   }
   nodata.style.display='none'; content.style.display='block';
 
@@ -3907,12 +3914,12 @@ function buildAvance(){
     return cx.filter(r=>r.periodo===mes&&r.ctaTipo===tipo&&(!seg||r.seg===seg))
              .reduce((a,r)=>a+r.importe,0);
   }
-  const segsGV = Object.keys(ft.gvBySeg||{});
   const realRev   = _avfSeg ? -sumR('4',_avfSeg) : -sumR('4',null);
   const realCosto = _avfSeg ?  sumR('5',_avfSeg) :  sumR('5',null);
   const realGP    = realRev - realCosto;
-  const realGV    = _avfSeg ? sumR('6',_avfSeg)
-                             : segsGV.reduce((s,seg)=>s+sumR('6',seg),0);
+  const realGV    = _avfSeg
+    ? sumR('6',_avfSeg)
+    : cx.filter(r=>r.periodo===mes&&r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').reduce((a,r)=>a+r.importe,0);
   const realGI    = _avfSeg ? 0 : sumR('6','ADMINISTRACIÓN');
   const realUtMC  = realGP - realGV;
   const realUtOp  = realUtMC - realGI;
