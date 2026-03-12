@@ -1810,8 +1810,8 @@ function renderRazones(){
 
   const invTotal=sb2(window._inv,'valor');
   const invUnidades=sb2(window._inv,'unidades');
-  const cartTotal=sb2(window._ant,'saldo');
-  const cartVencida=sb2(window._ant,'vencido');
+  const cartTotal=sb2(fAnt(),'saldo');
+  const cartVencida=sb2(fAnt(),'vencido');
 
   // Days in period
   const D=DIAS_PERIODO;
@@ -1847,7 +1847,7 @@ function renderRazones(){
   const valorRisk=sb2(invRisk,'valor');
   const pctRisk=invTotal>0?(valorRisk/invTotal)*100:0;
   // Concentración top 5 clientes
-  const cliGroup=gb(window._ant,'cliente');
+  const cliGroup=gb(fAnt(),'cliente');
   const top5=Object.entries(cliGroup).map(([n,rows])=>sb2(rows,'saldo')).sort((a,b)=>b-a).slice(0,5);
   const concTop5=cartTotal>0?(top5.reduce((a,b)=>a+b,0)/cartTotal)*100:0;
 
@@ -1954,7 +1954,7 @@ function renderRazones(){
     }).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:16px">Sin unidades en riesgo ✓</td></tr>';
 
   // Cartera crítica >90d
-  const cliVenc=gb(window._ant.filter(r=>r.diasVenc>90),'cliente');
+  const cliVenc=gb(fAnt().filter(r=>r.diasVenc>90),'cliente');
   document.querySelector('#tbl-cart-risk tbody').innerHTML=
     Object.entries(cliVenc).map(([n,rows])=>({nombre:n,monto:sb2(rows,'saldo'),maxD:Math.max(...rows.map(r=>r.diasVenc)),seg:rows[0]?.segmento||''}))
     .sort((a,b)=>b.monto-a.monto).slice(0,15)
@@ -1969,7 +1969,7 @@ function renderRazones(){
     uniByS[r.segmento].ingresos+=r.ventasK*1000;
     uniByS[r.segmento].und+=r.unidades;
   });
-  const antByS=gb(window._ant,'segmento');
+  const antByS=gb(fAnt(),'segmento');
   document.querySelector('#tbl-rent-seg tbody').innerHTML=
     Object.entries(uniByS).sort((a,b)=>b[1].ingresos-a[1].ingresos).map(([s,d])=>{
       const cart=sb2(antByS[s]||[],'saldo');
@@ -2042,7 +2042,7 @@ function renderResumenCharts(ant,inv){
   // Aging donut
   const BK=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
   const BC=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
-  const antBase=activeSeg?window._ant.filter(r=>r.segmento===activeSeg):window._ant;
+  const antBase=fAnt();
   const dBg=BK.map((b,i)=>activeBucket&&activeBucket!==b?BC[i]+'30':BC[i]);
   dch('ch-aging-r');
   const cdnutR=new Chart(document.getElementById('ch-aging-r'),{
@@ -2095,7 +2095,7 @@ function renderCartKPIs(ant){
 function renderAgingBars(ant){
   const BK=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
   const BC=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
-  const antSeg=activeSeg?window._ant.filter(r=>r.segmento===activeSeg):window._ant;
+  const antSeg=fAnt();
   const bv=BK.map(b=>sb2(antSeg.filter(r=>r.bucket===b),'saldo'));
   const mx=Math.max(...bv,1);
   document.getElementById('aging-bars').innerHTML=BK.map((b,i)=>{
@@ -2108,7 +2108,7 @@ function renderAgingBars(ant){
 }
 
 function renderCartCharts(ant){
-  const antSeg=activeSeg?window._ant.filter(r=>r.segmento===activeSeg):window._ant;
+  const antSeg=fAnt();
   const t=sb2(antSeg,'saldo'),v=sb2(antSeg,'vencido'),pv=sb2(antSeg,'porVencer');
   const donutBg=activeBucket&&activeBucket!=='Por Vencer'?['rgba(16,185,129,.18)','#ef4444']:activeBucket==='Por Vencer'?['#10b981','rgba(239,68,68,.18)']:['#10b981','#ef4444'];
   dch('ch-venc-d');
