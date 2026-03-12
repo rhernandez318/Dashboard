@@ -781,7 +781,7 @@ function handleFile(type,input){
 // PARSE HELPERS
 // ═══════════════════════════════════════════
 function normKey(s){return(s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
-function findCol(keys,target){return keys.find(k=>normKey(k)===normKey(target))||target;}
+function findCol(keys,target){return keys.find(k=>normKey(k)===normKey(target))||null;}
 function pd(v){
   if(!v&&v!==0)return null;
   if(v instanceof Date)return isNaN(v)?null:v;
@@ -837,6 +837,8 @@ function parseAnt(data){
   const cCliente=findCol(keys,'Nombre de Deudor');
   const cSeg=findCol(keys,'Descripción del Segmento');
   const cDivAnt=findCol(keys,'División');
+  console.log('[parseAnt] columnas raw:', keys.slice(0,25));
+  console.log('[parseAnt] cDivAnt:', cDivAnt, '| sample:', rawRows[0]?.[cDivAnt]);
   const cRef=findCol(keys,'Referencia');
   const cFechaDoc=findCol(keys,'Fecha de documento');
   const cDiasVenc=findCol(keys,'Días Vencidos');
@@ -852,7 +854,8 @@ function parseAnt(data){
     else if(fdRaw)fechaDoc=new Date(fdRaw);
     const divRaw = cDivAnt ? String(r[cDivAnt]||'').trim() : '';
     return{cliente:(r[cCliente]||'').trim(),segmento:(r[cSeg]||'').trim(),saldo,diasVenc:dv,
-      porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),sociedad:div2soc(r[cDivAnt]),division:divRaw,
+      porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),
+      sociedad:div2soc(r[cDivAnt]),division:divRaw,
       ref,fechaDoc};
   }).filter(r=>r.saldo!==0);
 }
