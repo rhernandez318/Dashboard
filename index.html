@@ -2116,8 +2116,8 @@ function renderCartCharts(ant){
   document.getElementById('ch-venc-d').onclick=e=>{
     const pts=cdnut.getElementsAtEventForMode(e,'nearest',{intersect:true},false);
     if(!pts.length){clearBktFilter();return;}
-    if(pts[0].index===0)applyBucketFilter('Por Vencer');
-    else{if(activeBucket&&activeBucket!=='Por Vencer')clearBktFilter();else applyBucketFilter('1-30 días');}
+    if(pts[0].index===0){ if(activeBucket==='Por Vencer')clearBktFilter(); else applyBucketFilter('Por Vencer'); }
+    else{ if(activeBucket&&activeBucket!=='Por Vencer')clearBktFilter(); else clearBktFilter(); }
   };
   CH['ch-venc-d']=cdnut;
   const VBK=['1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
@@ -3258,7 +3258,7 @@ async function buildRefTable(){
       <td style="font-family:monospace;font-size:11px;color:var(--text-muted)">${r.ref}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.cliente}">${r.cliente}</td>
       <td>${sb(r.segmento,false)}</td>
-      <td style="text-align:right;font-weight:600">${fmtM(r.saldo)}</td>
+      <td style="text-align:right;font-weight:600">${fmtC(r.saldo)}</td>
       <td style="text-align:right"><span style="color:${dColor};font-weight:600">${diasTxt}</span></td>
       <td style="white-space:nowrap;color:var(--text-muted)">${fmtFecha(r.fechaDoc)}</td>
       <td><input type="text" value="${saved.replace(/"/g,'&quot;')}"
