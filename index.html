@@ -770,8 +770,15 @@ function handleFile(type,input){
     if(F.inventario&&F.antiguedad&&F.bdd) document.getElementById('btn-process').classList.add('ready');
     // Refresh EDO comparisons if dashboard already loaded
     if(document.getElementById('dashboard').style.display!=='none'){
-      if(type==='bdd25'&&window._bdd){window._bdd25=parseBDD(F.bdd25);buildEdo(currentPer);}
-      if(type==='ppto'&&window._bdd){window._ppto=parsePpto(F.ppto);buildEdo(currentPer);buildFcSegCombo();if(FC.ventas||_fcCache)runForecast();}
+      if(type==='bdd25'&&window._bdd){
+        window._bdd25=parseBDD(F.bdd25);buildEdo(currentPer);
+        saveAuxSnapshot('aa');
+      }
+      if(type==='ppto'&&window._bdd){
+        window._ppto=parsePpto(F.ppto);buildEdo(currentPer);buildFcSegCombo();
+        if(FC.ventas||_fcCache)runForecast();
+        saveAuxSnapshot('ppto');
+      }
     }
   };
   reader.readAsArrayBuffer(file);
@@ -1185,7 +1192,7 @@ function fCxPpto(){
   if(activeSoc)d=d.filter(r=>div2soc(r.division)===activeSoc);
   return d;
 }
-function fAnt(){let d=window._ant;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeCartDiv)d=d.filter(r=>r.division===activeCartDiv);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
+function fAnt(){let d=window._ant;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeCartDiv)d=d.filter(r=>r.division===activeCartDiv);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket==='VENCIDA')d=d.filter(r=>r.diasVenc>0);else if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
 function fInv(){let d=window._inv;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
 
 // ── EXPORT TO EXCEL ─────────────────────────────────────────────
@@ -1309,8 +1316,9 @@ async function saveSnapshot(){
     bal:   window._bal ? {rows: window._bal.rows, maxBalPer: window._bal.maxBalPer,
              OTROS_ING: window._bal.OTROS_ING, OTROS_GTO: window._bal.OTROS_GTO,
              ISR_ACC: window._bal.ISR_ACC} : null,
-    bdd25: window._bdd25 || null,
-    ppto:  window._ppto  || null,
+    // ppto and bdd25 have their own aux snapshots — not stored here
+    bdd25: null,
+    ppto:  null,
     savedAt: Date.now()
   };
   const str = JSON.stringify(payload);
@@ -1402,8 +1410,9 @@ function applySnapshotData(d){
     fechaDoc: r.fechaDoc ? new Date(r.fechaDoc) : null
   })) || null;
   window._bdd   = d.bdd   || null;
-  window._bdd25 = d.bdd25 || null;
-  window._ppto  = d.ppto  || null;
+  // ppto/bdd25 restored via loadAuxSnapshots(), not from main snapshot
+  // window._bdd25 = d.bdd25 (deprecated)
+  // window._ppto  = d.ppto  (deprecated)
 
   // Reconstruct _bal: JSON strips functions, rebuild them from rows
   if(d.bal && d.bal.rows){
@@ -1504,6 +1513,18 @@ async function applySession(user){
       try{
         console.log('[build] iniciando buildStatic...');
         buildStatic();
+        // Load ppto/aa from their own snapshots if not already in main snapshot
+        if(!window._ppto || !window._bdd25){
+          await loadAuxSnapshots();
+          if(window._ppto){
+            document.getElementById('card-ppto')?.classList.add('loaded');
+            document.getElementById('status-ppto').textContent='✓ Presupuesto (guardado)';
+          }
+          if(window._bdd25){
+            document.getElementById('card-bdd25')?.classList.add('loaded');
+            document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
+          }
+        }
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
@@ -1538,6 +1559,18 @@ async function applySession(user){
       try{
         console.log('[build] iniciando buildStatic (admin)...');
         buildStatic();
+        // Restaurar ppto/bdd25 de sus snapshots independientes
+        if(!window._ppto || !window._bdd25){
+          await loadAuxSnapshots();
+          if(window._ppto){
+            document.getElementById('card-ppto')?.classList.add('loaded');
+            document.getElementById('status-ppto').textContent='✓ Presupuesto (guardado)';
+          }
+          if(window._bdd25){
+            document.getElementById('card-bdd25')?.classList.add('loaded');
+            document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
+          }
+        }
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
@@ -1575,10 +1608,11 @@ async function doLogout(){
   _currentUser=null; clearSession();
   // Clear in-memory data so next login always fetches from Supabase
   window._bdd=null; window._inv=null; window._ant=null;
-  window._bal=null; window._bdd25=null; window._ppto=null;
+  window._bal=null; // _ppto y _bdd25 se preservan entre cargas
   _invComments={}; _invCommentsLoaded=false;
   _refComments={}; _refCommentsLoaded=false;
   _fcCache=null; _fcConfig={};
+  // _ppto y _bdd25 se preservan en memoria — se restauran de aux snapshots al recargar
   document.body.classList.remove('role-admin','role-gerente');
   document.getElementById('user-badge').style.display='none';
   const hdrBtn2=document.getElementById('btn-usuarios-hdr'); if(hdrBtn2) hdrBtn2.style.display='none';
@@ -1667,6 +1701,18 @@ function procesarDatos(){
       window._bal=F.balance?parseBalance(F.balance):null;
       window._bdd25=F.bdd25?parseBDD(F.bdd25):null;
       window._ppto=F.ppto?parsePpto(F.ppto):null;
+      // If not uploaded this session, restore from Supabase aux snapshots
+      if(!window._ppto || !window._bdd25){
+        await loadAuxSnapshots();
+        if(window._ppto){
+          document.getElementById('card-ppto')?.classList.add('loaded');
+          document.getElementById('status-ppto').textContent='✓ Presupuesto (guardado)';
+        }
+        if(window._bdd25){
+          document.getElementById('card-bdd25')?.classList.add('loaded');
+          document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
+        }
+      }
       buildStatic();
       refreshAll();
       document.getElementById('upload-section').style.display='none';
@@ -2110,14 +2156,14 @@ function renderAgingBars(ant){
 function renderCartCharts(ant){
   const antSeg=fAnt();
   const t=sb2(antSeg,'saldo'),v=sb2(antSeg,'vencido'),pv=sb2(antSeg,'porVencer');
-  const donutBg=activeBucket&&activeBucket!=='Por Vencer'?['rgba(16,185,129,.18)','#ef4444']:activeBucket==='Por Vencer'?['#10b981','rgba(239,68,68,.18)']:['#10b981','#ef4444'];
+  const donutBg=activeBucket==='VENCIDA'?['rgba(16,185,129,.18)','#ef4444']:activeBucket==='Por Vencer'?['#10b981','rgba(239,68,68,.18)']:['#10b981','#ef4444'];
   dch('ch-venc-d');
   const cdnut=new Chart(document.getElementById('ch-venc-d'),{type:'doughnut',data:{labels:['Por Vencer','Vencida'],datasets:[{data:[pv,v],backgroundColor:donutBg,borderWidth:0,borderRadius:3}]},options:dOpts()});
   document.getElementById('ch-venc-d').onclick=e=>{
     const pts=cdnut.getElementsAtEventForMode(e,'nearest',{intersect:true},false);
     if(!pts.length){clearBktFilter();return;}
     if(pts[0].index===0){ if(activeBucket==='Por Vencer')clearBktFilter(); else applyBucketFilter('Por Vencer'); }
-    else{ if(activeBucket&&activeBucket!=='Por Vencer')clearBktFilter(); else clearBktFilter(); }
+    else{ if(activeBucket==='VENCIDA')clearBktFilter(); else applyBucketFilter('VENCIDA'); }
   };
   CH['ch-venc-d']=cdnut;
   const VBK=['1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
@@ -2895,7 +2941,7 @@ function dOpts(){return{responsive:true,maintainAspectRatio:false,cutout:'60%',p
 // ═══════════════════════════════════════════
 function nuevaCarga(){
   Object.keys(F).forEach(k=>F[k]=null);
-  window._bdd25=null; window._ppto=null;
+  // NO borrar _ppto ni _bdd25 — persisten de aux snapshots entre cargas
   ['inv','ant','bdd','bal','bdd25','ppto'].forEach(id=>{
     const card=document.getElementById('card-'+id);
     if(card){card.classList.remove('loaded');card.querySelectorAll('input[type=file]').forEach(i=>i.value='');}
@@ -2903,6 +2949,15 @@ function nuevaCarga(){
     const optIds={'bal':'Opcional — mejora razones','bdd25':'Opcional — habilita vs 2025','ppto':'Opcional — habilita vs Ppto'};
     if(st)st.textContent=optIds[id]||'Esperando…';
   });
+  // Si ya están en memoria (de aux snapshot), mostrar sus cards como guardados
+  if(window._ppto){
+    document.getElementById('card-ppto')?.classList.add('loaded');
+    document.getElementById('status-ppto').textContent='✓ Presupuesto (guardado)';
+  }
+  if(window._bdd25){
+    document.getElementById('card-bdd25')?.classList.add('loaded');
+    document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
+  }
   document.getElementById('btn-process').classList.remove('ready');
   document.getElementById('dashboard').style.display='none';
   document.getElementById('upload-section').style.display='flex';
@@ -4314,6 +4369,78 @@ function buildWaterfall(){
   svg.innerHTML = svgHtml;
   document.getElementById('wf-title').textContent =
     `🌊 Puente de Utilidad Contribución${t.edoSeg ? ' — ' + t.edoSeg : ''} — Real vs ${compLabel}`;
+}
+
+// ═══════════════════════════════════════════
+// SNAPSHOTS AUXILIARES — Presupuesto y Año Anterior
+// Se guardan solo cuando el admin sube esos archivos.
+// Se cargan automáticamente para todos al iniciar.
+// ═══════════════════════════════════════════
+async function saveAuxSnapshot(which){
+  // which: 'ppto' | 'aa'
+  const data   = which==='ppto' ? window._ppto : window._bdd25;
+  const prefix = which==='ppto' ? 'ppto'       : 'aa';
+  const label  = which==='ppto' ? 'Presupuesto' : 'Año Anterior';
+  if(!data){ console.warn('[aux_snap] sin datos para',which); return; }
+
+  const rd = document.getElementById('report-date');
+  const orig = rd?.textContent;
+  if(rd) rd.textContent = `⏳ Guardando ${label}…`;
+
+  try{
+    const str = JSON.stringify(data);
+    const totalChunks = Math.ceil(str.length / CHUNK_SIZE);
+    console.log(`[aux_snap/${prefix}] ${str.length} chars, ${totalChunks} chunk(s)`);
+
+    await supaUpsert('dashboard_snapshot',{
+      id: `${prefix}_meta`,
+      data: {total: totalChunks, savedAt: Date.now(), savedBy: _currentUser?.username,
+             year: new Date().getFullYear()},
+      updated_by: _currentUser?.username,
+      updated_at: new Date().toISOString()
+    });
+    for(let i=0;i<totalChunks;i++){
+      await supaUpsert('dashboard_snapshot',{
+        id: `${prefix}_${i}`,
+        data: {chunk: str.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE), index:i, total:totalChunks},
+        updated_by: _currentUser?.username,
+        updated_at: new Date().toISOString()
+      });
+    }
+    if(rd) rd.textContent = (orig||'') + ` · ✓ ${label} guardado`;
+    console.log(`[aux_snap/${prefix}] ✓ guardado`);
+  }catch(e){
+    if(rd) rd.textContent = orig||'';
+    console.error(`[aux_snap/${prefix}] ERROR:`,e);
+  }
+}
+
+async function loadAuxSnapshots(){
+  for(const [prefix, label, setter] of [
+    ['ppto','Presupuesto', d=>{ window._ppto  = d; }],
+    ['aa',  'Año Anterior',d=>{ window._bdd25 = d; }],
+  ]){
+    try{
+      const meta = await supaGet('dashboard_snapshot',`id=eq.${prefix}_meta`);
+      if(!meta||!meta[0]?.data?.total){
+        console.log(`[aux_snap/${prefix}] sin snapshot guardado`);
+        continue;
+      }
+      const total = meta[0].data.total;
+      const year  = meta[0].data.year;
+      console.log(`[aux_snap/${prefix}] cargando ${total} chunks (año ${year})`);
+      let str='';
+      for(let i=0;i<total;i++){
+        const row = await supaGet('dashboard_snapshot',`id=eq.${prefix}_${i}`);
+        if(!row||!row[0]?.data?.chunk) throw new Error(`chunk ${i} faltante`);
+        str += row[0].data.chunk;
+      }
+      setter(JSON.parse(str));
+      console.log(`[aux_snap/${prefix}] ✓ ${label} restaurado`);
+    }catch(e){
+      console.warn(`[aux_snap/${prefix}] no se pudo cargar:`,e.message);
+    }
+  }
 }
 // ═══════════════════════════════════════════
 // PAGE INIT
