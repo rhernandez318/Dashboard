@@ -770,8 +770,15 @@ function handleFile(type,input){
     if(F.inventario&&F.antiguedad&&F.bdd) document.getElementById('btn-process').classList.add('ready');
     // Refresh EDO comparisons if dashboard already loaded
     if(document.getElementById('dashboard').style.display!=='none'){
-      if(type==='bdd25'&&window._bdd){window._bdd25=parseBDD(F.bdd25);buildEdo(currentPer);}
-      if(type==='ppto'&&window._bdd){window._ppto=parsePpto(F.ppto);buildEdo(currentPer);buildFcSegCombo();if(FC.ventas||_fcCache)runForecast();}
+      if(type==='bdd25'&&window._bdd){
+        window._bdd25=parseBDD(F.bdd25);buildEdo(currentPer);
+        saveAuxSnapshot('aa');
+      }
+      if(type==='ppto'&&window._bdd){
+        window._ppto=parsePpto(F.ppto);buildEdo(currentPer);buildFcSegCombo();
+        if(FC.ventas||_fcCache)runForecast();
+        saveAuxSnapshot('ppto');
+      }
     }
   };
   reader.readAsArrayBuffer(file);
@@ -1504,6 +1511,18 @@ async function applySession(user){
       try{
         console.log('[build] iniciando buildStatic...');
         buildStatic();
+        // Load ppto/aa from their own snapshots if not already in main snapshot
+        if(!window._ppto || !window._bdd25){
+          await loadAuxSnapshots();
+          if(window._ppto){
+            document.getElementById('card-ppto')?.classList.add('loaded');
+            document.getElementById('status-ppto').textContent='✓ Presupuesto (guardado)';
+          }
+          if(window._bdd25){
+            document.getElementById('card-bdd25')?.classList.add('loaded');
+            document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
+          }
+        }
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
@@ -4314,6 +4333,78 @@ function buildWaterfall(){
   svg.innerHTML = svgHtml;
   document.getElementById('wf-title').textContent =
     `🌊 Puente de Utilidad Contribución${t.edoSeg ? ' — ' + t.edoSeg : ''} — Real vs ${compLabel}`;
+}
+
+// ═══════════════════════════════════════════
+// SNAPSHOTS AUXILIARES — Presupuesto y Año Anterior
+// Se guardan solo cuando el admin sube esos archivos.
+// Se cargan automáticamente para todos al iniciar.
+// ═══════════════════════════════════════════
+async function saveAuxSnapshot(which){
+  // which: 'ppto' | 'aa'
+  const data   = which==='ppto' ? window._ppto : window._bdd25;
+  const prefix = which==='ppto' ? 'ppto'       : 'aa';
+  const label  = which==='ppto' ? 'Presupuesto' : 'Año Anterior';
+  if(!data){ console.warn('[aux_snap] sin datos para',which); return; }
+
+  const rd = document.getElementById('report-date');
+  const orig = rd?.textContent;
+  if(rd) rd.textContent = `⏳ Guardando ${label}…`;
+
+  try{
+    const str = JSON.stringify(data);
+    const totalChunks = Math.ceil(str.length / CHUNK_SIZE);
+    console.log(`[aux_snap/${prefix}] ${str.length} chars, ${totalChunks} chunk(s)`);
+
+    await supaUpsert('dashboard_snapshot',{
+      id: `${prefix}_meta`,
+      data: {total: totalChunks, savedAt: Date.now(), savedBy: _currentUser?.username,
+             year: new Date().getFullYear()},
+      updated_by: _currentUser?.username,
+      updated_at: new Date().toISOString()
+    });
+    for(let i=0;i<totalChunks;i++){
+      await supaUpsert('dashboard_snapshot',{
+        id: `${prefix}_${i}`,
+        data: {chunk: str.slice(i*CHUNK_SIZE,(i+1)*CHUNK_SIZE), index:i, total:totalChunks},
+        updated_by: _currentUser?.username,
+        updated_at: new Date().toISOString()
+      });
+    }
+    if(rd) rd.textContent = (orig||'') + ` · ✓ ${label} guardado`;
+    console.log(`[aux_snap/${prefix}] ✓ guardado`);
+  }catch(e){
+    if(rd) rd.textContent = orig||'';
+    console.error(`[aux_snap/${prefix}] ERROR:`,e);
+  }
+}
+
+async function loadAuxSnapshots(){
+  for(const [prefix, label, setter] of [
+    ['ppto','Presupuesto', d=>{ window._ppto  = d; }],
+    ['aa',  'Año Anterior',d=>{ window._bdd25 = d; }],
+  ]){
+    try{
+      const meta = await supaGet('dashboard_snapshot',`id=eq.${prefix}_meta`);
+      if(!meta||!meta[0]?.data?.total){
+        console.log(`[aux_snap/${prefix}] sin snapshot guardado`);
+        continue;
+      }
+      const total = meta[0].data.total;
+      const year  = meta[0].data.year;
+      console.log(`[aux_snap/${prefix}] cargando ${total} chunks (año ${year})`);
+      let str='';
+      for(let i=0;i<total;i++){
+        const row = await supaGet('dashboard_snapshot',`id=eq.${prefix}_${i}`);
+        if(!row||!row[0]?.data?.chunk) throw new Error(`chunk ${i} faltante`);
+        str += row[0].data.chunk;
+      }
+      setter(JSON.parse(str));
+      console.log(`[aux_snap/${prefix}] ✓ ${label} restaurado`);
+    }catch(e){
+      console.warn(`[aux_snap/${prefix}] no se pudo cargar:`,e.message);
+    }
+  }
 }
 // ═══════════════════════════════════════════
 // PAGE INIT
