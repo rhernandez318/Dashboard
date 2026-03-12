@@ -1596,7 +1596,7 @@ async function doLogout(){
   _currentUser=null; clearSession();
   // Clear in-memory data so next login always fetches from Supabase
   window._bdd=null; window._inv=null; window._ant=null;
-  window._bal=null; window._bdd25=null; window._ppto=null;
+  window._bal=null; // _ppto y _bdd25 se preservan entre cargas
   _invComments={}; _invCommentsLoaded=false;
   _refComments={}; _refCommentsLoaded=false;
   _fcCache=null; _fcConfig={};
@@ -2928,7 +2928,7 @@ function dOpts(){return{responsive:true,maintainAspectRatio:false,cutout:'60%',p
 // ═══════════════════════════════════════════
 function nuevaCarga(){
   Object.keys(F).forEach(k=>F[k]=null);
-  window._bdd25=null; window._ppto=null;
+  // NO borrar _ppto ni _bdd25 — persisten de aux snapshots entre cargas
   ['inv','ant','bdd','bal','bdd25','ppto'].forEach(id=>{
     const card=document.getElementById('card-'+id);
     if(card){card.classList.remove('loaded');card.querySelectorAll('input[type=file]').forEach(i=>i.value='');}
@@ -2936,6 +2936,15 @@ function nuevaCarga(){
     const optIds={'bal':'Opcional — mejora razones','bdd25':'Opcional — habilita vs 2025','ppto':'Opcional — habilita vs Ppto'};
     if(st)st.textContent=optIds[id]||'Esperando…';
   });
+  // Si ya están en memoria (de aux snapshot), mostrar sus cards como guardados
+  if(window._ppto){
+    document.getElementById('card-ppto')?.classList.add('loaded');
+    document.getElementById('status-ppto').textContent='✓ Presupuesto (guardado)';
+  }
+  if(window._bdd25){
+    document.getElementById('card-bdd25')?.classList.add('loaded');
+    document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
+  }
   document.getElementById('btn-process').classList.remove('ready');
   document.getElementById('dashboard').style.display='none';
   document.getElementById('upload-section').style.display='flex';
