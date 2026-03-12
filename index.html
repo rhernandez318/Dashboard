@@ -485,16 +485,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
   <!-- CARTERA -->
   <div class="tcontent" id="tab-cartera">
-    <div class="shdr" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div class="stitle">Cartera de Clientes <small>Al <span id="fecha-analisis"></span></small></div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span style="font-size:10px;color:var(--text-muted);font-family:'Inter',sans-serif">División:</span>
-        <select id="cart-div-select" onchange="setCartDiv(this.value)"
-          style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 10px;border-radius:6px;font-family:'Inter',sans-serif;cursor:pointer">
-          <option value="">Todas</option>
-        </select>
-      </div>
-    </div>
+    <div class="shdr"><div class="stitle">Cartera de Clientes <small>Al <span id="fecha-analisis"></span></small></div></div>
     <div class="kgrid" id="kpi-cart"></div>
     <div class="tcard" style="margin-bottom:18px;"><div class="thead2"><h4>📅 Antigüedad Recalculada por Vencimiento Neto<span class="hint">· toca fila para filtrar</span></h4></div><div style="padding:14px 17px;" id="aging-bars"></div></div>
     <div class="crow">
@@ -1157,6 +1148,8 @@ function populateCartDivSelect(){
   let rows = window._ant;
   if(activeSoc) rows = rows.filter(r=>r.sociedad===activeSoc);
   const divs = [...new Set(rows.map(r=>r.division).filter(Boolean))].sort();
+  console.log('[cartDiv] rows sample division values:', rows.slice(0,5).map(r=>r.division));
+  console.log('[cartDiv] unique divs found:', divs);
   sel.innerHTML = '<option value="">Todas</option>' +
     divs.map(d=>`<option value="${d}" ${activeCartDiv===d?'selected':''}>${d}</option>`).join('');
 }
