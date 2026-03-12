@@ -1511,9 +1511,7 @@ async function applySession(user){
       _setLoadingMsg('⏳ Construyendo dashboard…');
       await new Promise(r=>setTimeout(r,50));
       try{
-        console.log('[build] iniciando buildStatic...');
-        buildStatic();
-        // Load ppto/aa from their own snapshots if not already in main snapshot
+        // Cargar ppto/bdd25 ANTES de buildStatic para que estén disponibles
         if(!window._ppto || !window._bdd25){
           await loadAuxSnapshots();
           if(window._ppto){
@@ -1525,6 +1523,8 @@ async function applySession(user){
             document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
           }
         }
+        console.log('[build] iniciando buildStatic...');
+        buildStatic();
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
@@ -1557,9 +1557,7 @@ async function applySession(user){
       rd.textContent='⏳ Construyendo dashboard…';
       await new Promise(r=>setTimeout(r,50));
       try{
-        console.log('[build] iniciando buildStatic (admin)...');
-        buildStatic();
-        // Restaurar ppto/bdd25 de sus snapshots independientes
+        // Cargar ppto/bdd25 ANTES de buildStatic para que estén disponibles
         if(!window._ppto || !window._bdd25){
           await loadAuxSnapshots();
           if(window._ppto){
@@ -1571,6 +1569,8 @@ async function applySession(user){
             document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
           }
         }
+        console.log('[build] iniciando buildStatic (admin)...');
+        buildStatic();
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
