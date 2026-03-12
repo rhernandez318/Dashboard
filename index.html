@@ -1728,6 +1728,9 @@ function procesarDatos(){
       const rd=document.getElementById('report-date');
       const origTxt=rd.textContent;
       rd.textContent='⏳ Publicando en Supabase…';
+      // Guardar ppto y bdd25 en sus propios snapshots si se subieron en esta carga
+      if(F.ppto && window._ppto)   saveAuxSnapshot('ppto');
+      if(F.bdd25 && window._bdd25) saveAuxSnapshot('aa');
       saveSnapshot()
         .then(()=>{ rd.textContent=origTxt+' · ✓ Publicado'; })
         .catch((e)=>{
