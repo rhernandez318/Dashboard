@@ -1688,6 +1688,18 @@ function procesarDatos(){
       window._bal=F.balance?parseBalance(F.balance):null;
       window._bdd25=F.bdd25?parseBDD(F.bdd25):null;
       window._ppto=F.ppto?parsePpto(F.ppto):null;
+      // If not uploaded this session, restore from Supabase aux snapshots
+      if(!window._ppto || !window._bdd25){
+        await loadAuxSnapshots();
+        if(window._ppto){
+          document.getElementById('card-ppto')?.classList.add('loaded');
+          document.getElementById('status-ppto').textContent='✓ Presupuesto (guardado)';
+        }
+        if(window._bdd25){
+          document.getElementById('card-bdd25')?.classList.add('loaded');
+          document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
+        }
+      }
       buildStatic();
       refreshAll();
       document.getElementById('upload-section').style.display='none';
