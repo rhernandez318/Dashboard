@@ -353,6 +353,13 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <button class="socbtn soc-zap"        id="soc-btn-zap"  onclick="setSoc('ZAPATA CAMIONES',this)">Zapata Camiones</button>
     <button class="socbtn soc-forz"       id="soc-btn-forz" onclick="setSoc('FORZA ZAPATA',this)">Forza Zapata</button>
     <button class="socbtn soc-nor"        id="soc-btn-nor"  onclick="setSoc('NORTRACK DE MEXICO',this)">Nortrack de México</button>
+    <div id="cart-div-wrap" style="display:none;align-items:center;gap:6px;margin-left:12px;border-left:1px solid var(--border);padding-left:12px">
+      <label>División:</label>
+      <select id="cart-div-select" onchange="setCartDiv(this.value)"
+        style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:3px 8px;border-radius:6px;font-family:'Inter',sans-serif;cursor:pointer">
+        <option value="">Todas</option>
+      </select>
+    </div>
   </div>
 
   <!-- RESUMEN -->
@@ -852,8 +859,9 @@ function parseAnt(data){
     if(fdRaw instanceof Date)fechaDoc=fdRaw;
     else if(typeof fdRaw==='number')fechaDoc=new Date(Math.round((fdRaw-25569)*86400000));
     else if(fdRaw)fechaDoc=new Date(fdRaw);
+    const divRaw = cDivAnt ? String(r[cDivAnt]||'').trim() : '';
     return{cliente:(r[cCliente]||'').trim(),segmento:(r[cSeg]||'').trim(),saldo,diasVenc:dv,
-      porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),sociedad:div2soc(r[cDivAnt]),
+      porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),sociedad:div2soc(r[cDivAnt]),division:divRaw,
       ref,fechaDoc};
   }).filter(r=>r.saldo!==0);
 }
@@ -2919,7 +2927,9 @@ function showTab(tab,btn){
   btn.classList.add('active');
   if(tab==='usuarios') renderUsersTable();
   if(tab==='avance') buildAvance();
-  if(tab==='cartera') populateCartDivSelect();
+  const cdw = document.getElementById('cart-div-wrap');
+  if(tab==='cartera'){ populateCartDivSelect(); if(cdw) cdw.style.display='flex'; }
+  else { if(cdw) cdw.style.display='none'; activeCartDiv=null; }
 }
 function buildEdoSegCombo(){
   const sel=document.getElementById('edo-seg-select');
