@@ -1699,10 +1699,12 @@ function procesarDatos(){
       window._ant=parseAnt(F.antiguedad);
       window._bdd=parseBDD(F.bdd);
       window._bal=F.balance?parseBalance(F.balance):null;
-      window._bdd25=F.bdd25?parseBDD(F.bdd25):null;
-      window._ppto=F.ppto?parsePpto(F.ppto):null;
-      // If not uploaded this session, restore from Supabase aux snapshots
+      // Solo sobreescribir si se subió el archivo; si no, conservar lo que haya en memoria
+      if(F.bdd25) window._bdd25 = parseBDD(F.bdd25);
+      if(F.ppto)  window._ppto  = parsePpto(F.ppto);
+      // Si aún faltan, cargar de aux snapshots en Supabase
       if(!window._ppto || !window._bdd25){
+        console.log('[procesarDatos] cargando aux snapshots — ppto:', !!window._ppto, 'bdd25:', !!window._bdd25);
         await loadAuxSnapshots();
         if(window._ppto){
           document.getElementById('card-ppto')?.classList.add('loaded');
@@ -1712,6 +1714,7 @@ function procesarDatos(){
           document.getElementById('card-bdd25')?.classList.add('loaded');
           document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
         }
+        console.log('[procesarDatos] tras loadAux — ppto:', !!window._ppto, 'bdd25:', !!window._bdd25);
       }
       buildStatic();
       refreshAll();
