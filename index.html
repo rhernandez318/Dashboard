@@ -1192,7 +1192,7 @@ function fCxPpto(){
   if(activeSoc)d=d.filter(r=>div2soc(r.division)===activeSoc);
   return d;
 }
-function fAnt(){let d=window._ant;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeCartDiv)d=d.filter(r=>r.division===activeCartDiv);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
+function fAnt(){let d=window._ant;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeCartDiv)d=d.filter(r=>r.division===activeCartDiv);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket==='VENCIDA')d=d.filter(r=>r.diasVenc>0);else if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
 function fInv(){let d=window._inv;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
 
 // ── EXPORT TO EXCEL ─────────────────────────────────────────────
@@ -1316,8 +1316,9 @@ async function saveSnapshot(){
     bal:   window._bal ? {rows: window._bal.rows, maxBalPer: window._bal.maxBalPer,
              OTROS_ING: window._bal.OTROS_ING, OTROS_GTO: window._bal.OTROS_GTO,
              ISR_ACC: window._bal.ISR_ACC} : null,
-    bdd25: window._bdd25 || null,
-    ppto:  window._ppto  || null,
+    // ppto and bdd25 have their own aux snapshots — not stored here
+    bdd25: null,
+    ppto:  null,
     savedAt: Date.now()
   };
   const str = JSON.stringify(payload);
@@ -1409,8 +1410,9 @@ function applySnapshotData(d){
     fechaDoc: r.fechaDoc ? new Date(r.fechaDoc) : null
   })) || null;
   window._bdd   = d.bdd   || null;
-  window._bdd25 = d.bdd25 || null;
-  window._ppto  = d.ppto  || null;
+  // ppto/bdd25 restored via loadAuxSnapshots(), not from main snapshot
+  // window._bdd25 = d.bdd25 (deprecated)
+  // window._ppto  = d.ppto  (deprecated)
 
   // Reconstruct _bal: JSON strips functions, rebuild them from rows
   if(d.bal && d.bal.rows){
@@ -2129,14 +2131,14 @@ function renderAgingBars(ant){
 function renderCartCharts(ant){
   const antSeg=fAnt();
   const t=sb2(antSeg,'saldo'),v=sb2(antSeg,'vencido'),pv=sb2(antSeg,'porVencer');
-  const donutBg=activeBucket&&activeBucket!=='Por Vencer'?['rgba(16,185,129,.18)','#ef4444']:activeBucket==='Por Vencer'?['#10b981','rgba(239,68,68,.18)']:['#10b981','#ef4444'];
+  const donutBg=activeBucket==='VENCIDA'?['rgba(16,185,129,.18)','#ef4444']:activeBucket==='Por Vencer'?['#10b981','rgba(239,68,68,.18)']:['#10b981','#ef4444'];
   dch('ch-venc-d');
   const cdnut=new Chart(document.getElementById('ch-venc-d'),{type:'doughnut',data:{labels:['Por Vencer','Vencida'],datasets:[{data:[pv,v],backgroundColor:donutBg,borderWidth:0,borderRadius:3}]},options:dOpts()});
   document.getElementById('ch-venc-d').onclick=e=>{
     const pts=cdnut.getElementsAtEventForMode(e,'nearest',{intersect:true},false);
     if(!pts.length){clearBktFilter();return;}
     if(pts[0].index===0){ if(activeBucket==='Por Vencer')clearBktFilter(); else applyBucketFilter('Por Vencer'); }
-    else{ if(activeBucket&&activeBucket!=='Por Vencer')clearBktFilter(); else clearBktFilter(); }
+    else{ if(activeBucket==='VENCIDA')clearBktFilter(); else applyBucketFilter('VENCIDA'); }
   };
   CH['ch-venc-d']=cdnut;
   const VBK=['1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
