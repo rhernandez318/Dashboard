@@ -1559,6 +1559,18 @@ async function applySession(user){
       try{
         console.log('[build] iniciando buildStatic (admin)...');
         buildStatic();
+        // Restaurar ppto/bdd25 de sus snapshots independientes
+        if(!window._ppto || !window._bdd25){
+          await loadAuxSnapshots();
+          if(window._ppto){
+            document.getElementById('card-ppto')?.classList.add('loaded');
+            document.getElementById('status-ppto').textContent='✓ Presupuesto (guardado)';
+          }
+          if(window._bdd25){
+            document.getElementById('card-bdd25')?.classList.add('loaded');
+            document.getElementById('status-bdd25').textContent='✓ Año Anterior (guardado)';
+          }
+        }
         console.log('[build] buildStatic OK, iniciando refreshAll...');
         refreshAll();
         console.log('[build] refreshAll OK');
@@ -1600,6 +1612,7 @@ async function doLogout(){
   _invComments={}; _invCommentsLoaded=false;
   _refComments={}; _refCommentsLoaded=false;
   _fcCache=null; _fcConfig={};
+  // _ppto y _bdd25 se preservan en memoria — se restauran de aux snapshots al recargar
   document.body.classList.remove('role-admin','role-gerente');
   document.getElementById('user-badge').style.display='none';
   const hdrBtn2=document.getElementById('btn-usuarios-hdr'); if(hdrBtn2) hdrBtn2.style.display='none';
