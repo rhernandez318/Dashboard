@@ -604,6 +604,10 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
           background:linear-gradient(135deg,#3b82f6,#1d4ed8);color:#fff;font-weight:700;font-size:11px;
           padding:6px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">
           ⬇ Exportar Excel</button>
+        <button id="ec-btn-macro" onclick="descargarMacroVBA()" style="display:none;
+          background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;font-weight:700;font-size:11px;
+          padding:6px 16px;border:none;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">
+          🎨 Macro VBA</button>
         <button id="ec-btn-back" onclick="ecLimpiar()" style="display:none;
           background:rgba(255,255,255,.07);border:1px solid var(--border);color:var(--text-muted);font-size:11px;
           padding:6px 14px;border-radius:7px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">
@@ -4662,6 +4666,7 @@ function ecLimpiar(){
   const chip=document.getElementById('ec-selected-chip'); if(chip) chip.style.display='none';
   document.getElementById('ec-report').innerHTML='';
   document.getElementById('ec-btn-export').style.display='none';
+  document.getElementById('ec-btn-macro').style.display='none';
   document.getElementById('ec-btn-back').style.display='none';
 }
 
@@ -4673,6 +4678,7 @@ function generarEstado(){
     console.log('[estados] generarEstado rows:', rows.length, 'cliente:', _ecSelectedClient);
     if(!rows.length){alert('No hay documentos con los filtros seleccionados.');return;}
     document.getElementById('ec-btn-export').style.display='';
+    document.getElementById('ec-btn-macro').style.display='';
     document.getElementById('ec-btn-back').style.display='';
     _renderEstadoReport(rows);
     setTimeout(()=>{
@@ -4797,21 +4803,194 @@ function exportEstadosXlsx(){
   let rows=_ecBaseRows();
   if(_ecSelectedClient) rows=rows.filter(r=>r.cliente===_ecSelectedClient);
   if(!rows.length){alert('Genera el reporte primero.');return;}
+
   const BKT=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
-  const data=[['Cliente','Nº Documento','Referencia','Serie PAC','Folio PAC','Fecha Documento','Segmento','Empresa','División','Saldo','Días Vencidos','Estado','Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días','UUID']];
+  const fechaLabel=new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+  const clienteLabel=_ecSelectedClient||'Todos los clientes';
+  const socLabel=document.getElementById('ec-soc')?.selectedOptions[0]?.text||'Todas las empresas';
+
+  // ── Hoja 1: RESUMEN ──
+  const byClient={};
+  rows.forEach(r=>{
+    if(!byClient[r.cliente]) byClient[r.cliente]={saldo:0,bkt:Object.fromEntries(BKT.map(b=>[b,0])),docs:0};
+    byClient[r.cliente].saldo+=r.saldo; byClient[r.cliente].docs++;
+    const bk=r.diasVenc<=0?'Por Vencer':r.bucket;
+    byClient[r.cliente].bkt[bk]=(byClient[r.cliente].bkt[bk]||0)+r.saldo;
+  });
+  const totSaldo=rows.reduce((s,r)=>s+r.saldo,0);
+  const bktTotales=Object.fromEntries(BKT.map(b=>[b,rows.reduce((s,r)=>s+(b==='Por Vencer'?r.diasVenc<=0?r.saldo:0:r.bucket===b?r.saldo:0),0)]));
+
+  const resumen=[
+    ['ESTADO DE CUENTA DE CARTERA'],
+    ['Empresa:',socLabel],
+    ['Cliente:',clienteLabel],
+    ['Fecha de corte:',fechaLabel],
+    [''],
+    ['RESUMEN POR ANTIGÜEDAD'],
+    ['Rango','Saldo','% del Total'],
+    ...BKT.map(b=>[b,bktTotales[b]||0,totSaldo?(((bktTotales[b]||0)/totSaldo)*100).toFixed(1)+'%':'0%']),
+    ['TOTAL',totSaldo,'100%'],
+    [''],
+    ['DETALLE POR CLIENTE'],
+    ['Cliente','Documentos','Saldo Total','Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'],
+    ...Object.entries(byClient).sort((a,b)=>b[1].saldo-a[1].saldo).map(([cli,v])=>
+      [cli,v.docs,v.saldo,...BKT.map(b=>v.bkt[b]||0)]
+    ),
+    ['TOTAL','',totSaldo,...BKT.map(b=>bktTotales[b]||0)],
+  ];
+
+  // ── Hoja 2: DETALLE ──
+  const detalle=[['Cliente','Nº Documento','Referencia','Serie PAC','Folio PAC','Fecha Documento','Segmento','Empresa','División','Saldo','Días Vencidos','Estado','Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días','UUID']];
   rows.sort((a,b)=>a.cliente.localeCompare(b.cliente)||(b.diasVenc-a.diasVenc)).forEach(r=>{
     const bktCols=BKT.map(b=>b==='Por Vencer'?r.diasVenc<=0?r.saldo:0:r.bucket===b?r.saldo:0);
-    data.push([r.cliente,r.ndoc||'',r.ref||'',r.seriePAC||'',r.folioPAC||'',r.fechaDoc?r.fechaDoc.toLocaleDateString('es-MX'):'',r.segmento,r.sociedad||'',r.division||'',r.saldo,r.diasVenc,r.diasVenc<=0?'Por Vencer':'Vencido',...bktCols,r.uuid||'']);
+    detalle.push([r.cliente,r.ndoc||'',r.ref||'',r.seriePAC||'',r.folioPAC||'',
+      r.fechaDoc?r.fechaDoc.toLocaleDateString('es-MX'):'',
+      r.segmento,r.sociedad||'',r.division||'',r.saldo,r.diasVenc,
+      r.diasVenc<=0?'Por Vencer':'Vencido',...bktCols,r.uuid||'']);
   });
-  const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[30,16,18,10,12,14,16,22,10,14,10,10,12,10,10,10,10,10,38].map(w=>({wch:w}));
+
+  const wsRes=XLSX.utils.aoa_to_sheet(resumen);
+  wsRes['!cols']=[32,28,16,16,16,16,10].map(w=>({wch:w}));
+  const wsDet=XLSX.utils.aoa_to_sheet(detalle);
+  wsDet['!cols']=[30,16,18,10,12,14,16,22,10,14,10,10,12,10,10,10,10,10,38].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Estados de Cuenta');
-  const fecha=new Date().toLocaleDateString('es-MX').replace(/\//g,'-');
+  XLSX.utils.book_append_sheet(wb,wsRes,'Resumen');
+  XLSX.utils.book_append_sheet(wb,wsDet,'Detalle');
+  const fechaFile=new Date().toLocaleDateString('es-MX').replace(/\//g,'-');
   const suf=_ecSelectedClient?'_'+_ecSelectedClient.replace(/[^a-zA-Z0-9]/g,'_').slice(0,30):'';
-  XLSX.writeFile(wb,`Estado_Cuenta${suf}_${fecha}.xlsx`);
+  XLSX.writeFile(wb,`Estado_Cuenta${suf}_${fechaFile}.xlsx`);
 }
 
+function descargarMacroVBA(){
+  const vba=[
+    'Attribute VB_Name = "FormatoEstadoCuenta"',
+    "' ============================================================",
+    "' MACRO: Formato Estado de Cuenta de Cartera",
+    "' Instrucciones:",
+    "'   1. Abrir el archivo Excel exportado",
+    "'   2. Presionar Alt+F11 > Insertar > Modulo",
+    "'   3. Pegar este codigo y ejecutar FormatearEstadoCuenta",
+    "' ============================================================",
+    "Sub FormatearEstadoCuenta()",
+    "    Dim wsRes As Worksheet, wsDet As Worksheet",
+    "    On Error Resume Next",
+    "    Set wsRes = Sheets(\"Resumen\")",
+    "    Set wsDet = Sheets(\"Detalle\")",
+    "    On Error GoTo 0",
+    "    If Not wsRes Is Nothing Then Call FormatearResumen(wsRes)",
+    "    If Not wsDet Is Nothing Then Call FormatearDetalle(wsDet)",
+    "    If Not wsRes Is Nothing Then wsRes.Activate",
+    "    MsgBox \"Formato aplicado correctamente.\", vbInformation, \"Estado de Cuenta\"",
+    "End Sub",
+    "",
+    "Sub FormatearResumen(ws As Worksheet)",
+    "    ws.Cells.Font.Name = \"Calibri\": ws.Cells.Font.Size = 10",
+    "    ' Titulo principal",
+    "    With ws.Range(\"A1\")",
+    "        .Font.Size = 16: .Font.Bold = True",
+    "        .Interior.Color = RGB(0, 70, 127): .Font.Color = RGB(255, 255, 255)",
+    "    End With",
+    "    ws.Range(\"A1:G1\").Merge",
+    "    ws.Range(\"A1\").HorizontalAlignment = xlCenter",
+    "    ' Info encabezado",
+    "    ws.Range(\"A2:G4\").Interior.Color = RGB(217, 234, 245)",
+    "    ws.Range(\"A2:A4\").Font.Bold = True",
+    "    ' Seccion resumen por antiguedad",
+    "    With ws.Range(\"A6\")",
+    "        .Font.Bold = True: .Font.Size = 12",
+    "        .Interior.Color = RGB(0, 70, 127): .Font.Color = RGB(255, 255, 255)",
+    "    End With",
+    "    ws.Range(\"A6:C6\").Merge",
+    "    ' Header tabla",
+    "    With ws.Range(\"A7:C7\")",
+    "        .Font.Bold = True: .Interior.Color = RGB(31, 73, 125)",
+    "        .Font.Color = RGB(255, 255, 255)",
+    "    End With",
+    "    ' Colores por rango",
+    "    Dim col(5) As Long",
+    "    col(0) = RGB(198, 239, 206): col(1) = RGB(255, 235, 156)",
+    "    col(2) = RGB(255, 199, 112): col(3) = RGB(255, 150, 80)",
+    "    col(4) = RGB(255, 100, 80):  col(5) = RGB(220, 50, 50)",
+    "    Dim i As Integer",
+    "    For i = 0 To 5",
+    "        ws.Range(\"A\" & (8+i) & \":C\" & (8+i)).Interior.Color = col(i)",
+    "        ws.Range(\"B\" & (8+i)).NumberFormat = \"#,##0.00\"",
+    "    Next i",
+    "    ' Fila TOTAL resumen",
+    "    With ws.Range(\"A14:C14\")",
+    "        .Font.Bold = True: .Interior.Color = RGB(0,70,127): .Font.Color = RGB(255,255,255)",
+    "    End With",
+    "    ws.Range(\"B14\").NumberFormat = \"#,##0.00\"",
+    "    ' Seccion detalle por cliente",
+    "    With ws.Range(\"A16\")",
+    "        .Font.Bold = True: .Font.Size = 12",
+    "        .Interior.Color = RGB(0,70,127): .Font.Color = RGB(255,255,255)",
+    "    End With",
+    "    ws.Range(\"A16:I16\").Merge",
+    "    With ws.Range(\"A17:I17\")",
+    "        .Font.Bold = True: .Interior.Color = RGB(31,73,125): .Font.Color = RGB(255,255,255)",
+    "    End With",
+    "    Dim lastRow As Long",
+    "    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row",
+    "    Dim j As Long",
+    "    For j = 18 To lastRow - 1",
+    "        If j Mod 2 = 0 Then ws.Range(\"A\"&j&\":I\"&j).Interior.Color = RGB(242,242,242)",
+    "        ws.Range(\"C\"&j&\":I\"&j).NumberFormat = \"#,##0.00\"",
+    "        ws.Range(\"D\"&j).Interior.Color = col(0)",
+    "        ws.Range(\"E\"&j).Interior.Color = col(1)",
+    "        ws.Range(\"F\"&j).Interior.Color = col(2)",
+    "        ws.Range(\"G\"&j).Interior.Color = col(3)",
+    "        ws.Range(\"H\"&j).Interior.Color = col(4)",
+    "        ws.Range(\"I\"&j).Interior.Color = col(5)",
+    "    Next j",
+    "    With ws.Range(\"A\"&lastRow&\":I\"&lastRow)",
+    "        .Font.Bold = True: .Interior.Color = RGB(0,70,127): .Font.Color = RGB(255,255,255)",
+    "    End With",
+    "    ws.Range(\"C\"&lastRow&\":I\"&lastRow).NumberFormat = \"#,##0.00\"",
+    "    ws.Range(\"A7:C14\").Borders.LineStyle = xlContinuous",
+    "    ws.Range(\"A17:I\"&lastRow).Borders.LineStyle = xlContinuous",
+    "    ws.Columns(\"A:I\").AutoFit",
+    "End Sub",
+    "",
+    "Sub FormatearDetalle(ws As Worksheet)",
+    "    Dim lastRow As Long",
+    "    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row",
+    "    ws.Cells.Font.Name = \"Calibri\": ws.Cells.Font.Size = 10",
+    "    With ws.Range(\"A1:S1\")",
+    "        .Font.Bold = True: .Interior.Color = RGB(0,70,127): .Font.Color = RGB(255,255,255)",
+    "    End With",
+    "    Dim col(5) As Long",
+    "    col(0)=RGB(198,239,206): col(1)=RGB(255,235,156)",
+    "    col(2)=RGB(255,199,112): col(3)=RGB(255,150,80)",
+    "    col(4)=RGB(255,100,80):  col(5)=RGB(220,50,50)",
+    "    ws.Range(\"J2:J\"&lastRow).NumberFormat = \"#,##0.00\"",
+    "    ws.Range(\"M2:R\"&lastRow).NumberFormat = \"#,##0.00\"",
+    "    Dim i As Long",
+    "    For i = 2 To lastRow",
+    "        Dim est As String: est = ws.Cells(i,12).Value",
+    "        If i Mod 2 = 0 Then ws.Range(\"A\"&i&\":S\"&i).Interior.Color = RGB(242,242,242)",
+    "        ws.Cells(i,12).Interior.Color = IIf(est=\"Por Vencer\",col(0),col(5))",
+    "        ws.Cells(i,13).Interior.Color = col(0)",
+    "        ws.Cells(i,14).Interior.Color = col(1)",
+    "        ws.Cells(i,15).Interior.Color = col(2)",
+    "        ws.Cells(i,16).Interior.Color = col(3)",
+    "        ws.Cells(i,17).Interior.Color = col(4)",
+    "        ws.Cells(i,18).Interior.Color = col(5)",
+    "    Next i",
+    "    ws.Range(\"A1:S\"&lastRow).Borders.LineStyle = xlContinuous",
+    "    ws.Columns(\"A:S\").AutoFit",
+    "    ws.Range(\"A2\").Select",
+    "    ws.Application.ActiveWindow.FreezePanes = False",
+    "    ws.Application.ActiveWindow.FreezePanes = True",
+    "End Sub",
+  ].join('\n');
+  const blob=new Blob([vba],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='FormatoEstadoCuenta.bas';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 function renderEstados(){ populateEstadosFiltros(); }
 function ecGoCartera(){
   const btn = [...document.querySelectorAll('.tbtn')].find(b=>b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'cartera'"));
