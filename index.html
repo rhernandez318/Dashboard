@@ -856,6 +856,7 @@ function gb(arr,key){return arr.reduce((a,i)=>{const k=i[key];if(!a[k])a[k]=[];a
 function sb2(arr,key){return arr.reduce((s,r)=>s+(+r[key]||0),0);}
 function fmtM(n){const a=Math.abs(n);if(a>=1e9)return'$'+(n/1e9).toFixed(1)+'B';if(a>=1e6)return'$'+(n/1e6).toFixed(1)+'M';if(a>=1e3)return'$'+(n/1e3).toFixed(0)+'K';return'$'+n.toFixed(0);}
 function fmtC(n){return'$'+Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function fmtFecha(d){if(!d)return'—';try{return new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});}catch(e){return'—';}}
 // P&L format: positive=green, negative=red+(parentheses)
 function fmtPL(n){
   const abs='$'+Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0});
@@ -3436,11 +3437,7 @@ async function buildRefTable(){
   });
   const refRows = Object.values(byRef).sort((a,b)=>b.diasVenc-a.diasVenc||b.saldo-a.saldo);
 
-  function fmtFecha(d){
-    if(!d) return '—';
-    try{ return new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}); }
-    catch(e){ return '—'; }
-  }
+  // fmtFecha moved to global scope below
   function diasColor(d){
     if(d<=0) return 'var(--green)';
     if(d<=30) return '#f59e0b';
