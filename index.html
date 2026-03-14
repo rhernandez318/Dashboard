@@ -4682,6 +4682,7 @@ function generarEstado(){
 function _renderEstadoReport(rows){
   try{
   console.log('[estados] _renderEstadoReport start, rows:', rows.length);
+  const fmtFecha=d=>{if(!d)return'—';try{return new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});}catch(e){return'—';}};
   const BKT=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
   const BKTC=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
   const report=document.getElementById('ec-report');
