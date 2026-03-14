@@ -906,6 +906,9 @@ function parseAnt(data){
   const cFechaDoc=findCol(keys,'Fecha de documento');
   const cDiasVenc=findCol(keys,'Días Vencidos');
   const cNDoc=findCol(keys,'Nº documento')||findCol(keys,'No. documento')||findCol(keys,'Numero documento');
+  const cSeriePAC=findCol(keys,'Serie PAC');
+  const cFolioPAC=findCol(keys,'Folio PAC');
+  const cUUID=findCol(keys,'UUID');
   // Get raw sheet for text-format cells (Nº documento may be stored as number)
   const rawSheet=wb.Sheets[wb.SheetNames.find(s=>!s.startsWith('_'))];
   return rawRows.map(r=>{
@@ -925,10 +928,13 @@ function parseAnt(data){
       const ndocRaw=r[cNDoc];
       ndoc = ndocRaw!==null&&ndocRaw!==undefined ? String(ndocRaw).trim() : '';
     }
+    const seriePAC=String(r[cSeriePAC]||'').trim();
+    const folioPAC=String(r[cFolioPAC]||'').trim();
+    const uuid=String(r[cUUID]||'').trim();
     return{cliente:(r[cCliente]||'').trim(),segmento:(r[cSeg]||'').trim(),saldo,diasVenc:dv,
       porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),
       sociedad:div2soc(r[cDivAnt]),division:divRaw,
-      ref,ndoc,fechaDoc};
+      ref,ndoc,seriePAC,folioPAC,uuid,fechaDoc};
   }).filter(r=>r.saldo!==0);
 }
 
@@ -4792,13 +4798,13 @@ function exportEstadosXlsx(){
   if(_ecSelectedClient) rows=rows.filter(r=>r.cliente===_ecSelectedClient);
   if(!rows.length){alert('Genera el reporte primero.');return;}
   const BKT=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
-  const data=[['Cliente','Nº Documento','Referencia','Fecha Documento','Segmento','Empresa','División','Saldo','Días Vencidos','Estado','Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días']];
+  const data=[['Cliente','Nº Documento','Referencia','Serie PAC','Folio PAC','Fecha Documento','Segmento','Empresa','División','Saldo','Días Vencidos','Estado','Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días','UUID']];
   rows.sort((a,b)=>a.cliente.localeCompare(b.cliente)||(b.diasVenc-a.diasVenc)).forEach(r=>{
     const bktCols=BKT.map(b=>b==='Por Vencer'?r.diasVenc<=0?r.saldo:0:r.bucket===b?r.saldo:0);
-    data.push([r.cliente,r.ndoc||'',r.ref||'',r.fechaDoc?r.fechaDoc.toLocaleDateString('es-MX'):'',r.segmento,r.sociedad||'',r.division||'',r.saldo,r.diasVenc,r.diasVenc<=0?'Por Vencer':'Vencido',...bktCols]);
+    data.push([r.cliente,r.ndoc||'',r.ref||'',r.seriePAC||'',r.folioPAC||'',r.fechaDoc?r.fechaDoc.toLocaleDateString('es-MX'):'',r.segmento,r.sociedad||'',r.division||'',r.saldo,r.diasVenc,r.diasVenc<=0?'Por Vencer':'Vencido',...bktCols,r.uuid||'']);
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[30,16,18,14,16,22,10,14,10,10,12,10,10,10,10,10].map(w=>({wch:w}));
+  ws['!cols']=[30,16,18,10,12,14,16,22,10,14,10,10,12,10,10,10,10,10,38].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Estados de Cuenta');
   const fecha=new Date().toLocaleDateString('es-MX').replace(/\//g,'-');
