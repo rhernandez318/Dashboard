@@ -1527,6 +1527,10 @@ async function applySession(user){
         document.getElementById('soc-bar').style.display='flex';
         const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
         document.getElementById('report-date').textContent='Cartera de Clientes';
+        // Mostrar combo de divisiones (solo las permitidas)
+        populateCartDivSelect();
+        const cdw=document.getElementById('cart-div-wrap');
+        if(cdw) cdw.style.display='flex';
       } catch(e){
         showGerenteWait('❌ Error: '+e.message);
         console.error('[cartera role]',e);
