@@ -1500,7 +1500,8 @@ async function applySession(user){
   document.body.classList.add('role-'+user.role);
   document.getElementById('user-badge').style.display='flex';
   document.getElementById('badge-name').textContent=user.username;
-  document.getElementById('badge-role').textContent=user.role==='admin'?'· Admin':'· Gerente';
+  const roleLabel={admin:'· Admin',gerente:'· Gerente',cartera:'· Cartera'};
+  document.getElementById('badge-role').textContent=roleLabel[user.role]||('· '+user.role);
   const tabBtn=document.getElementById('tab-btn-usuarios');
   if(tabBtn) tabBtn.style.display = user.role==='admin' ? 'inline-flex' : 'none';
   const hdrBtn=document.getElementById('btn-usuarios-hdr');
@@ -1643,15 +1644,15 @@ async function doLogout(){
   _refComments={}; _refCommentsLoaded=false;
   _fcCache=null; _fcConfig={};
   // _ppto y _bdd25 se preservan en memoria — se restauran de aux snapshots al recargar
-  document.body.classList.remove('role-admin','role-gerente');
+  document.body.classList.remove('role-admin','role-gerente','role-cartera');
   document.getElementById('user-badge').style.display='none';
-  const hdrBtn2=document.getElementById('btn-usuarios-hdr'); if(hdrBtn2) hdrBtn2.style.display='none';
-  document.getElementById('usuarios-panel').style.display='none';
-  document.getElementById('usuarios-backdrop').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('upload-section').style.display='none';
   document.getElementById('dashboard').style.display='none';
   document.getElementById('soc-bar').style.display='none';
+  // Restore all tab buttons (cartera role hides them)
+  document.querySelectorAll('.tbtn').forEach(b=>b.style.display='');
+  document.getElementById('tab-btn-usuarios').style.display='none';
   const w=document.getElementById('gerente-wait'); if(w) w.style.display='none';
   document.getElementById('l-user').value='';
   document.getElementById('l-pass').value='';
