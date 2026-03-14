@@ -46,6 +46,7 @@ header h1 span{color:var(--accent);}
 .role-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;}
 .role-admin{background:rgba(239,68,68,.15);color:#ef4444;}
 .role-gerente{background:rgba(59,130,246,.15);color:#60a5fa;}
+.role-cartera{background:rgba(168,85,247,.15);color:#c084fc;}
 /* User badge in header */
 #user-badge{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:4px 10px;font-size:11px;}
 #user-badge .uname{font-weight:600;color:#fff;}
@@ -58,6 +59,10 @@ body.role-gerente #fc-upload-ventas,
 body.role-gerente #fc-upload-ipp,
 body.role-gerente #fc-config-wrap,
 body.role-gerente #fc-btn-calcular{display:none!important;}
+body.role-cartera #upload-section,
+body.role-cartera #btn-reload,
+body.role-cartera #btn-process,
+body.role-cartera #filter-bar{display:none!important;}
 
 /* Upload */
 #upload-section{padding:40px 26px;display:flex;flex-direction:column;align-items:center;gap:24px;}
@@ -262,43 +267,14 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
       <span class="urole" id="badge-role"></span>
       <button onclick="doLogout()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;margin-left:4px;padding:0 2px;transition:color .12s" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-muted)'">✕</button>
     </div>
-    <button id="btn-usuarios-hdr" onclick="toggleUsuariosPanel()" style="display:none;background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">👥 Usuarios</button>
+
     <div id="report-date">Sin datos</div>
     <button id="btn-reload" onclick="nuevaCarga()" style="display:none;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#60a5fa;font-size:10px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s;white-space:nowrap;" onmouseover="this.style.background='rgba(59,130,246,.25)'" onmouseout="this.style.background='rgba(59,130,246,.12)'">↑ Nueva Carga</button>
   </div>
 </header>
 
 <!-- USUARIOS PANEL (floating, admin only) -->
-<div id="usuarios-panel" style="display:none;position:fixed;top:64px;right:16px;z-index:200;width:640px;max-width:calc(100vw - 32px);background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface2)">
-    <h4 style="font-size:14px;font-weight:700;color:#fff">👥 Gestión de Usuarios</h4>
-    <button onclick="toggleUsuariosPanel()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='var(--text-muted)'">✕</button>
-  </div>
-  <!-- Add user form -->
-  <div style="padding:14px 20px;border-bottom:1px solid var(--border);background:rgba(0,212,170,.03)">
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end">
-      <div class="lfield"><label>Usuario</label><input id="nu-user" type="text" placeholder="nombre de usuario"></div>
-      <div class="lfield"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="contraseña"></div>
-      <div class="lfield"><label>Rol</label>
-        <select id="nu-role" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:13px;padding:9px 13px;border-radius:8px;font-family:'Inter',sans-serif">
-          <option value="gerente">Gerente</option>
-          <option value="admin">Administrador</option>
-        </select>
-      </div>
-      <button onclick="addUser()" style="background:linear-gradient(135deg,var(--accent),#00a88a);color:#000;font-weight:700;font-size:12px;padding:9px 18px;border:none;border-radius:8px;cursor:pointer;white-space:nowrap;font-family:'Inter',sans-serif">+ Agregar</button>
-    </div>
-    <div class="lerr" id="nu-err" style="text-align:left;margin-top:6px"></div>
-  </div>
-  <!-- Users table -->
-  <div style="max-height:320px;overflow-y:auto;padding:0 0 8px">
-    <table id="tbl-usuarios" style="font-size:12px;width:100%">
-      <thead><tr><th>#</th><th>Usuario</th><th>Rol</th><th>Creado por</th><th>Acciones</th></tr></thead>
-      <tbody id="tbody-usuarios"></tbody>
-    </table>
-  </div>
-</div>
-<!-- Backdrop -->
-<div id="usuarios-backdrop" onclick="toggleUsuariosPanel()" style="display:none;position:fixed;inset:0;z-index:199;background:rgba(0,0,0,.3)"></div>
+<!-- floating panel removed — usuarios now in tab -->
 
 <!-- LOGIN -->
 <div id="login-screen">
@@ -340,7 +316,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <button class="tbtn" onclick="showTab('razones',this)">⚖️ Razones Financieras</button>
     <button class="tbtn" onclick="showTab('financiero',this)">💰 Resultados</button>
     <button class="tbtn" onclick="showTab('cartera',this)">📋 Cartera</button>
-    <button class="tbtn" id="tab-btn-usuarios" onclick="showTab('usuarios',this)" style="display:none">👥 Usuarios</button>
+    <button class="tbtn" id="tab-btn-usuarios" onclick="showTab('usuarios',this)" style="display:none">⚙️ Usuarios</button>
     <button class="tbtn" onclick="showTab('inventario',this)">🏭 Inventario</button>
     <button class="tbtn" onclick="showTab('forecast',this)" style="color:#f59e0b;border-bottom-color:transparent">🔮 Forecast</button>
     <button class="tbtn" id="tab-btn-avance" onclick="showTab('avance',this)" style="color:#22d3ee">📊 Avance vs FC</button>
@@ -551,14 +527,38 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
   <!-- USUARIOS (admin only) -->
   <div class="tcontent" id="tab-usuarios" style="padding:24px 26px">
-    <div class="tcard" style="max-width:860px">
-      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <h4>👥 Gestión de Usuarios</h4>
-        <button onclick="toggleUsuariosPanel()" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:11px;font-weight:600;padding:5px 14px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif">+ Nuevo Usuario</button>
+    <div class="tcard" style="max-width:960px;margin-bottom:18px">
+      <div class="thead2"><h4>➕ Nuevo Usuario</h4></div>
+      <div style="padding:16px 20px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="lfield"><label>Usuario</label><input id="nu-user" type="text" placeholder="nombre de usuario" style="width:100%"></div>
+          <div class="lfield"><label>Contraseña</label><input id="nu-pass" type="password" placeholder="contraseña" style="width:100%"></div>
+          <div class="lfield"><label>Rol</label>
+            <select id="nu-role" onchange="toggleDivField()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:13px;padding:9px 13px;border-radius:8px;font-family:'Inter',sans-serif;width:100%">
+              <option value="gerente">Gerente (todo)</option>
+              <option value="cartera">Cartera (sólo cartera)</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+        </div>
+        <div id="nu-div-wrap" style="display:none;margin-bottom:12px">
+          <div class="lfield">
+            <label>Divisiones permitidas <span style="color:var(--text-muted);font-weight:400">(vacío = todas)</span></label>
+            <input id="nu-divs" type="text" placeholder="ej: 4105,4106,4111" style="width:100%;font-family:monospace">
+            <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Separadas por coma. Déjalo vacío para permitir todas las divisiones.</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button onclick="addUser()" style="background:linear-gradient(135deg,var(--accent),#00a88a);color:#000;font-weight:700;font-size:12px;padding:9px 20px;border:none;border-radius:8px;cursor:pointer;font-family:'Inter',sans-serif">+ Agregar Usuario</button>
+          <div class="lerr" id="nu-err"></div>
+        </div>
       </div>
+    </div>
+    <div class="tcard" style="max-width:960px">
+      <div class="thead2"><h4>👥 Usuarios Registrados</h4></div>
       <div class="tscroll" style="padding:0 0 4px">
-        <table id="tbl-usuarios" style="font-size:12px">
-          <thead><tr><th>#</th><th>Usuario</th><th>Rol</th><th>Creado por</th><th>Acción</th></tr></thead>
+        <table id="tbl-usuarios" style="font-size:12px;width:100%">
+          <thead><tr><th>#</th><th>Usuario</th><th>Rol</th><th>Divisiones</th><th>Creado por</th><th>Acciones</th></tr></thead>
           <tbody id="tbody-usuarios"></tbody>
         </table>
       </div>
@@ -1156,6 +1156,8 @@ function populateCartDivSelect(){
   const sel = document.getElementById('cart-div-select');
   if(!sel || !window._ant) return;
   let rows = window._ant;
+  const allowedDivs=_currentUser?.role==='cartera'&&_currentUser?.divisions?.length?_currentUser.divisions:null;
+  if(allowedDivs) rows = rows.filter(r=>allowedDivs.includes(r.division));
   if(activeSoc) rows = rows.filter(r=>r.sociedad===activeSoc);
   const divs = [...new Set(rows.map(r=>r.division).filter(Boolean))].sort();
   console.log('[cartDiv] rows sample division values:', rows.slice(0,5).map(r=>r.division));
@@ -1192,7 +1194,7 @@ function fCxPpto(){
   if(activeSoc)d=d.filter(r=>div2soc(r.division)===activeSoc);
   return d;
 }
-function fAnt(){let d=window._ant;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeCartDiv)d=d.filter(r=>r.division===activeCartDiv);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket==='VENCIDA')d=d.filter(r=>r.diasVenc>0);else if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
+function fAnt(){let d=window._ant;const allowedDivs=_currentUser?.role==='cartera'&&_currentUser?.divisions?.length?_currentUser.divisions:null;if(allowedDivs)d=d.filter(r=>allowedDivs.includes(r.division));if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeCartDiv)d=d.filter(r=>r.division===activeCartDiv);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket==='VENCIDA')d=d.filter(r=>r.diasVenc>0);else if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
 function fInv(){let d=window._inv;if(activeSoc)d=d.filter(r=>r.sociedad===activeSoc);if(activeSeg)d=d.filter(r=>r.segmento===activeSeg);if(activeBucket)d=d.filter(r=>r.bucket===activeBucket);return d;}
 
 // ── EXPORT TO EXCEL ─────────────────────────────────────────────
@@ -1464,7 +1466,7 @@ async function hashPass(pass){
 async function loadUsers(){
   try{
     const rows = await supaGet('dashboard_users','order=created_at.asc');
-    _users = (rows||[]).map(u=>({username:u.username,passHash:u.pass_hash,role:u.role,createdBy:u.created_by}));
+    _users = (rows||[]).map(u=>({username:u.username,passHash:u.pass_hash,role:u.role,createdBy:u.created_by,divisions:u.divisions||[]}));
   } catch(e){ _users=[]; }
   if(!_users.find(u=>u.role==='admin')){
     const h=await hashPass('admin123');
@@ -1487,8 +1489,9 @@ async function loginSubmit(){
   if(!username||!pass){ errEl.textContent='Completa todos los campos.'; return; }
   const h=await hashPass(pass);
   const user=_users.find(u=>u.username===username&&u.passHash===h);
+  if(user && user.divisions === undefined) user.divisions=[];
   if(!user){ errEl.textContent='Usuario o contraseña incorrectos.'; return; }
-  await applySession({username:user.username,role:user.role});
+  await applySession({username:user.username,role:user.role,divisions:user.divisions||[]});
 }
 async function applySession(user){
   _currentUser=user;
@@ -1503,7 +1506,34 @@ async function applySession(user){
   const hdrBtn=document.getElementById('btn-usuarios-hdr');
   if(hdrBtn) hdrBtn.style.display = user.role==='admin' ? 'inline-block' : 'none';
   document.getElementById('login-screen').style.display='none';
-  if(user.role==='gerente'){
+  if(user.role==='cartera'){
+    showGerenteWait('⏳ Cargando cartera…');
+    let ok = false;
+    try{ ok = await loadSnapshot(); } catch(e){ console.error('[loadSnapshot]',e); }
+    if(ok){
+      _setLoadingMsg('⏳ Cargando datos de cartera…');
+      await new Promise(r=>setTimeout(r,50));
+      try{
+        await loadAuxSnapshots();
+        buildStatic();
+        refreshAll();
+        // Show only cartera tab
+        document.querySelectorAll('.tbtn').forEach(b=>b.style.display='none');
+        document.querySelectorAll('.tcontent').forEach(el=>el.classList.remove('active'));
+        document.getElementById('tab-cartera').classList.add('active');
+        document.getElementById('upload-section').style.display='none';
+        document.getElementById('dashboard').style.display='block';
+        document.getElementById('soc-bar').style.display='flex';
+        const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
+        document.getElementById('report-date').textContent='Cartera de Clientes';
+      } catch(e){
+        showGerenteWait('❌ Error: '+e.message);
+        console.error('[cartera role]',e);
+      }
+    } else {
+      showGerenteWait('Sin datos — el administrador debe generar el dashboard primero');
+    }
+  } else if(user.role==='gerente'){
     showGerenteWait('⏳ Cargando datos…');
     let ok = false;
     try{ ok = await loadSnapshot(); } catch(e){ console.error('[loadSnapshot]',e); }
@@ -1627,6 +1657,11 @@ async function doLogout(){
   document.getElementById('l-pass').value='';
   document.getElementById('l-err').textContent='';
 }
+function toggleDivField(){
+  const role=document.getElementById('nu-role')?.value;
+  const wrap=document.getElementById('nu-div-wrap');
+  if(wrap) wrap.style.display = role==='cartera' ? 'block' : 'none';
+}
 function toggleUsuariosPanel(){
   const p = document.getElementById('usuarios-panel');
   const b = document.getElementById('usuarios-backdrop');
@@ -1639,16 +1674,18 @@ async function addUser(){
   const username=document.getElementById('nu-user').value.trim();
   const pass=document.getElementById('nu-pass').value;
   const role=document.getElementById('nu-role').value;
+  const divsRaw=document.getElementById('nu-divs')?.value||'';
+  const divisions=divsRaw.split(',').map(d=>d.trim()).filter(Boolean);
   const errEl=document.getElementById('nu-err');
   errEl.textContent='';
   if(!username||!pass){ errEl.textContent='Completa usuario y contraseña.'; return; }
   if(_users.find(u=>u.username===username)){ errEl.textContent='Ese usuario ya existe.'; return; }
   const h=await hashPass(pass);
-  await supaUpsert('dashboard_users',{username,pass_hash:h,role,created_by:_currentUser?.username||'admin'});
-  _users.push({username,passHash:h,role,createdBy:_currentUser?.username||'admin'});
+  await supaUpsert('dashboard_users',{username,pass_hash:h,role,divisions,created_by:_currentUser?.username||'admin'});
+  _users.push({username,passHash:h,role,divisions,createdBy:_currentUser?.username||'admin'});
   document.getElementById('nu-user').value='';
   document.getElementById('nu-pass').value='';
-  document.getElementById('add-user-form') && (document.getElementById('add-user-form').style.display='none');
+  if(document.getElementById('nu-divs')) document.getElementById('nu-divs').value='';
   renderUsersTable();
 }
 async function deleteUser(username){
@@ -1668,24 +1705,45 @@ async function changePass(username){
   if(u){ u.passHash=h; }
   alert('Contraseña actualizada.');
 }
+async function editDivisions(username){
+  const u=_users.find(u=>u.username===username);
+  if(!u) return;
+  const current=(u.divisions||[]).join(', ');
+  const input=prompt(`Divisiones para "${username}":\n(separadas por coma, vacío = todas)\n\nDivisiones disponibles: ${[...new Set((window._ant||[]).map(r=>r.division).filter(Boolean))].sort().join(', ')||'carga primero el archivo de cartera'}`,current);
+  if(input===null) return;
+  const divisions=input.split(',').map(d=>d.trim()).filter(Boolean);
+  await fetch(`${SUPA_URL}/rest/v1/dashboard_users?username=eq.${encodeURIComponent(username)}`,{
+    method:'PATCH', headers:{...SUPA_HDR,'Prefer':'return=minimal'}, body:JSON.stringify({divisions})
+  });
+  u.divisions=divisions;
+  renderUsersTable();
+  alert('Divisiones actualizadas: '+(divisions.length?divisions.join(', '):'Todas'));
+}
 function renderUsersTable(){
-  const L={admin:'Administrador',gerente:'Gerente'};
-  document.getElementById('tbody-usuarios').innerHTML=_users.map((u,i)=>`
-    <tr>
+  const L={admin:'Administrador',gerente:'Gerente',cartera:'Cartera'};
+  document.getElementById('tbody-usuarios').innerHTML=_users.map((u,i)=>{
+    const divLabel = u.role==='cartera'
+      ? (u.divisions&&u.divisions.length ? u.divisions.join(', ') : '<span style="color:var(--text-muted)">Todas</span>')
+      : '<span style="color:var(--text-muted)">—</span>';
+    return`<tr>
       <td style="color:var(--text-muted)">${i+1}</td>
       <td style="font-weight:600">${u.username}</td>
       <td><span class="role-badge role-${u.role}">${L[u.role]||u.role}</span></td>
+      <td style="font-size:11px;font-family:monospace">${divLabel}</td>
       <td style="color:var(--text-muted);font-size:11px">${u.createdBy||'—'}</td>
-      <td style="display:flex;gap:6px">
+      <td style="display:flex;gap:6px;flex-wrap:wrap">
         <button onclick="changePass('${u.username}')"
           style="background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.3);color:#60a5fa;font-size:10px;padding:3px 9px;border-radius:5px;cursor:pointer;font-family:'Inter',sans-serif">
           🔑 Clave</button>
+        ${u.role==='cartera'?`<button onclick="editDivisions('${u.username}')"
+          style="background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.3);color:#c084fc;font-size:10px;padding:3px 9px;border-radius:5px;cursor:pointer;font-family:'Inter',sans-serif">
+          🏢 Divisiones</button>`:''}
         ${u.username===_currentUser?.username?'':
         `<button onclick="deleteUser('${u.username}')"
           style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:#ef4444;font-size:10px;padding:3px 9px;border-radius:5px;cursor:pointer;font-family:'Inter',sans-serif">
           🗑 Eliminar</button>`}
       </td>
-    </tr>`).join('');
+    </tr>`;}).join('');
 }
 
 // ═══════════════════════════════════════════
