@@ -905,6 +905,8 @@ function parseAnt(data){
   const cFechaDoc=findCol(keys,'Fecha de documento');
   const cDiasVenc=findCol(keys,'Días Vencidos');
   const cNDoc=findCol(keys,'Nº documento')||findCol(keys,'No. documento')||findCol(keys,'Numero documento');
+  // Get raw sheet for text-format cells (Nº documento may be stored as number)
+  const rawSheet=wb.Sheets[wb.SheetNames.find(s=>!s.startsWith('_'))];
   return rawRows.map(r=>{
     const vd=pd(r[cVenc]);
     const dv=vd?Math.floor((TODAY-vd)/86400000):0;
@@ -916,7 +918,12 @@ function parseAnt(data){
     else if(typeof fdRaw==='number')fechaDoc=new Date(Math.round((fdRaw-25569)*86400000));
     else if(fdRaw)fechaDoc=new Date(fdRaw);
     const divRaw = cDivAnt ? String(r[cDivAnt]||'').trim() : '';
-    const ndoc=String(r[cNDoc]||'').trim();
+    // Read Nº documento as text (may be numeric in sheet)
+    let ndoc='';
+    if(cNDoc){
+      const ndocRaw=r[cNDoc];
+      ndoc = ndocRaw!==null&&ndocRaw!==undefined ? String(ndocRaw).trim() : '';
+    }
     return{cliente:(r[cCliente]||'').trim(),segmento:(r[cSeg]||'').trim(),saldo,diasVenc:dv,
       porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),
       sociedad:div2soc(r[cDivAnt]),division:divRaw,
@@ -4663,6 +4670,11 @@ function generarEstado(){
   document.getElementById('ec-btn-export').style.display='';
   document.getElementById('ec-btn-back').style.display='';
   _renderEstadoReport(rows);
+  // Scroll to report
+  setTimeout(()=>{
+    const r=document.getElementById('ec-report');
+    if(r) r.scrollIntoView({behavior:'smooth',block:'start'});
+  },120);
 }
 
 function _renderEstadoReport(rows){
