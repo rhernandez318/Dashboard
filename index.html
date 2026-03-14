@@ -568,13 +568,13 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
 
   <!-- ESTADOS DE CUENTA -->
-  <div class="tcontent" id="tab-estados">
+  <div class="tcontent" id="tab-estados" style="padding:0 26px">
     <!-- Sticky search bar -->
     <div style="position:sticky;top:calc(var(--hh) + var(--tnav-h) + var(--sb-h));z-index:70;background:var(--bg);
                 padding:12px 26px;margin:0 -26px 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div class="stitle" style="color:#34d399;white-space:nowrap">📄 Estado de Cuenta</div>
-        <button id="ec-btn-cartera" onclick="showTab('cartera',document.querySelector('.tbtn[onclick*=cartera]'))" style="display:none;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);color:#34d399;font-size:11px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">← Ver Cartera</button>
+        <button id="ec-btn-cartera" onclick="ecGoCartera()" style="display:none;background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);color:#34d399;font-size:11px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">← Ver Cartera</button>
         <!-- Autocomplete search -->
         <div style="position:relative;flex:1;min-width:220px;max-width:380px">
           <input id="ec-search" type="text" placeholder="🔍 Escribe el nombre del cliente…" autocomplete="off"
@@ -617,7 +617,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
       </div>
     </div>
     <!-- Report area -->
-    <div id="ec-report" style="padding-top:16px"></div>
+    <div id="ec-report" style="padding:16px 0 32px"></div>
   </div>
 
   <!-- FORECAST -->
@@ -904,6 +904,7 @@ function parseAnt(data){
   const cRef=findCol(keys,'Referencia');
   const cFechaDoc=findCol(keys,'Fecha de documento');
   const cDiasVenc=findCol(keys,'Días Vencidos');
+  const cNDoc=findCol(keys,'Nº documento')||findCol(keys,'No. documento')||findCol(keys,'Numero documento');
   return rawRows.map(r=>{
     const vd=pd(r[cVenc]);
     const dv=vd?Math.floor((TODAY-vd)/86400000):0;
@@ -915,10 +916,11 @@ function parseAnt(data){
     else if(typeof fdRaw==='number')fechaDoc=new Date(Math.round((fdRaw-25569)*86400000));
     else if(fdRaw)fechaDoc=new Date(fdRaw);
     const divRaw = cDivAnt ? String(r[cDivAnt]||'').trim() : '';
+    const ndoc=String(r[cNDoc]||'').trim();
     return{cliente:(r[cCliente]||'').trim(),segmento:(r[cSeg]||'').trim(),saldo,diasVenc:dv,
       porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),
       sociedad:div2soc(r[cDivAnt]),division:divRaw,
-      ref,fechaDoc};
+      ref,ndoc,fechaDoc};
   }).filter(r=>r.saldo!==0);
 }
 
@@ -4710,6 +4712,7 @@ function _renderEstadoReport(rows){
       const dc=d.diasVenc<=0?'#10b981':d.diasVenc<=30?'#3b82f6':d.diasVenc<=60?'#f59e0b':d.diasVenc<=90?'#f97316':d.diasVenc<=120?'#ef4444':'#7c3aed';
       const dt=d.diasVenc<=0?`Por vencer ${Math.abs(d.diasVenc)}d`:`${d.diasVenc}d vencido`;
       return `<tr>
+        <td style="padding:5px 10px;font-family:monospace;font-size:11px;color:#94a3b8">${d.ndoc||'—'}</td>
         <td style="padding:5px 10px;font-family:monospace;font-size:11px;color:var(--text-muted)">${d.ref||'—'}</td>
         <td style="padding:5px 10px;font-size:11px">${d.fechaDoc?fmtFecha(d.fechaDoc):'—'}</td>
         <td style="padding:5px 10px;font-size:11px">${d.segmento}</td>
@@ -4735,6 +4738,7 @@ function _renderEstadoReport(rows){
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse">
             <thead><tr style="background:rgba(0,0,0,.2)">
+              <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--text-muted)">Nº Documento</th>
               <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--text-muted)">Referencia</th>
               <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--text-muted)">Fecha Doc</th>
               <th style="text-align:left;padding:6px 10px;font-size:10px;color:var(--text-muted)">Segmento</th>
@@ -4769,13 +4773,13 @@ function exportEstadosXlsx(){
   if(_ecSelectedClient) rows=rows.filter(r=>r.cliente===_ecSelectedClient);
   if(!rows.length){alert('Genera el reporte primero.');return;}
   const BKT=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
-  const data=[['Cliente','Referencia','Fecha Documento','Segmento','Empresa','División','Saldo','Días Vencidos','Estado','Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días']];
+  const data=[['Cliente','Nº Documento','Referencia','Fecha Documento','Segmento','Empresa','División','Saldo','Días Vencidos','Estado','Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días']];
   rows.sort((a,b)=>a.cliente.localeCompare(b.cliente)||(b.diasVenc-a.diasVenc)).forEach(r=>{
     const bktCols=BKT.map(b=>b==='Por Vencer'?r.diasVenc<=0?r.saldo:0:r.bucket===b?r.saldo:0);
-    data.push([r.cliente,r.ref||'',r.fechaDoc?r.fechaDoc.toLocaleDateString('es-MX'):'',r.segmento,r.sociedad||'',r.division||'',r.saldo,r.diasVenc,r.diasVenc<=0?'Por Vencer':'Vencido',...bktCols]);
+    data.push([r.cliente,r.ndoc||'',r.ref||'',r.fechaDoc?r.fechaDoc.toLocaleDateString('es-MX'):'',r.segmento,r.sociedad||'',r.division||'',r.saldo,r.diasVenc,r.diasVenc<=0?'Por Vencer':'Vencido',...bktCols]);
   });
   const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[30,18,14,16,22,10,14,10,10,12,10,10,10,10,10].map(w=>({wch:w}));
+  ws['!cols']=[30,16,18,14,16,22,10,14,10,10,12,10,10,10,10,10].map(w=>({wch:w}));
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Estados de Cuenta');
   const fecha=new Date().toLocaleDateString('es-MX').replace(/\//g,'-');
@@ -4784,6 +4788,10 @@ function exportEstadosXlsx(){
 }
 
 function renderEstados(){ populateEstadosFiltros(); }
+function ecGoCartera(){
+  const btn = [...document.querySelectorAll('.tbtn')].find(b=>b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'cartera'"));
+  if(btn) showTab('cartera', btn);
+}
 
 // PAGE INIT
 // ═══════════════════════════════════════════
