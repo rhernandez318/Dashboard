@@ -610,7 +610,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
           ✕ Limpiar</button>
       </div>
       <!-- Selected client chip -->
-      <div id="ec-selected-chip" style="display:none;margin-top:8px;display:flex;align-items:center;gap:8px">
+      <div id="ec-selected-chip" style="display:none;margin-top:8px;align-items:center;gap:8px">
         <span style="font-size:10px;color:var(--text-muted)">Cliente seleccionado:</span>
         <span id="ec-chip-name" style="background:rgba(52,211,153,.15);border:1px solid rgba(52,211,153,.35);
               color:#34d399;font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px"></span>
@@ -4663,24 +4663,32 @@ function ecLimpiar(){
 }
 
 function generarEstado(){
-  if(!window._ant){alert('Sin datos de cartera.');return;}
-  let rows=_ecBaseRows();
-  if(_ecSelectedClient) rows=rows.filter(r=>r.cliente===_ecSelectedClient);
-  if(!rows.length){alert('No hay documentos con los filtros seleccionados.');return;}
-  document.getElementById('ec-btn-export').style.display='';
-  document.getElementById('ec-btn-back').style.display='';
-  _renderEstadoReport(rows);
-  // Scroll to report
-  setTimeout(()=>{
-    const r=document.getElementById('ec-report');
-    if(r) r.scrollIntoView({behavior:'smooth',block:'start'});
-  },120);
+  try{
+    if(!window._ant){alert('Sin datos de cartera.');return;}
+    let rows=_ecBaseRows();
+    if(_ecSelectedClient) rows=rows.filter(r=>r.cliente===_ecSelectedClient);
+    console.log('[estados] generarEstado rows:', rows.length, 'cliente:', _ecSelectedClient);
+    if(!rows.length){alert('No hay documentos con los filtros seleccionados.');return;}
+    document.getElementById('ec-btn-export').style.display='';
+    document.getElementById('ec-btn-back').style.display='';
+    _renderEstadoReport(rows);
+    setTimeout(()=>{
+      const rpt=document.getElementById('ec-report');
+      if(rpt) rpt.scrollIntoView({behavior:'smooth',block:'start'});
+    },120);
+  }catch(e){
+    console.error('[estados] Error en generarEstado:',e);
+    alert('Error al generar: '+e.message);
+  }
 }
 
 function _renderEstadoReport(rows){
+  try{
+  console.log('[estados] _renderEstadoReport start, rows:', rows.length);
   const BKT=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
   const BKTC=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
   const report=document.getElementById('ec-report');
+  console.log('[estados] report div found:', !!report);
   const byClient={};
   rows.forEach(r=>{
     if(!byClient[r.cliente]) byClient[r.cliente]={cliente:r.cliente,sociedad:r.sociedad,division:r.division,segmento:r.segmento,saldo:0,docs:[],bktSaldos:Object.fromEntries(BKT.map(b=>[b,0]))};
@@ -4777,6 +4785,7 @@ function _renderEstadoReport(rows){
         scales:{x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#64748b',font:{size:10}}},
                 y:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#64748b',font:{size:10},callback:v=>fmtM(v)}}}}});
   },80);
+  }catch(e){console.error('[estados] Error en _renderEstadoReport:',e);document.getElementById('ec-report').innerHTML='<div style="color:#ef4444;padding:20px">Error al renderizar: '+e.message+'</div>';}
 }
 
 function exportEstadosXlsx(){
