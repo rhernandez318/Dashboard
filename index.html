@@ -692,11 +692,11 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
     <!-- Configuración de fuente por segmento -->
     <div class="tcard mt4" id="fc-config-wrap">
-      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between">
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleFcConfig(this)">
         <h4>⚙️ Configuración de Segmentos</h4>
-        <span style="font-size:10px;color:var(--text-muted);font-family:'Inter',sans-serif">Define qué usa Forecast vs Presupuesto</span>
+        <span style="font-size:10px;color:var(--text-muted);font-family:'Inter',sans-serif">Define qué usa Forecast vs Presupuesto &nbsp;<span id="fc-config-arrow">▲</span></span>
       </div>
-      <div style="padding:12px 16px">
+      <div id="fc-config-body" style="padding:12px 16px">
         <table id="tbl-fc-config" style="font-size:11px;width:100%;border-collapse:collapse">
           <thead><tr>
             <th style="text-align:left;padding:6px 10px;color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border)">Segmento</th>
@@ -1746,6 +1746,13 @@ async function doLogout(){
   document.getElementById('l-user').value='';
   document.getElementById('l-pass').value='';
   document.getElementById('l-err').textContent='';
+}
+function toggleFcConfig(hdr){
+  const body = document.getElementById('fc-config-body');
+  const arrow = document.getElementById('fc-config-arrow');
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : '';
+  arrow.textContent = open ? '▼' : '▲';
 }
 function toggleDivField(){
   const role=document.getElementById('nu-role')?.value;
