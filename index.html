@@ -4220,28 +4220,38 @@ function buildAvance(){
   undSegs.forEach(seg=>{
     const r=realUndBySeg[seg]||0, f=fcUndBySeg[seg]||0;
     if(!r&&!f) return;
-    sumReal+=r; sumFc+=f;
-    const diff=r-f, pct=f>0?(r/f*100):null;
-    const col=r>=f?'#00d4aa':'#ef4444';
-    const pctStr=pct!=null?`<span class="pill ${r>=f?'pg':'pr'}">${pct.toFixed(0)}%</span>`:'—';
+    // Only count in forecast total if segment was in forecast source
+    const inFc = (ft.segsInForecast||[]).includes(seg) || f>0;
+    sumReal+=r; if(inFc) sumFc+=f;
+    const diff=r-f;
+    const pct = inFc && f>0 ? (r/f*100) : inFc ? null : null;
+    const col = !inFc ? '#94a3b8' : r>=f?'#00d4aa':'#ef4444';
+    const fcDisplay = inFc ? (f||'0') : '—';
+    const diffDisplay = inFc
+      ? `<span style="color:${col}">${diff>=0?'+':''}${diff}</span>`
+      : `<span style="color:#94a3b8">${r>=0?'+':''}${r}</span>`;
+    const pctStr = inFc && f>0
+      ? `<span class="pill ${r>=f?'pg':'pr'}">${pct.toFixed(0)}%</span>`
+      : '—';
     undHtml+=`<tr><td class="tdn">${seg}</td>
       <td style="text-align:right;font-weight:600">${r}</td>
-      <td style="text-align:right;color:#94a3b8">${f||'—'}</td>
-      <td style="text-align:right"><span style="color:${col}">${diff>=0?'+':''}${diff}</span></td>
+      <td style="text-align:right;color:#94a3b8">${fcDisplay}</td>
+      <td style="text-align:right">${diffDisplay}</td>
       <td style="text-align:right">${pctStr}</td></tr>`;
   });
   const totDiff=sumReal-sumFc, totPct=sumFc>0?(sumReal/sumFc*100):null;
   const totCol=sumReal>=sumFc?'#00d4aa':'#ef4444';
+  const totPctStr=totPct!=null?`<span class="pill ${sumReal>=sumFc?'pg':'pr'}">${totPct.toFixed(0)}%</span>`:'—';
   undHtml+=`<tr style="font-weight:800;border-top:2px solid rgba(34,211,238,.3);background:rgba(34,211,238,.05)">
     <td class="tdn" style="color:#22d3ee">TOTAL</td>
     <td style="text-align:right;color:#22d3ee">${sumReal}</td>
-    <td style="text-align:right;color:#94a3b8">${sumFc}</td>
+    <td style="text-align:right;color:#94a3b8">${sumFc||'—'}</td>
     <td style="text-align:right"><span style="color:${totCol}">${totDiff>=0?'+':''}${totDiff}</span></td>
-    <td style="text-align:right"><span class="pill ${sumReal>=sumFc?'pg':'pr'}">${totPct!=null?totPct.toFixed(0)+'%':'—'}</span></td></tr>`;
+    <td style="text-align:right">${totPctStr}</td></tr>`;
   document.getElementById('tbody-avf-und').innerHTML=undHtml;
   const el=document.getElementById('avf-kpi-avance');
   el.textContent=totPct!=null?totPct.toFixed(1)+'%':'—';
-  el.style.color=sumReal>=sumFc?'#22d3ee':'#ef4444';
+  el.style.color=sumFc>0&&sumReal>=sumFc?'#22d3ee':'#ef4444';
 
   // ── P&L table ─────────────────────────────────────────────────────────────
   function fC(v){ return '$'+(v/1e6).toFixed(2)+'M'; }
