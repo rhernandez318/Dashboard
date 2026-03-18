@@ -494,6 +494,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
             <th style="text-align:right">Saldo</th>
             <th style="text-align:right">Antigüedad</th>
             <th>Fecha Doc.</th>
+            <th style="min-width:160px">Cliente Final <span style="font-weight:400;color:var(--text-muted)">(se guarda automáticamente)</span></th>
             <th style="min-width:240px">Comentario <span style="font-weight:400;color:var(--text-muted)">(se guarda automáticamente)</span></th>
           </tr></thead>
           <tbody id="tbody-seg-ref"></tbody>
@@ -1729,7 +1730,7 @@ async function doLogout(){
   window._bdd=null; window._inv=null; window._ant=null;
   window._bal=null; // _ppto y _bdd25 se preservan entre cargas
   _invComments={}; _invCommentsLoaded=false;
-  _refComments={}; _refCommentsLoaded=false;
+  _refComments={}; _refCommentsLoaded=false; _refClienteFinal={};
   _fcCache=null; _fcConfig={};
   // _ppto y _bdd25 se preservan en memoria — se restauran de aux snapshots al recargar
   document.body.classList.remove('role-admin','role-gerente','role-cartera');
@@ -3408,12 +3409,16 @@ async function pruneInvComments(activeVins){
 let _refComments = {};  // {ref: {comment, ts}}
 
 let _refCommentsLoaded = false;
+let _refClienteFinal = {};  // ref → cliente_final string
 async function loadRefComments(){
   if(_refCommentsLoaded) return;  // ya cargados — usar cache en memoria
   try{
     const rows = await supaGet('dashboard_comments','key_type=eq.cartera');
-    _refComments = {};
-    (rows||[]).forEach(r=>{ _refComments[r.key_value]={comment:r.comment,ts:r.updated_at}; });
+    _refComments = {}; _refClienteFinal = {};
+    (rows||[]).forEach(r=>{
+      _refComments[r.key_value]={comment:r.comment,ts:r.updated_at};
+      if(r.client_final) _refClienteFinal[r.key_value]=r.client_final;
+    });
     _refCommentsLoaded = true;
   } catch(e){ _refComments={}; }
 }
@@ -3421,6 +3426,26 @@ async function saveRefComment(ref, comment){
   if(comment.trim()) _refComments[ref]={comment:comment.trim(),ts:Date.now()};
   else delete _refComments[ref];
   await saveComment('cartera', ref, comment);
+}
+async function saveRefClienteFinal(ref, value){
+  if(value.trim()) _refClienteFinal[ref]=value.trim();
+  else delete _refClienteFinal[ref];
+  // PATCH the existing row or upsert with client_final field
+  const encoded=encodeURIComponent(ref);
+  const url=`${SUPA_URL}/rest/v1/dashboard_comments?key_type=eq.cartera&key_value=eq.${encoded}`;
+  try{
+    // Try PATCH first (row may already exist from comment)
+    const existing = await supaGet('dashboard_comments',`key_type=eq.cartera&key_value=eq.${encoded}`);
+    if(existing && existing.length>0){
+      await supaFetch(url,{method:'PATCH',headers:{...SUPA_HDR,'Prefer':'return=minimal'},
+        body:JSON.stringify({client_final:value.trim()||null})});
+    } else {
+      // Row doesn't exist yet — insert with both fields
+      await supaFetch(`${SUPA_URL}/rest/v1/dashboard_comments`,{method:'POST',
+        headers:{...SUPA_HDR,'Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify({key_type:'cartera',key_value:ref,comment:'',client_final:value.trim()||null,updated_at:new Date().toISOString()})});
+    }
+  } catch(e){ console.error('[saveRefClienteFinal]',e); }
 }
 async function pruneRefComments(activeRefs){
   const toDelete=Object.keys(_refComments).filter(r=>!activeRefs.has(r));
@@ -3466,6 +3491,15 @@ async function buildRefTable(){
       <td style="text-align:right;font-weight:600">${fmtC(r.saldo)}</td>
       <td style="text-align:right"><span style="color:${dColor};font-weight:600">${diasTxt}</span></td>
       <td style="white-space:nowrap;color:var(--text-muted)">${fmtFecha(r.fechaDoc)}</td>
+      <td><input type="text" value="${(_refClienteFinal[r.ref]||'').replace(/"/g,'&quot;')}"
+        placeholder="Cliente final…"
+        data-ref="${r.ref}"
+        oninput="_refClienteFinal[this.dataset.ref]=this.value.trim();debounced('rcf_'+this.dataset.ref, ()=>saveRefClienteFinal(this.dataset.ref, this.value))"
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);
+               color:var(--text);font-size:11px;padding:4px 8px;border-radius:5px;
+               font-family:'Inter',sans-serif;outline:none"
+        onfocus="this.style.borderColor='#3b82f6'"
+        onblur="this.style.borderColor='var(--border)'"></td>
       <td><input type="text" value="${saved.replace(/"/g,'&quot;')}"
         placeholder="Agregar comentario…"
         data-ref="${r.ref}"
