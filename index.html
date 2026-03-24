@@ -852,8 +852,8 @@ function pd(v){
 function bkt(d){if(d<=0)return'Por Vencer';if(d<=30)return'1-30 días';if(d<=60)return'31-60 días';if(d<=90)return'61-90 días';if(d<=120)return'91-120 días';return'+120 días';}
 function gb(arr,key){return arr.reduce((a,i)=>{const k=i[key];if(!a[k])a[k]=[];a[k].push(i);return a;},{});}
 function sb2(arr,key){return arr.reduce((s,r)=>s+(+r[key]||0),0);}
-function fmtM(n){const a=Math.abs(n);if(a>=1e9)return'$'+(n/1e9).toFixed(1)+'B';if(a>=1e6)return'$'+(n/1e6).toFixed(1)+'M';if(a>=1e3)return'$'+(n/1e3).toFixed(0)+'K';return'$'+n.toFixed(0);}
-function fmtC(n){return'$'+Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function fmtM(n){const a=Math.abs(n),s=n<0?'-':'';if(a>=1e9)return s+'$'+(a/1e9).toFixed(1)+'B';if(a>=1e6)return s+'$'+(a/1e6).toFixed(1)+'M';if(a>=1e3)return s+'$'+(a/1e3).toFixed(0)+'K';return s+'$'+a.toFixed(0);}
+function fmtC(n){const abs=Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:0,maximumFractionDigits:0});return(n<0?'-':''+'$'+abs);}
 function fmtFecha(d){if(!d)return'—';try{return new Date(d).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});}catch(e){return'—';}}
 // P&L format: positive=green, negative=red+(parentheses)
 function fmtPL(n){
@@ -2246,7 +2246,7 @@ function renderResumenCharts(ant,inv){
   const dBg=BK.map((b,i)=>activeBucket&&activeBucket!==b?BC[i]+'30':BC[i]);
   dch('ch-aging-r');
   const cdnutR=new Chart(document.getElementById('ch-aging-r'),{
-    type:'doughnut',data:{labels:BK,datasets:[{data:BK.map(b=>Math.max(0,sb2(antBase.filter(r=>r.bucket===b),'saldo'))),backgroundColor:dBg,borderWidth:0,borderRadius:3}]},options:dOpts()});
+    type:'doughnut',data:{labels:BK,datasets:[{data:BK.map(b=>sb2(antBase.filter(r=>r.bucket===b),'saldo')),backgroundColor:dBg,borderWidth:0,borderRadius:3}]},options:dOpts()});
   document.getElementById('ch-aging-r').onclick=e=>bucketChartClick(cdnutR,e,BK);
   CH['ch-aging-r']=cdnutR;
 
@@ -2260,7 +2260,7 @@ function renderResumenCharts(ant,inv){
   CH['ch-inv-s']=c3;
 
   // Cartera donut
-  const abys=gb(ant.filter(r=>r.saldo>0),'segmento');
+  const abys=gb(ant.filter(r=>r.saldo!==0),'segmento');
   const anames=Object.keys(abys).sort((a,b)=>sb2(abys[b],'saldo')-sb2(abys[a],'saldo')).slice(0,9);
   dch('ch-cart-s');
   const c4=new Chart(document.getElementById('ch-cart-s'),{
@@ -2330,7 +2330,7 @@ function renderCartCharts(ant){
 
 function renderCartTables(ant){
   const abys=gb(ant,'segmento');
-  const rows=Object.entries(abys).map(([s,r])=>({segmento:s,saldo:sb2(r,'saldo'),vencer:sb2(r,'porVencer'),vencida:sb2(r,'vencido')})).filter(r=>r.saldo>0).sort((a,b)=>b.saldo-a.saldo);
+  const rows=Object.entries(abys).map(([s,r])=>({segmento:s,saldo:sb2(r,'saldo'),vencer:sb2(r,'porVencer'),vencida:sb2(r,'vencido')})).filter(r=>r.saldo!==0).sort((a,b)=>b.saldo-a.saldo);
   document.querySelector('#tbl-cart-s tbody').innerHTML=rows.map(r=>`
     <tr class="srow${activeSeg===r.segmento?' arow':''}" onclick="applyFilter('${r.segmento.replace(/'/g,"\\'")}')">
       <td>${sb(r.segmento)}</td><td>${fmtC(r.saldo)}</td><td>${fmtC(r.vencer)}</td><td>${fmtC(r.vencida)}</td>
