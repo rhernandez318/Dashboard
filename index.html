@@ -3134,8 +3134,8 @@ function showTab(tab,btn){
   if(tab==='avance') buildAvance();
   const cdw = document.getElementById('cart-div-wrap');
   if(tab==='cartera'){ populateCartDivSelect(); if(cdw) cdw.style.display='flex'; }
-  if(tab==='estados'){ populateEstadosFiltros(); renderEstados(); }
   else { if(cdw) cdw.style.display='none'; activeCartDiv=null; }
+  if(tab==='estados'){ populateEstadosFiltros(); renderEstados(); }
 }
 function buildEdoSegCombo(){
   const sel=document.getElementById('edo-seg-select');
