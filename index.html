@@ -390,6 +390,62 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
         <tbody></tbody>
       </table></div>
     </div>
+
+    <!-- OFI -->
+    <div class="divider"></div>
+    <div class="shdr" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div class="stitle" style="font-size:14px;">📈 Flujo de Efectivo OFI <small>Variación periodo actual vs anterior</small></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:11px;color:var(--text-muted)">Periodo actual:</label>
+        <select id="ofi-per" onchange="buildOFI()"
+          style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 8px;border-radius:6px;font-family:'Inter',sans-serif;cursor:pointer">
+        </select>
+        <button onclick="exportOFIExcel()"
+          style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button>
+      </div>
+    </div>
+
+    <!-- KPI row -->
+    <div id="ofi-kpis" style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0"></div>
+
+    <!-- Waterfall chart -->
+    <div class="tcard" style="margin-bottom:14px">
+      <div class="thead2" onclick="toggleOFIChart(this)" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between">
+        <h4>📊 Variación de Efectivo</h4>
+        <span style="font-size:10px;color:var(--text-muted)">▲</span>
+      </div>
+      <div id="ofi-chart-wrap" style="padding:14px 18px;height:240px">
+        <canvas id="ofi-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- Three columns: O / F / I -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+      <!-- OPERACION -->
+      <div class="tcard">
+        <div class="thead2" style="background:rgba(59,130,246,.08);border-bottom:2px solid rgba(59,130,246,.3)">
+          <h4 style="color:#60a5fa">🔵 Actividades de Operación</h4>
+          <div id="ofi-op-total" style="font-size:13px;font-weight:800;font-family:monospace"></div>
+        </div>
+        <div id="ofi-op-body" style="padding:0"></div>
+      </div>
+      <!-- FINANCIAMIENTO -->
+      <div class="tcard">
+        <div class="thead2" style="background:rgba(245,158,11,.08);border-bottom:2px solid rgba(245,158,11,.3)">
+          <h4 style="color:#f59e0b">🟡 Actividades de Financiamiento</h4>
+          <div id="ofi-fin-total" style="font-size:13px;font-weight:800;font-family:monospace"></div>
+        </div>
+        <div id="ofi-fin-body" style="padding:0"></div>
+      </div>
+      <!-- INVERSION -->
+      <div class="tcard">
+        <div class="thead2" style="background:rgba(16,185,129,.08);border-bottom:2px solid rgba(16,185,129,.3)">
+          <h4 style="color:#10b981">🟢 Actividades de Inversión</h4>
+          <div id="ofi-inv-total" style="font-size:13px;font-weight:800;font-family:monospace"></div>
+        </div>
+        <div id="ofi-inv-body" style="padding:0"></div>
+      </div>
+    </div>
   </div>
 
   <!-- FINANCIERO -->
@@ -2052,6 +2108,7 @@ function renderRazones(){
   const concTop5=cartTotal>0?(top5.reduce((a,b)=>a+b,0)/cartTotal)*100:0;
 
   window._razones={dso,dii,dpo,cce,rotInv,margenBruto,margenPP,pctVenc,ppVsGB,pctRisk,concTop5,revTotal,costTotal,gpTotal,ppTotal,invTotal,cartTotal,cartVencida,provTotal,invUnidades};
+  buildOFI();
 
   // ── CCE FLOW ──
   document.getElementById('cce-flow').innerHTML=`
@@ -5094,6 +5151,308 @@ function ecGoCartera(){
   if(btn) showTab('cartera', btn);
 }
 
+
+// ═══════════════════════════════════════════
+// OFI — FLUJO DE EFECTIVO
+// ═══════════════════════════════════════════
+
+// Clasificación de cuentas OFI
+const OFI_MAP = {
+  operacion: [
+    // Capital de trabajo — Clientes
+    {cuenta:'Clientes Nacionales',      label:'Clientes Nacionales',      signo:-1},
+    {cuenta:'Ant de Clientes Nac',      label:'Anticipos de Clientes',    signo:-1},
+    {cuenta:'Anticipo Deudors Div',     label:'Anticipos Deudores Div.',  signo:-1},
+    {cuenta:'CXC Entre Divisiones',     label:'CXC Entre Divisiones',     signo:-1},
+    {cuenta:'CXC  Empresas Grupo',      label:'CXC Empresas Grupo',       signo:-1},
+    // Inventarios
+    {cuenta:'Inventarios Nuevos',       label:'Inventario Nuevos',        signo:-1},
+    {cuenta:'Inventario Semi-Nvos',     label:'Inventario Semi-Nuevos',   signo:-1},
+    {cuenta:'Inv. Refacciones',         label:'Inventario Refacciones',   signo:-1},
+    {cuenta:'Mercancias Transito',      label:'Mercancías en Tránsito',   signo:-1},
+    // Proveedores y acreedores
+    {cuenta:'Proveedores Nacional',     label:'Proveedores Nacional',     signo:1},
+    {cuenta:'Prov Operat y Adtiva',     label:'Proveedores Operativos',   signo:1},
+    {cuenta:'Prov Nacional(ICIAS)',     label:'Proveedores ICIAS',        signo:1},
+    {cuenta:'CXP entre Divisiones',     label:'CXP Entre Divisiones',     signo:1},
+    {cuenta:'Acreedores Diversos',      label:'Acreedores Diversos',      signo:1},
+    {cuenta:'Acreedores de Ret',        label:'Acreedores Retenciones',   signo:1},
+    // Impuestos y nómina
+    {cuenta:'IVA Acreditado 16%',       label:'IVA Acreditado 16%',       signo:-1},
+    {cuenta:'IVA Trasladado  16%',      label:'IVA Trasladado 16%',       signo:1},
+    {cuenta:'ISR por Pagar',            label:'ISR por Pagar',            signo:1},
+    {cuenta:'Prov Contable ISR',        label:'Provisión ISR',            signo:1},
+    {cuenta:'Aportes IMSS X pagar',     label:'IMSS por Pagar',           signo:1},
+    {cuenta:'Aportes INFONA X pag',     label:'INFONAVIT por Pagar',      signo:1},
+    {cuenta:'Aportes SAR X pagar',      label:'SAR por Pagar',            signo:1},
+    {cuenta:'Aportes Fonacot',          label:'Fonacot por Pagar',        signo:1},
+  ],
+  financiamiento: [
+    {cuenta:'Obligacion Fin BBVA',      label:'Crédito BBVA',             signo:1},
+    {cuenta:'Obligacion Fin Banor',     label:'Crédito Banorte',          signo:1},
+    {cuenta:'Obligacion Fin Sant',      label:'Crédito Santander',        signo:1},
+    {cuenta:'Oblig Fin Planta',         label:'Obligación Fin. Planta',   signo:1},
+    {cuenta:'DXP Tercer CP Bancos',     label:'Deuda C.P. Bancos',        signo:1},
+    {cuenta:'Pasivo Arrend L.P.',       label:'Arrendamiento L.P.',       signo:1},
+  ],
+  inversion: [
+    {cuenta:'Recursos Enviados',        label:'Recursos Enviados/Recib.', signo:-1},
+    {cuenta:'Comp (EM-RF) Refacc',      label:'Compras Pendientes Ref.',  signo:-1},
+    {cuenta:'Comp (EM-RF) TOT',         label:'Compras Pendientes TOT',   signo:-1},
+    {cuenta:'Otros Gastos Prepaga',     label:'Gastos Prepagados',        signo:-1},
+  ],
+};
+
+function ofiSumBy(cuenta, per){
+  if(!window._bal) return 0;
+  const soc = activeSoc;
+  return window._bal.rows
+    .filter(r => r.cuenta===cuenta && r.periodo===per
+      && (!soc || (r.seg && (
+        (soc==='ZAPATA CAMIONES'   && (r.seg.includes('410') || ['CARGA','PASAJE','TRACTO','VANES','VEHICULOS SEMINUEVOS','REFACCIONES','TALLER','SEMIREMOLQUES','FL360'].some(s=>r.seg.includes(s)))) ||
+        (soc==='NORTRACK DE MEXICO' && r.seg.includes('430')) ||
+        (soc==='FORZA ZAPATA'       && r.seg.includes('605'))
+      ))))
+    .reduce((s,r)=>s+r.importe, 0);
+}
+
+// Better: filter by division code in seg field if available, else use all rows for the soc
+function ofiSumByCta(cuenta, per){
+  if(!window._bal) return 0;
+  return window._bal.rows
+    .filter(r => r.cuenta===cuenta && r.periodo===per)
+    .reduce((s,r)=>s+r.importe, 0);
+}
+
+function buildOFI(){
+  if(!window._bal){
+    ['ofi-kpis','ofi-op-body','ofi-fin-body','ofi-inv-body'].forEach(id=>{
+      const el=document.getElementById(id); if(el) el.innerHTML='';
+    });
+    return;
+  }
+
+  // Populate period selector
+  const sel = document.getElementById('ofi-per');
+  if(sel){
+    const pers = [...new Set(window._bal.rows.map(r=>r.periodo))].sort((a,b)=>a-b);
+    const curVal = +sel.value || Math.max(...pers);
+    sel.innerHTML = pers.map(p=>`<option value="${p}" ${p===curVal?'selected':''}>${p}</option>`).join('');
+  }
+
+  const perAct = +document.getElementById('ofi-per')?.value || window._bal.maxBalPer;
+  const perAnt = perAct - 1;
+  if(perAnt < 1){ 
+    document.getElementById('ofi-kpis').innerHTML=
+      '<div style="color:var(--text-muted);font-size:12px;padding:8px">Selecciona el periodo 2 o mayor para calcular la variación</div>';
+    return;
+  }
+
+  const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  // Helper: variación = saldo actual - saldo anterior, ajustado por signo contable
+  function varCta(cuenta, signo){
+    const act = ofiSumByCta(cuenta, perAct);
+    const ant = ofiSumByCta(cuenta, perAnt);
+    return (act - ant) * signo;
+  }
+
+  // Calculate each section
+  function calcSection(items){
+    return items.map(it=>({
+      ...it,
+      varAnt: ofiSumByCta(it.cuenta, perAnt),
+      varAct: ofiSumByCta(it.cuenta, perAct),
+      flujo:  varCta(it.cuenta, it.signo)
+    })).filter(it => it.varAnt!==0 || it.varAct!==0);
+  }
+
+  const opRows  = calcSection(OFI_MAP.operacion);
+  const finRows = calcSection(OFI_MAP.financiamiento);
+  const invRows = calcSection(OFI_MAP.inversion);
+
+  // Utilidad neta del periodo (aproximada desde P&L acumulado)
+  const cx = window._bdd?.cuentas || [];
+  function sumPL(tipo, pers){ return cx.filter(r=>r.ctaTipo===tipo&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0); }
+  const rev  = -sumPL('4',[perAct]);
+  const cst  =  sumPL('5',[perAct]);
+  const gv   =  cx.filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN'&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0);
+  const gi   =  cx.filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN'&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0);
+  const utilNeta = rev - cst - gv - gi;
+
+  const totOp  = utilNeta + opRows.reduce((s,r)=>s+r.flujo, 0);
+  const totFin = finRows.reduce((s,r)=>s+r.flujo, 0);
+  const totInv = invRows.reduce((s,r)=>s+r.flujo, 0);
+  const totNet = totOp + totFin + totInv;
+
+  const MCOLORS = {op:'#60a5fa', fin:'#f59e0b', inv:'#10b981'};
+
+  // ── KPIs ──
+  function kpiColor(v){ return v>0?'#10b981':v<0?'#ef4444':'#94a3b8'; }
+  document.getElementById('ofi-kpis').innerHTML = `
+    <div class="kcard ct"><div class="klabel">Flujo Operación</div>
+      <div class="kval" style="color:${kpiColor(totOp)}">${fmtM(totOp)}</div></div>
+    <div class="kcard ct"><div class="klabel">Flujo Financiamiento</div>
+      <div class="kval" style="color:${kpiColor(totFin)}">${fmtM(totFin)}</div></div>
+    <div class="kcard ct"><div class="klabel">Flujo Inversión</div>
+      <div class="kval" style="color:${kpiColor(totInv)}">${fmtM(totInv)}</div></div>
+    <div class="kcard ct" style="border-color:rgba(255,255,255,.2)"><div class="klabel">Variación Neta Efectivo</div>
+      <div class="kval" style="color:${kpiColor(totNet)};font-size:22px">${fmtM(totNet)}</div></div>
+    <div class="kcard ct"><div class="klabel">Periodo</div>
+      <div class="kval" style="font-size:14px">${MESES[perAnt-1]||perAnt} → ${MESES[perAct-1]||perAct}</div></div>`;
+
+  // ── Chart: waterfall ──
+  dch('ofi-chart');
+  const chartLabels = ['Op.','Fin.','Inv.','Neto'];
+  const chartVals   = [totOp, totFin, totInv, totNet];
+  const chartColors = chartVals.map(v=>v>=0?'rgba(16,185,129,.8)':'rgba(239,68,68,.8)');
+  chartColors[3] = totNet>=0?'rgba(34,211,238,.9)':'rgba(239,68,68,.9)';
+  const ctx = document.getElementById('ofi-chart');
+  if(ctx){
+    new Chart(ctx,{type:'bar',data:{
+      labels:chartLabels,
+      datasets:[{data:chartVals,backgroundColor:chartColors,borderRadius:6,borderSkipped:false}]
+    },options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtM(c.raw)}}},
+      scales:{
+        x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#94a3b8',font:{size:11,weight:'600'}}},
+        y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#64748b',font:{size:10},callback:v=>fmtM(v)}}
+      }
+    }});
+  }
+
+  // ── Section renderer ──
+  function renderSection(rows, utilNeta, bodyId, totalId, color, showUtil){
+    const totalEl = document.getElementById(totalId);
+    const bodyEl  = document.getElementById(bodyId);
+    if(!totalEl||!bodyEl) return;
+    const tot = showUtil ? utilNeta + rows.reduce((s,r)=>s+r.flujo,0) : rows.reduce((s,r)=>s+r.flujo,0);
+    totalEl.innerHTML = `<span style="color:${tot>=0?'#10b981':'#ef4444'}">${fmtM(tot)}</span>`;
+
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+    html += `<thead><tr style="background:rgba(0,0,0,.2)">
+      <th style="text-align:left;padding:6px 10px;color:var(--text-muted);font-size:10px">Concepto</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--text-muted);font-size:10px">${MESES[perAnt-1]||perAnt}</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--text-muted);font-size:10px">${MESES[perAct-1]||perAct}</th>
+      <th style="text-align:right;padding:6px 10px;color:var(--text-muted);font-size:10px">Variación</th>
+    </tr></thead><tbody>`;
+
+    if(showUtil){
+      const uc = utilNeta>=0?'#10b981':'#ef4444';
+      html+=`<tr style="background:rgba(255,255,255,.04);font-weight:700">
+        <td style="padding:6px 10px;color:#fff">Utilidad Neta del Mes</td>
+        <td style="text-align:right;padding:6px 10px;color:#94a3b8">—</td>
+        <td style="text-align:right;padding:6px 10px;color:#94a3b8">—</td>
+        <td style="text-align:right;padding:6px 10px;color:${uc};font-family:monospace">${fmtM(utilNeta)}</td>
+      </tr>`;
+    }
+
+    rows.forEach((r,i)=>{
+      if(r.flujo===0 && r.varAnt===0 && r.varAct===0) return;
+      const fc = r.flujo>0?'#10b981':r.flujo<0?'#ef4444':'#64748b';
+      const bg = i%2===0?'':'background:rgba(255,255,255,.02)';
+      const hint = r.flujo>0
+        ? (r.signo===1?'↑ Aumentó pasivo/fuente':'↑ Cobro/reducción activo')
+        : (r.signo===1?'↓ Redujo pasivo/uso':'↓ Mayor activo/uso');
+      html+=`<tr style="${bg}" title="${hint}">
+        <td style="padding:5px 10px;color:var(--text)">${r.label}</td>
+        <td style="text-align:right;padding:5px 10px;color:#64748b;font-family:monospace">${fmtM(r.varAnt)}</td>
+        <td style="text-align:right;padding:5px 10px;color:#94a3b8;font-family:monospace">${fmtM(r.varAct)}</td>
+        <td style="text-align:right;padding:5px 10px;font-family:monospace;font-weight:600;color:${fc}">${r.flujo>=0?'+':''}${fmtM(r.flujo)}</td>
+      </tr>`;
+    });
+
+    // Subtotal row
+    const sc = tot>=0?'#10b981':'#ef4444';
+    html+=`<tr style="font-weight:800;border-top:2px solid rgba(255,255,255,.1);background:rgba(0,0,0,.2)">
+      <td style="padding:6px 10px;color:${color}">TOTAL</td>
+      <td colspan="2"></td>
+      <td style="text-align:right;padding:6px 10px;font-family:monospace;color:${sc}">${tot>=0?'+':''}${fmtM(tot)}</td>
+    </tr>`;
+    html += '</tbody></table>';
+    bodyEl.innerHTML = html;
+  }
+
+  renderSection(opRows,  utilNeta, 'ofi-op-body',  'ofi-op-total',  '#60a5fa', true);
+  renderSection(finRows, 0,        'ofi-fin-body', 'ofi-fin-total', '#f59e0b', false);
+  renderSection(invRows, 0,        'ofi-inv-body', 'ofi-inv-total', '#10b981', false);
+}
+
+function toggleOFIChart(hdr){
+  const wrap = document.getElementById('ofi-chart-wrap');
+  const arrow = hdr.querySelector('span');
+  if(!wrap) return;
+  const open = wrap.style.display !== 'none';
+  wrap.style.display = open ? 'none' : '';
+  if(arrow) arrow.textContent = open ? '▼' : '▲';
+}
+
+function exportOFIExcel(){
+  if(!window._bal){ alert('Carga el Balance primero.'); return; }
+  const perAct = +document.getElementById('ofi-per')?.value || window._bal.maxBalPer;
+  const perAnt = perAct - 1;
+  const MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const mAnt = MESES[perAnt-1]||perAnt, mAct = MESES[perAct-1]||perAct;
+
+  function varCta(cuenta, signo){
+    const act = window._bal.rows.filter(r=>r.cuenta===cuenta&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0);
+    const ant = window._bal.rows.filter(r=>r.cuenta===cuenta&&r.periodo===perAnt).reduce((s,r)=>s+r.importe,0);
+    return (act - ant) * signo;
+  }
+
+  const cx = window._bdd?.cuentas||[];
+  const rev  = -cx.filter(r=>r.ctaTipo==='4'&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0);
+  const cst  =  cx.filter(r=>r.ctaTipo==='5'&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0);
+  const gv   =  cx.filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN'&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0);
+  const gi   =  cx.filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN'&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0);
+  const utilNeta = rev - cst - gv - gi;
+
+  const data = [
+    ['FLUJO DE EFECTIVO — MÉTODO OFI'],
+    [`Periodo: ${mAnt} → ${mAct}`],
+    [''],
+    ['ACTIVIDADES DE OPERACIÓN','','',mAnt,mAct,'Variación'],
+    ['Utilidad Neta del Mes','','','','',utilNeta],
+    ...OFI_MAP.operacion.map(it=>[
+      it.label,'','',
+      window._bal.rows.filter(r=>r.cuenta===it.cuenta&&r.periodo===perAnt).reduce((s,r)=>s+r.importe,0),
+      window._bal.rows.filter(r=>r.cuenta===it.cuenta&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0),
+      varCta(it.cuenta, it.signo)
+    ]),
+    ['TOTAL OPERACIÓN','','','','', utilNeta+OFI_MAP.operacion.reduce((s,it)=>s+varCta(it.cuenta,it.signo),0)],
+    [''],
+    ['ACTIVIDADES DE FINANCIAMIENTO','','',mAnt,mAct,'Variación'],
+    ...OFI_MAP.financiamiento.map(it=>[
+      it.label,'','',
+      window._bal.rows.filter(r=>r.cuenta===it.cuenta&&r.periodo===perAnt).reduce((s,r)=>s+r.importe,0),
+      window._bal.rows.filter(r=>r.cuenta===it.cuenta&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0),
+      varCta(it.cuenta, it.signo)
+    ]),
+    ['TOTAL FINANCIAMIENTO','','','','', OFI_MAP.financiamiento.reduce((s,it)=>s+varCta(it.cuenta,it.signo),0)],
+    [''],
+    ['ACTIVIDADES DE INVERSIÓN','','',mAnt,mAct,'Variación'],
+    ...OFI_MAP.inversion.map(it=>[
+      it.label,'','',
+      window._bal.rows.filter(r=>r.cuenta===it.cuenta&&r.periodo===perAnt).reduce((s,r)=>s+r.importe,0),
+      window._bal.rows.filter(r=>r.cuenta===it.cuenta&&r.periodo===perAct).reduce((s,r)=>s+r.importe,0),
+      varCta(it.cuenta, it.signo)
+    ]),
+    ['TOTAL INVERSIÓN','','','','', OFI_MAP.inversion.reduce((s,it)=>s+varCta(it.cuenta,it.signo),0)],
+    [''],
+    ['VARIACIÓN NETA DE EFECTIVO','','','','',
+      utilNeta +
+      [...OFI_MAP.operacion,...OFI_MAP.financiamiento,...OFI_MAP.inversion].reduce((s,it)=>s+varCta(it.cuenta,it.signo),0)
+    ],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [36,4,4,16,16,16].map(w=>({wch:w}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Flujo OFI');
+  XLSX.writeFile(wb, `Flujo_OFI_${mAnt}-${mAct}.xlsx`);
+}
+
 // PAGE INIT
 // ═══════════════════════════════════════════
 (async function initApp(){
@@ -5113,3 +5472,4 @@ function ecGoCartera(){
 </script>
 </body>
 </html>
+
