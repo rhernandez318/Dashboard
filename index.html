@@ -1270,6 +1270,8 @@ function setSoc(soc,btn){
   refreshAll();
   if(window._bdd)buildStatic();
   if(FC.ventas||_fcCache)runForecast();
+  // Re-render OFI if razones tab is active
+  if(document.getElementById('tab-razones')?.classList.contains('active')) buildOFI();
 }
 
 function setCartDiv(val){
@@ -5354,23 +5356,29 @@ function buildOFI(){
 
   // ── Chart: waterfall ──
   dch('ofi-chart');
-  const chartLabels = ['Op.','Fin.','Inv.','Neto'];
+  // Replace canvas to avoid Chart.js stale state
+  const ofiWrap = document.getElementById('ofi-chart-wrap');
+  if(ofiWrap){
+    ofiWrap.innerHTML = '<canvas id="ofi-chart"></canvas>';
+  }
+  const chartLabels = ['Operación','Financiamiento','Inversión','Neto'];
   const chartVals   = [totOp, totFin, totInv, totNet];
   const chartColors = chartVals.map(v=>v>=0?'rgba(16,185,129,.8)':'rgba(239,68,68,.8)');
   chartColors[3] = totNet>=0?'rgba(34,211,238,.9)':'rgba(239,68,68,.9)';
   const ctx = document.getElementById('ofi-chart');
   if(ctx){
-    new Chart(ctx,{type:'bar',data:{
+    const ch = new Chart(ctx,{type:'bar',data:{
       labels:chartLabels,
       datasets:[{data:chartVals,backgroundColor:chartColors,borderRadius:6,borderSkipped:false}]
     },options:{
       responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtM(c.raw)}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${fmtM(c.raw)}`}}},
       scales:{
         x:{grid:{color:'rgba(255,255,255,.03)'},ticks:{color:'#94a3b8',font:{size:11,weight:'600'}}},
         y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#64748b',font:{size:10},callback:v=>fmtM(v)}}
       }
     }});
+    CH['ofi-chart'] = ch;
   }
 
   // ── Section renderer ──
