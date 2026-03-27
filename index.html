@@ -3189,6 +3189,7 @@ function showTab(tab,btn){
   btn.classList.add('active');
   if(tab==='usuarios') renderUsersTable();
   if(tab==='avance') buildAvance();
+  if(tab==='razones') buildOFI();
   const cdw = document.getElementById('cart-div-wrap');
   if(tab==='cartera'){ populateCartDivSelect(); if(cdw) cdw.style.display='flex'; }
   else { if(cdw) cdw.style.display='none'; activeCartDiv=null; }
@@ -5158,48 +5159,88 @@ function ecGoCartera(){
 
 // Clasificación de cuentas OFI
 const OFI_MAP = {
+  // signo: -1 = activo (aumento usa efectivo), +1 = pasivo (aumento genera efectivo)
   operacion: [
-    // Capital de trabajo — Clientes
-    {cuenta:'Clientes Nacionales',      label:'Clientes Nacionales',      signo:-1},
-    {cuenta:'Ant de Clientes Nac',      label:'Anticipos de Clientes',    signo:-1},
-    {cuenta:'Anticipo Deudors Div',     label:'Anticipos Deudores Div.',  signo:-1},
-    {cuenta:'CXC Entre Divisiones',     label:'CXC Entre Divisiones',     signo:-1},
-    {cuenta:'CXC  Empresas Grupo',      label:'CXC Empresas Grupo',       signo:-1},
-    // Inventarios
-    {cuenta:'Inventarios Nuevos',       label:'Inventario Nuevos',        signo:-1},
-    {cuenta:'Inventario Semi-Nvos',     label:'Inventario Semi-Nuevos',   signo:-1},
-    {cuenta:'Inv. Refacciones',         label:'Inventario Refacciones',   signo:-1},
-    {cuenta:'Mercancias Transito',      label:'Mercancías en Tránsito',   signo:-1},
-    // Proveedores y acreedores
-    {cuenta:'Proveedores Nacional',     label:'Proveedores Nacional',     signo:1},
-    {cuenta:'Prov Operat y Adtiva',     label:'Proveedores Operativos',   signo:1},
-    {cuenta:'Prov Nacional(ICIAS)',     label:'Proveedores ICIAS',        signo:1},
-    {cuenta:'CXP entre Divisiones',     label:'CXP Entre Divisiones',     signo:1},
-    {cuenta:'Acreedores Diversos',      label:'Acreedores Diversos',      signo:1},
-    {cuenta:'Acreedores de Ret',        label:'Acreedores Retenciones',   signo:1},
-    // Impuestos y nómina
-    {cuenta:'IVA Acreditado 16%',       label:'IVA Acreditado 16%',       signo:-1},
-    {cuenta:'IVA Trasladado  16%',      label:'IVA Trasladado 16%',       signo:1},
-    {cuenta:'ISR por Pagar',            label:'ISR por Pagar',            signo:1},
-    {cuenta:'Prov Contable ISR',        label:'Provisión ISR',            signo:1},
-    {cuenta:'Aportes IMSS X pagar',     label:'IMSS por Pagar',           signo:1},
-    {cuenta:'Aportes INFONA X pag',     label:'INFONAVIT por Pagar',      signo:1},
-    {cuenta:'Aportes SAR X pagar',      label:'SAR por Pagar',            signo:1},
-    {cuenta:'Aportes Fonacot',          label:'Fonacot por Pagar',        signo:1},
+    // ── Clientes y cuentas por cobrar ──
+    {cuenta:'Clientes Nacionales',      label:'Clientes Nacionales',          signo:-1, grupo:'Clientes'},
+    {cuenta:'Ant de Clientes Nac',      label:'Anticipos de Clientes',        signo: 1, grupo:'Clientes'},
+    {cuenta:'Anticipo Deudors Div.',    label:'Anticipos Deudores Div.',      signo:-1, grupo:'Clientes'},
+    {cuenta:'CXC Entre Divisiones',     label:'CXC Entre Divisiones',         signo:-1, grupo:'Clientes'},
+    {cuenta:'CXC  Empresas Grupo',      label:'CXC Empresas Grupo',           signo:-1, grupo:'Clientes'},
+    {cuenta:'Dif Camb Clientes',        label:'Dif. Cambiaria Clientes',      signo:-1, grupo:'Clientes'},
+    // ── Inventarios ──
+    {cuenta:'Inventarios Nuevos',       label:'Inventario Vehículos Nuevos',  signo:-1, grupo:'Inventarios'},
+    {cuenta:'Inventario Semi-Nvos',     label:'Inventario Semi-Nuevos',       signo:-1, grupo:'Inventarios'},
+    {cuenta:'Inv. Refacciones',         label:'Inventario Refacciones',       signo:-1, grupo:'Inventarios'},
+    {cuenta:'Mercancias Transito',      label:'Mercancías en Tránsito',       signo:-1, grupo:'Inventarios'},
+    // ── Otros activos circulantes ──
+    {cuenta:'Otros Gastos Prepaga',     label:'Gastos Prepagados',            signo:-1, grupo:'Otros Activos'},
+    {cuenta:'Hold Back/Fdo Estre',      label:'Hold Back / Fondo Estrella',   signo:-1, grupo:'Otros Activos'},
+    // ── Compras pendientes de aplicar ──
+    {cuenta:'Comp (EM-RF) Refacc',      label:'Compras Pend. Refacciones',    signo: 1, grupo:'Compras Pend.'},
+    {cuenta:'Comp (EM-RF) TOT',         label:'Compras Pend. Total',          signo: 1, grupo:'Compras Pend.'},
+    {cuenta:'Comp (EM-RF) Serv.',       label:'Compras Pend. Servicios',      signo: 1, grupo:'Compras Pend.'},
+    // ── Proveedores y acreedores ──
+    {cuenta:'Proveedores Nacional',     label:'Proveedores Nacional',         signo: 1, grupo:'Proveedores'},
+    {cuenta:'Prov Operat y Adtiva',     label:'Proveedores Operativos',       signo: 1, grupo:'Proveedores'},
+    {cuenta:'Prov Nacional(ICIAS)',     label:'Proveedores ICIAS',            signo: 1, grupo:'Proveedores'},
+    {cuenta:'Diferencia Cam Prove',     label:'Dif. Cambiaria Proveedores',   signo: 1, grupo:'Proveedores'},
+    {cuenta:'Dif Cam Pro ICIA',         label:'Dif. Cambiaria ICIA',          signo: 1, grupo:'Proveedores'},
+    {cuenta:'Dif Cam Doc x P',          label:'Dif. Cambiaria Docs x Pagar', signo: 1, grupo:'Proveedores'},
+    {cuenta:'Acreedores Diversos',      label:'Acreedores Diversos',          signo: 1, grupo:'Proveedores'},
+    {cuenta:'Acreedores de Ret',        label:'Acreedores Retenciones',       signo: 1, grupo:'Proveedores'},
+    {cuenta:'CXP Nomina',               label:'CXP Nómina',                   signo: 1, grupo:'Proveedores'},
+    {cuenta:'CXP entre Divisiones',     label:'CXP Entre Divisiones',         signo: 1, grupo:'Proveedores'},
+    {cuenta:'Diferencia Cobranza',      label:'Diferencia Cobranza',          signo: 1, grupo:'Proveedores'},
+    // ── IVA ──
+    {cuenta:'IVA Acreditado 16%',       label:'IVA Acreditado 16%',           signo:-1, grupo:'IVA'},
+    {cuenta:'IVA Acred Dif 16%',        label:'IVA Acreditado Diferido',      signo:-1, grupo:'IVA'},
+    {cuenta:'IVA Acreditado Dif8%',     label:'IVA Acreditado Dif. 8%',       signo:-1, grupo:'IVA'},
+    {cuenta:'IVA X cob (Fiscal)',        label:'IVA x Cobrar (Fiscal)',        signo:-1, grupo:'IVA'},
+    {cuenta:'IVA Trasladado  16%',      label:'IVA Trasladado 16%',           signo: 1, grupo:'IVA'},
+    {cuenta:'IVA Trasl Dif 16%',        label:'IVA Trasladado Diferido',      signo: 1, grupo:'IVA'},
+    {cuenta:'Iva X pagar (Fiscal)',     label:'IVA x Pagar (Fiscal)',         signo: 1, grupo:'IVA'},
+    {cuenta:'Retención IVA Prov',       label:'Ret. IVA Proveedores',         signo: 1, grupo:'IVA'},
+    // ── ISR y nómina ──
+    {cuenta:'ISR por Pagar',            label:'ISR por Pagar',                signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Prov Contable ISR',        label:'Provisión ISR',                signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'ISR Bancos',               label:'ISR Bancos',                   signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'ISR Ret por Salarios',     label:'ISR Ret. Salarios',            signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Retención ISR Prov',       label:'Ret. ISR Proveedores',         signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Retención RESICO',         label:'Ret. RESICO',                  signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Subsidio al Empleo',       label:'Subsidio al Empleo',           signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'ISN Retenido Estatal',     label:'ISN Retenido',                 signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Compens.impuesto rep',     label:'Compensación Impuestos',       signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Aportes IMSS X pagar',     label:'IMSS por Pagar',               signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Aportes INFONA X pag',     label:'INFONAVIT por Pagar',          signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Aportes SAR X pagar',      label:'SAR por Pagar',                signo: 1, grupo:'ISR / Nómina'},
+    {cuenta:'Aportes Fonacot',          label:'Fonacot por Pagar',            signo: 1, grupo:'ISR / Nómina'},
+    // ── Provisiones laborales ──
+    {cuenta:'Indemnización Legal',      label:'Indemnización Legal',          signo: 1, grupo:'Provisiones'},
+    {cuenta:'Prima de Antigüedad',      label:'Prima de Antigüedad',          signo: 1, grupo:'Provisiones'},
+    {cuenta:'Plan de Pensiones',        label:'Plan de Pensiones',            signo: 1, grupo:'Provisiones'},
+    // ── Intercompany ──
+    {cuenta:'Recursos Enviados',        label:'Recursos Enviados',            signo:-1, grupo:'Intercompany'},
+    {cuenta:'Recursos Recibidos',       label:'Recursos Recibidos',           signo: 1, grupo:'Intercompany'},
   ],
   financiamiento: [
-    {cuenta:'Obligacion Fin BBVA',      label:'Crédito BBVA',             signo:1},
-    {cuenta:'Obligacion Fin Banor',     label:'Crédito Banorte',          signo:1},
-    {cuenta:'Obligacion Fin Sant',      label:'Crédito Santander',        signo:1},
-    {cuenta:'Oblig Fin Planta',         label:'Obligación Fin. Planta',   signo:1},
-    {cuenta:'DXP Tercer CP Bancos',     label:'Deuda C.P. Bancos',        signo:1},
-    {cuenta:'Pasivo Arrend L.P.',       label:'Arrendamiento L.P.',       signo:1},
+    {cuenta:'Obligacion Fin BBVA',      label:'Crédito BBVA',                 signo: 1, grupo:'Créditos'},
+    {cuenta:'Obligacion Fin Banor',     label:'Crédito Banorte',              signo: 1, grupo:'Créditos'},
+    {cuenta:'Obligacion Fin Sant',      label:'Crédito Santander',            signo: 1, grupo:'Créditos'},
+    {cuenta:'Oblig Fin Planta',         label:'Obligación Fin. Planta',       signo: 1, grupo:'Créditos'},
+    {cuenta:'DXP Tercer CP Bancos',     label:'Deuda C.P. Bancos',            signo: 1, grupo:'Créditos'},
+    {cuenta:'Pasivo Arrend L.P.',       label:'Arrendamiento L.P.',           signo: 1, grupo:'Arrendamiento'},
   ],
   inversion: [
-    {cuenta:'Recursos Enviados',        label:'Recursos Enviados/Recib.', signo:-1},
-    {cuenta:'Comp (EM-RF) Refacc',      label:'Compras Pendientes Ref.',  signo:-1},
-    {cuenta:'Comp (EM-RF) TOT',         label:'Compras Pendientes TOT',   signo:-1},
-    {cuenta:'Otros Gastos Prepaga',     label:'Gastos Prepagados',        signo:-1},
+    {cuenta:'Herramentales',            label:'Herramentales',                signo:-1, grupo:'Activo Fijo'},
+    {cuenta:'Mejoras al Local Arr',     label:'Mejoras a Local Arrendado',    signo:-1, grupo:'Activo Fijo'},
+    {cuenta:'Dep. Acum. Maq y Eq',      label:'Dep. Maq. y Equipo',          signo:-1, grupo:'Depreciación'},
+    {cuenta:'Dep. Acum. Mob Eq Of',     label:'Dep. Mob. y Eq. Oficina',     signo:-1, grupo:'Depreciación'},
+    {cuenta:'Dep. Acum. Eq Comp',       label:'Dep. Equipo Cómputo',         signo:-1, grupo:'Depreciación'},
+    {cuenta:'Dep. Acum. Eq Trans',      label:'Dep. Equipo Transporte',      signo:-1, grupo:'Depreciación'},
+    {cuenta:'Dep. Acum. Herramien',     label:'Dep. Herramientas',           signo:-1, grupo:'Depreciación'},
+    {cuenta:'Dep. Acum.Mejora Loc',     label:'Dep. Mejoras Local',          signo:-1, grupo:'Depreciación'},
+    {cuenta:'Rev Dep Mej Local',        label:'Rev. Dep. Mejoras Local',     signo:-1, grupo:'Depreciación'},
   ],
 };
 
@@ -5219,8 +5260,18 @@ function ofiSumBy(cuenta, per){
 // Better: filter by division code in seg field if available, else use all rows for the soc
 function ofiSumByCta(cuenta, per){
   if(!window._bal) return 0;
+  // Balance rows don't have seg for BS accounts — filter by division prefix via seg field if available
   return window._bal.rows
-    .filter(r => r.cuenta===cuenta && r.periodo===per)
+    .filter(r => {
+      if(r.cuenta!==cuenta || r.periodo!==per) return false;
+      if(!activeSoc) return true;
+      // Try to filter by division prefix stored in seg field
+      const s = r.seg||'';
+      if(activeSoc==='ZAPATA CAMIONES')    return s.startsWith('41')||s.startsWith('4105')||s.startsWith('4106')||s.startsWith('4111')||['CARGA','PASAJE','TRACTO','VANES','VEHICULOS SEMINUEVOS','REFACCIONES','TALLER','SEMIREMOLQUES','FL360','COLLISION','#'].some(x=>s.includes(x));
+      if(activeSoc==='NORTRACK DE MEXICO') return s.startsWith('43')||s.startsWith('4305')||s.startsWith('4306');
+      if(activeSoc==='FORZA ZAPATA')       return s.startsWith('60')||s.startsWith('6056');
+      return true;
+    })
     .reduce((s,r)=>s+r.importe, 0);
 }
 
@@ -5348,18 +5399,26 @@ function buildOFI(){
       </tr>`;
     }
 
+    let lastGrupo='';
     rows.forEach((r,i)=>{
       if(r.flujo===0 && r.varAnt===0 && r.varAct===0) return;
+      // Group header
+      if(r.grupo && r.grupo!==lastGrupo){
+        lastGrupo=r.grupo;
+        html+=`<tr style="background:rgba(255,255,255,.035)">
+          <td colspan="4" style="padding:4px 10px;font-size:10px;font-weight:700;color:#64748b;letter-spacing:.5px;text-transform:uppercase">${r.grupo}</td>
+        </tr>`;
+      }
       const fc = r.flujo>0?'#10b981':r.flujo<0?'#ef4444':'#64748b';
       const bg = i%2===0?'':'background:rgba(255,255,255,.02)';
       const hint = r.flujo>0
         ? (r.signo===1?'↑ Aumentó pasivo/fuente':'↑ Cobro/reducción activo')
         : (r.signo===1?'↓ Redujo pasivo/uso':'↓ Mayor activo/uso');
       html+=`<tr style="${bg}" title="${hint}">
-        <td style="padding:5px 10px;color:var(--text)">${r.label}</td>
-        <td style="text-align:right;padding:5px 10px;color:#64748b;font-family:monospace">${fmtM(r.varAnt)}</td>
-        <td style="text-align:right;padding:5px 10px;color:#94a3b8;font-family:monospace">${fmtM(r.varAct)}</td>
-        <td style="text-align:right;padding:5px 10px;font-family:monospace;font-weight:600;color:${fc}">${r.flujo>=0?'+':''}${fmtM(r.flujo)}</td>
+        <td style="padding:4px 10px 4px 18px;color:var(--text)">${r.label}</td>
+        <td style="text-align:right;padding:4px 10px;color:#64748b;font-family:monospace">${fmtM(r.varAnt)}</td>
+        <td style="text-align:right;padding:4px 10px;color:#94a3b8;font-family:monospace">${fmtM(r.varAct)}</td>
+        <td style="text-align:right;padding:4px 10px;font-family:monospace;font-weight:600;color:${fc}">${r.flujo>=0?'+':''}${fmtM(r.flujo)}</td>
       </tr>`;
     });
 
@@ -5472,4 +5531,3 @@ function exportOFIExcel(){
 </script>
 </body>
 </html>
-
