@@ -1934,6 +1934,7 @@ function procesarDatos(){
       window._ant=parseAnt(F.antiguedad);
       window._bdd=parseBDD(F.bdd);
       window._bal=F.balance?parseBalance(F.balance):null;
+      console.log('[procesarDatos] _bal:', window._bal?'✓ loaded, rows:'+window._bal.rows.length:'null');
       // Solo sobreescribir si se subió el archivo; si no, conservar lo que haya en memoria
       if(F.bdd25) window._bdd25 = parseBDD(F.bdd25);
       if(F.ppto)  window._ppto  = parsePpto(F.ppto);
@@ -2110,15 +2111,16 @@ function renderRazones(){
   // DPO - Days Payable Outstanding (from balance or estimate)
   let dpo=0, provTotal=0;
   if(window._bal){
-    const{sumBy}=window._bal;
-    // AP balance at end of Feb = P1+P2 cumulative (SAP: negative = credit = owed to supplier)
-    const provNac  = sumBy('Proveedores Nacional',[1,2]);   // refacciones / parts suppliers
-    const provOper = sumBy('Prov Operat y Adtiva',[1,2]);  // operational / service suppliers
+    const{sumBy,maxBalPer:mBP}=window._bal;
+    // AP balance at latest available period (saldo final = balance, not movement)
+    const lastPer = mBP||Math.max(...window._bal.rows.map(r=>r.periodo));
+    const provNac  = sumBy('Proveedores Nacional',[lastPer]);
+    const provOper = sumBy('Prov Operat y Adtiva',[lastPer]);
     provTotal = Math.abs(provNac) + Math.abs(provOper);
-    // Denominator: ONLY non-vehicle cost (refacciones + MO)
-    // Vehicles financed via Plan Piso — not traditional AP
+    // Denominator: ONLY non-vehicle cost (refacciones + MO) accumulated to lastPer
     const COST_REF_MO=['Costo de Refacciones','Consumo Refacciones','Costo Mano de Obra','Costo TOT'];
-    const costRefMO=cx.filter(r=>COST_REF_MO.includes(r.cuenta)&&[1,2].includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+    const allPers=Array.from({length:lastPer},(_,i)=>i+1);
+    const costRefMO=cx.filter(r=>COST_REF_MO.includes(r.cuenta)&&allPers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
     dpo=costRefMO>0?(provTotal/costRefMO)*D:0;
   }
   // CCE
@@ -5315,10 +5317,12 @@ function ofiSumByCta(cuenta, per){
 function buildOFI(){
   if(!window._bal){
     ['ofi-kpis','ofi-op-body','ofi-fin-body','ofi-inv-body'].forEach(id=>{
-      const el=document.getElementById(id); if(el) el.innerHTML='';
+      const el=document.getElementById(id);
+      if(el) el.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:12px">Carga el archivo de Balance para calcular el flujo</div>';
     });
     return;
   }
+  console.log('[buildOFI] _bal rows:', window._bal.rows.length, 'maxBalPer:', window._bal.maxBalPer);
 
   // Populate period selector
   const sel = document.getElementById('ofi-per');
@@ -5476,6 +5480,8 @@ function buildOFI(){
     bodyEl.innerHTML = html;
   }
 
+  console.log('[buildOFI] opRows:', opRows.length, 'finRows:', finRows.length, 'invRows:', invRows.length);
+  console.log('[buildOFI] totOp:', totOp.toFixed(0), 'totFin:', totFin.toFixed(0), 'totInv:', totInv.toFixed(0));
   renderSection(opRows,  utilNeta, 'ofi-op-body',  'ofi-op-total',  '#60a5fa', true);
   renderSection(finRows, 0,        'ofi-fin-body', 'ofi-fin-total', '#f59e0b', false);
   renderSection(invRows, 0,        'ofi-inv-body', 'ofi-inv-total', '#10b981', false);
