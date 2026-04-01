@@ -2194,11 +2194,15 @@ function renderRazones(){
     const{sumBy,maxBalPer:mBP}=window._bal;
     // AP balance at latest available period (saldo final = balance, not movement)
     const lastPer = mBP||Math.max(...window._bal.rows.map(r=>r.periodo));
-    const provNac  = sumBy('Proveedores Nacional',[lastPer]);
-    const provOper = sumBy('Prov Operat y Adtiva',[lastPer]);
-    provTotal = Math.abs(provNac) + Math.abs(provOper);
-    // Denominator: ALL costo (tipo 5) — incluye vehículos nuevos, semi, refacciones y MO
-    // Consistent with AP which includes vehicle suppliers (Proveedores Nacional covers veh+ref)
+    const provNac   = sumBy('Proveedores Nacional',[lastPer]);
+    const provOper  = sumBy('Prov Operat y Adtiva',[lastPer]);
+    // Plan piso = financiamiento de inventario de unidades (BBVA, Banorte, Planta)
+    const ppBBVA    = sumBy('Obligacion Fin BBVA', [lastPer]);
+    const ppBanor   = sumBy('Obligacion Fin Banor',[lastPer]);
+    const ppPlanta  = sumBy('Oblig Fin Planta',    [lastPer]);
+    provTotal = Math.abs(provNac) + Math.abs(provOper)
+              + Math.abs(ppBBVA) + Math.abs(ppBanor) + Math.abs(ppPlanta);
+    // Denominator: ALL costo tipo 5 — refacciones, MO y vehículos nuevos/semi
     const allPers=Array.from({length:lastPer},(_,i)=>i+1);
     const costTotal5=cx.filter(r=>r.ctaTipo==='5'&&allPers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
     dpo=costTotal5>0?(provTotal/costTotal5)*D:0;
@@ -2240,7 +2244,7 @@ function renderRazones(){
       <div style="font-size:11px;color:var(--text-muted);line-height:1.7;">
         <div>💡 <strong style="color:var(--text-dim)">CCE</strong> = días que el capital queda inmovilizado</div>
         <div>🎯 Meta: <strong style="color:var(--accent)">minimizar</strong> mediante cobro rápido y rotación de inv.</div>
-        <div>📌 DPO = Prov. Nacional + Prov. Operat. al cierre período ÷ costo total (tipo 5)${window._bal?'':' · carga Balance para precisión'}</div>
+        <div>📌 DPO = Prov. Nacional + Prov. Operat. + Plan Piso (BBVA/Banorte/Planta) ÷ costo total (tipo 5)${window._bal?'':' · carga Balance para precisión'}</div>
       </div>
     </div>`;
 
