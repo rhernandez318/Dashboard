@@ -1274,7 +1274,55 @@ function parseBalance(data){
   const balSum=(accs,pers)=>rows.filter(r=>accs.includes(r.cuenta)&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
   // maxPer: highest period with revenue data in Balance
   const maxBalPer=Math.max(0,...rows.filter(r=>r.ctaTipo==='4').map(r=>r.periodo));
-  return{rows,sumBy,sumOpex,sumOtros,sumRevSeg,balSum,maxBalPer,OTROS_ING,OTROS_GTO,ISR_ACC};
+  // isNewFormat: true = saldos finales (use diff for P&L), false = movimientos (use raw)
+  const isNewFormat = !!(hasPeriodoEjercicio || hasSaldo);
+  // For P&L accounts in saldo format: monthly = current_period - prior_period
+  function balFlow(tipo, p){
+    if(!isNewFormat) return rows.filter(r=>r.ctaTipo===tipo&&r.periodo===p).reduce((s,r)=>s+r.importe,0);
+    const cur = rows.filter(r=>r.ctaTipo===tipo&&r.periodo===p).reduce((s,r)=>s+r.importe,0);
+    const prv = p>1 ? rows.filter(r=>r.ctaTipo===tipo&&r.periodo===p-1).reduce((s,r)=>s+r.importe,0) : 0;
+    return cur - prv;
+  }
+  function balFlowSeg(tipo, seg, p){
+    if(!isNewFormat) return rows.filter(r=>r.ctaTipo===tipo&&r.seg===seg&&r.periodo===p).reduce((s,r)=>s+r.importe,0);
+    const cur = rows.filter(r=>r.ctaTipo===tipo&&r.seg===seg&&r.periodo===p).reduce((s,r)=>s+r.importe,0);
+    const prv = p>1 ? rows.filter(r=>r.ctaTipo===tipo&&r.seg===seg&&r.periodo===p-1).reduce((s,r)=>s+r.importe,0) : 0;
+    return cur - prv;
+  }
+  // sumOpex for P&L opex: use flow for new format
+  const sumOpexNew=(seg,pers)=>{
+    if(!isNewFormat) return opexRows.filter(r=>r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+    return pers.reduce((s,p)=>{
+      const cur=opexRows.filter(r=>r.seg===seg&&r.periodo===p).reduce((a,r)=>a+r.importe,0);
+      const prv=p>1?opexRows.filter(r=>r.seg===seg&&r.periodo===p-1).reduce((a,r)=>a+r.importe,0):0;
+      return s+(cur-prv);
+    },0);
+  };
+  const sumRevSegNew=(seg,pers)=>{
+    if(!isNewFormat) return -rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+    return -pers.reduce((s,p)=>{
+      const cur=rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&r.periodo===p).reduce((a,r)=>a+r.importe,0);
+      const prv=p>1?rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&r.periodo===p-1).reduce((a,r)=>a+r.importe,0):0;
+      return s+(cur-prv);
+    },0);
+  };
+  const balSumNew=(accs,pers)=>{
+    if(!isNewFormat) return rows.filter(r=>accs.includes(r.cuenta)&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
+    return pers.reduce((s,p)=>{
+      const cur=rows.filter(r=>accs.includes(r.cuenta)&&r.periodo===p).reduce((a,r)=>a+r.importe,0);
+      const prv=p>1?rows.filter(r=>accs.includes(r.cuenta)&&r.periodo===p-1).reduce((a,r)=>a+r.importe,0):0;
+      return s+(cur-prv);
+    },0);
+  };
+  return{rows,
+    sumBy,
+    sumOpex:sumOpexNew,
+    sumOtros:(accs,pers)=>balSumNew(accs,pers),
+    sumRevSeg:sumRevSegNew,
+    balSum:balSumNew,
+    balFlow, balFlowSeg,
+    isNewFormat,
+    maxBalPer,OTROS_ING,OTROS_GTO,ISR_ACC};
 }
 
 // ═══════════════════════════════════════════
@@ -1471,7 +1519,7 @@ async function saveSnapshot(){
     inv:   window._inv   || null,
     ant:   window._ant   || null,
     bdd:   window._bdd   || null,
-    bal:   window._bal ? {rows: window._bal.rows, maxBalPer: window._bal.maxBalPer,
+    bal:   window._bal ? {rows: window._bal.rows, maxBalPer: window._bal.maxBalPer, isNewFormat: window._bal.isNewFormat||false,
              OTROS_ING: window._bal.OTROS_ING, OTROS_GTO: window._bal.OTROS_GTO,
              ISR_ACC: window._bal.ISR_ACC} : null,
     // ppto and bdd25 have their own aux snapshots — not stored here
@@ -1582,13 +1630,27 @@ function applySnapshotData(d){
     const OTROS_GTO=['Pérdida por Dif en C','Pérdida por Diferenc','Comisiones Bancarias','ISR Bancos'];
     const ISR_ACC=['IMPTO SOBRE LA RENTA'];
     const maxBalPer=d.bal.maxBalPer||Math.max(0,...rows.filter(r=>r.ctaTipo==='4').map(r=>r.periodo));
+    const isNF = d.bal.isNewFormat||false;
+    function _balFlow(tipo,p){
+      const cur=rows.filter(r=>r.ctaTipo===tipo&&r.periodo===p).reduce((s,r)=>s+r.importe,0);
+      const prv=p>1?rows.filter(r=>r.ctaTipo===tipo&&r.periodo===p-1).reduce((s,r)=>s+r.importe,0):0;
+      return isNF?(cur-prv):cur;
+    }
+    function _balFlowSeg(tipo,seg,p){
+      const cur=rows.filter(r=>r.ctaTipo===tipo&&(!seg||r.seg===seg)&&r.periodo===p).reduce((s,r)=>s+r.importe,0);
+      const prv=p>1?rows.filter(r=>r.ctaTipo===tipo&&(!seg||r.seg===seg)&&r.periodo===p-1).reduce((s,r)=>s+r.importe,0):0;
+      return isNF?(cur-prv):cur;
+    }
     window._bal = {
       rows,
       maxBalPer, OTROS_ING, OTROS_GTO, ISR_ACC,
+      isNewFormat: isNF,
+      balFlow: _balFlow,
+      balFlowSeg: _balFlowSeg,
       sumBy:     (cuenta,pers)=>rows.filter(r=>r.cuenta===cuenta&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
-      sumOpex:   (seg,pers)=>opexRows.filter(r=>r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
+      sumOpex:   (seg,pers)=>isNF?pers.reduce((s,p)=>{const c=opexRows.filter(r=>r.seg===seg&&r.periodo===p).reduce((a,r)=>a+r.importe,0);const v=p>1?opexRows.filter(r=>r.seg===seg&&r.periodo===p-1).reduce((a,r)=>a+r.importe,0):0;return s+(c-v);},0):opexRows.filter(r=>r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
       sumOtros:  (accs,pers)=>rows.filter(r=>accs.includes(r.cuenta)&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
-      sumRevSeg: (seg,pers)=>-rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
+      sumRevSeg: (seg,pers)=>isNF?-pers.reduce((s,p)=>{const c=rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&r.periodo===p).reduce((a,r)=>a+r.importe,0);const v=p>1?rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&r.periodo===p-1).reduce((a,r)=>a+r.importe,0):0;return s+(c-v);},0):-rows.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
       balSum:    (accs,pers)=>rows.filter(r=>accs.includes(r.cuenta)&&pers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0),
     };
   } else {
@@ -2007,6 +2069,7 @@ function buildStatic(){
   // Build arrays per period — P3+ from Balance if available
   function balTipo(tipo,p){
     if(!window._bal)return 0;
+    if(window._bal.balFlow) return window._bal.balFlow(tipo, p);
     return window._bal.rows
       .filter(r=>r.ctaTipo===tipo && r.periodo===p)
       .reduce((s,r)=>s+r.importe,0);
@@ -2015,7 +2078,9 @@ function buildStatic(){
   function getC(p){ return p<=maxBddPer ? cst(p) :  balTipo('5',p); }
   function getG(p,seg){ 
     if(p<=maxBddPer) return gto(p,seg);
-    return window._bal ? window._bal.rows.filter(r=>r.ctaTipo==='6'&&r.periodo===p&&(!seg||r.seg===seg)).reduce((s,r)=>s+r.importe,0) : 0;
+    if(!window._bal) return 0;
+    if(window._bal.balFlowSeg) return window._bal.balFlowSeg('6', seg||null, p);
+    return window._bal.rows.filter(r=>r.ctaTipo==='6'&&r.periodo===p&&(!seg||r.seg===seg)).reduce((s,r)=>s+r.importe,0);
   }
   function getO(p){ return p<=maxBddPer ? -otros(p) : -balTipo('7',p); } // net otros ingresos
 
