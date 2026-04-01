@@ -4955,6 +4955,34 @@ function generarReporteEjecutivo(){
       ${sub?`<div class="kpi-sub">${sub}</div>`:''}
     </div>`;
 
+  // ── Razones financieras cards ──
+  const rz = r;
+  const STATUS_COLOR = {good:'#00875a', warn:'#d97706', alert:'#cc0000', info:'#1a56db', neutral:'#7c3aed'};
+  const STATUS_ICON  = {good:'✓ En rango', warn:'⚠ Vigilar', alert:'⚡ Atención'};
+  const razCards = [
+    {name:'Días de Cartera',      acr:'DSO',  val:rz.dso.toFixed(1),    unit:'días', bench:Math.min(rz.dso,120),  max:120,  color:'#1a56db', status:rz.dso<45?'good':rz.dso<75?'warn':'alert'},
+    {name:'Días de Inventario',   acr:'DII',  val:rz.dii.toFixed(1),    unit:'días', bench:Math.min(rz.dii,180),  max:180,  color:'#0891b2', status:rz.dii<60?'good':rz.dii<90?'warn':'alert'},
+    {name:'Días de Proveedores',  acr:'DPO',  val:rz.dpo.toFixed(1),    unit:'días', bench:Math.min(rz.dpo,90),   max:90,   color:'#d97706', status:rz.dpo>30?'good':rz.dpo>15?'warn':'alert'},
+    {name:'Ciclo Conv. Efectivo', acr:'CCE',  val:rz.cce.toFixed(0),    unit:'días', bench:Math.min(Math.abs(rz.cce),200), max:200, color:'#0891b2', status:rz.cce<30?'good':rz.cce<60?'warn':'alert'},
+    {name:'Margen Bruto',         acr:'MB',   val:(rz.margenBruto*100).toFixed(1), unit:'%', bench:rz.margenBruto*100, max:30, color:'#00875a', status:rz.margenBruto>0.15?'good':rz.margenBruto>0.08?'warn':'alert'},
+    {name:'Margen s/Plan Piso',   acr:'MSPP', val:(rz.margenPP*100).toFixed(1),    unit:'%', bench:rz.margenPP*100,    max:20, color:'#8b5cf6', status:rz.margenPP>0.1?'good':rz.margenPP>0.05?'warn':'alert'},
+    {name:'Rotación Inventario',  acr:'RI',   val:rz.rotInv.toFixed(2), unit:'x año', bench:Math.min(rz.rotInv,20), max:20, color:'#d97706', status:rz.rotInv>8?'good':rz.rotInv>5?'warn':'alert'},
+    {name:'% Cartera Vencida',    acr:'CV',   val:rz.pctVenc.toFixed(1), unit:'%', bench:Math.min(rz.pctVenc,100), max:100, color:'#ef4444', status:rz.pctVenc<10?'good':rz.pctVenc<25?'warn':'alert'},
+    {name:'Plan Piso / Mg. Bruto',acr:'PPGB', val:rz.ppVsGB.toFixed(1), unit:'%', bench:Math.min(rz.ppVsGB,100),  max:100, color:'#f97316', status:rz.ppVsGB<30?'good':rz.ppVsGB<50?'warn':'alert'},
+    {name:'Concentración Top 5',  acr:'CT5',  val:rz.concTop5.toFixed(1), unit:'%', bench:rz.concTop5, max:100, color:'#8b5cf6', status:rz.concTop5<50?'good':rz.concTop5<70?'warn':'alert'},
+    {name:'Inventario en Riesgo', acr:'IR',   val:rz.pctRisk.toFixed(1), unit:'%', bench:rz.pctRisk,  max:100, color:'#ef4444', status:rz.pctRisk<10?'good':rz.pctRisk<25?'warn':'alert'},
+  ];
+  const razHtml = razCards.map(rc=>`
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;border-top:3px solid ${STATUS_COLOR[rc.status]}">
+      <div style="font-size:7px;color:#64748b;text-transform:uppercase;letter-spacing:.5px">${rc.name}</div>
+      <div style="font-size:8px;font-weight:700;color:#94a3b8">${rc.acr}</div>
+      <div style="font-size:16px;font-weight:800;color:${STATUS_COLOR[rc.status]};font-family:'Courier New',monospace;line-height:1.2">${rc.val} <span style="font-size:9px">${rc.unit}</span></div>
+      <div style="margin:4px 0 2px;background:#e2e8f0;border-radius:4px;height:4px">
+        <div style="width:${Math.min(100,rc.bench/rc.max*100).toFixed(0)}%;background:${rc.color};height:4px;border-radius:4px"></div>
+      </div>
+      <div style="font-size:7px;font-weight:600;color:${STATUS_COLOR[rc.status]}">${STATUS_ICON[rc.status]||''}</div>
+    </div>`).join('');
+
   // ── Waterfall global (consolidated, vs ppto) ──
   const wfGlobalSvg = (()=>{
     const td = {
@@ -5176,6 +5204,8 @@ function generarReporteEjecutivo(){
     ${kpiCard('Rot. Inventario', r.rotInv.toFixed(1)+'x', 'Inv: '+fM(r.invTotal), '#7c3aed')}
   </div>
 
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:8px 0">${razHtml}</div>
+
   ${wfGlobalSvg ? `
   <div class="sh" style="margin-top:6px"><span class="st">🌊 Puente de UC — Real vs Presupuesto</span></div>
   <div style="border:1px solid #e2e8f0;border-radius:7px;padding:4px 8px 2px;margin-bottom:10px">
@@ -5240,7 +5270,7 @@ function generarReporteEjecutivo(){
   </div>
 </div>
 
-<!-- CARTERA -->
+<!-- CARTERA + INVENTARIO -->
 <div class="page">
   <div class="sh"><span class="st">📋 Cartera de Clientes</span><span class="sp">${perLabel} · ${socLabel}</span></div>
   <div class="aging-grid">
@@ -5273,8 +5303,8 @@ function generarReporteEjecutivo(){
   </table>
 </div>
 
-<!-- INVENTARIO -->
-<div class="page" style="page-break-after:avoid">
+<!-- INVENTARIO (same page as cartera) -->
+<div style="margin-top:12px">
   <div class="sh"><span class="st">🏭 Inventario</span><span class="sp">${fechaHoy} · ${socLabel}</span></div>
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
     ${kpiCard('Valor Total', fM(r.invTotal), r.invUnidades.toLocaleString()+' unidades', '#1e3a5f')}
@@ -5299,7 +5329,8 @@ function generarReporteEjecutivo(){
       </tr>
     </tbody>
   </table>
-</div>
+</div>  <!-- close inner inventario div -->
+</div>  <!-- close combined cartera+inventario page -->
 
 <div class="no-print" style="position:fixed;bottom:20px;right:20px;z-index:999">
   <button onclick="window.print()" style="background:#1e3a5f;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)">🖨️ Imprimir / Guardar PDF</button>
