@@ -4963,7 +4963,7 @@ function generarReporteEjecutivo(){
       aaRev:t.aaRev, aaCost:t.aaCost, aaGp:t.aaGp, aaGv:t.aaGv, aaMC:t.aaMC, aaUnd:t.und25||null,
       hasPpto:t.hasPpto, has25:t.has25,
     };
-    return _wfmDrawSvg(td, 'ppto', 760) || null;
+    return _wfmDrawSvg(td, 'ppto', 940) || null;
   })();
 
   // ── Waterfall por segmento ──
@@ -5186,8 +5186,11 @@ function generarReporteEjecutivo(){
       <span><span style="display:inline-block;width:8px;height:8px;background:#3b82f6;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Base</span>
     </div>
   </div>` : ''}
+</div>
 
-  <div class="sh"><span class="st">💰 Estado de Resultados</span></div>
+<!-- ESTADO DE RESULTADOS + INDICADORES -->
+<div class="page">
+  <div class="sh"><span class="st">💰 Estado de Resultados</span><span class="sp">${perLabel} · ${socLabel}</span></div>
   <table>
     <thead><tr>
       <th style="width:30%">Concepto</th>
@@ -6228,4 +6231,3 @@ function exportOFIExcel(){
 </script>
 </body>
 </html>
-
