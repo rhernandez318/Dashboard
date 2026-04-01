@@ -2874,11 +2874,14 @@ function buildEdo(p){
   window._edoTotals = {
     modeLabel, pers, edoSeg: edoSeg||null,
     // Real
-    undReal, rev, cost, gp, gv, utMC,
+    undReal, rev, cost, gp, gv, gi, utMC, utOp, otros, uait,
+    ppPiso,
     // Ppto
-    undPpto, ppRev, ppCost, ppGp, ppGv, ppMC,
+    undPpto, ppRev, ppCost, ppGp, ppGv, ppGi, ppMC, ppOp, ppOtros, ppUait,
+    ppPisoPpto,
     // Año anterior
-    und25, aaRev, aaCost, aaGp, aaGv, aaMC,
+    und25, aaRev, aaCost, aaGp, aaGv, aaGi, aaMC, aaOp, aaOtros, aaUait,
+    ppPiso25,
     hasPpto: !!cxPpto, has25: !!cx25,
   };
   buildWaterfall();
@@ -4941,7 +4944,6 @@ function generarReporteEjecutivo(){
   const fechaHoy = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
   const socLabel = activeSoc || 'Consolidado';
 
-  // ── Format helpers ──
   const fM = n=>{const a=Math.abs(n),s=n<0?'-':'';return a>=1e6?s+'$'+(a/1e6).toFixed(1)+'M':a>=1e3?s+'$'+(a/1e3).toFixed(0)+'K':s+'$'+a.toFixed(0);};
   const fC = n=>{const a=Math.abs(n).toLocaleString('es-MX',{maximumFractionDigits:0});return(n<0?'-$':'$')+a;};
   const pct = (a,b)=>b?((a/b)*100).toFixed(1)+'%':'—';
@@ -4953,63 +4955,157 @@ function generarReporteEjecutivo(){
       ${sub?`<div class="kpi-sub">${sub}</div>`:''}
     </div>`;
 
-  // ── Waterfall SVGs ──
-  const wfMode = _wfmMode;
+  // ── Waterfall global (consolidated, vs ppto) ──
+  const wfGlobalSvg = (()=>{
+    const td = {
+      seg:'global', rev:t.rev, cost:t.cost, gp:t.gp, gv:t.gv, utMC:t.utMC, und:t.undReal||0,
+      ppRev:t.ppRev, ppCost:t.ppCost, ppGp:t.ppGp, ppGv:t.ppGv, ppMC:t.ppMC, ppUnd:t.undPpto||null,
+      aaRev:t.aaRev, aaCost:t.aaCost, aaGp:t.aaGp, aaGv:t.aaGv, aaMC:t.aaMC, aaUnd:t.und25||null,
+      hasPpto:t.hasPpto, has25:t.has25,
+    };
+    return _wfmDrawSvg(td, 'ppto', 760) || null;
+  })();
+
+  // ── Waterfall por segmento ──
   const wfSVGs = WFM_SEGS.map(seg=>{
     const td = _wfmCalcSeg(seg); if(!td) return {seg,svg:null,td:null};
-    const svg = _wfmDrawSvg(td, wfMode, 480);
+    const svg = _wfmDrawSvg(td, _wfmMode, 460);
     return {seg, svg, td};
   });
 
   // ── Aging buckets ──
   const BKT=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
   const BKC=['#00875a','#1a56db','#d97706','#ea580c','#cc0000','#7c3aed'];
-  const bktTots = BKT.map(b=>ant.reduce((s,row)=>s+(b==='Por Vencer'?row.diasVenc<=0?row.saldo:0:row.bucket===b?row.saldo:0),0));
-  const totalCart = ant.reduce((s,r)=>s+r.saldo,0);
+  const bktTots=BKT.map(b=>ant.reduce((s,row)=>s+(b==='Por Vencer'?row.diasVenc<=0?row.saldo:0:row.bucket===b?row.saldo:0),0));
+  const totalCart=ant.reduce((s,r)=>s+r.saldo,0);
 
-  // Top 10 clientes vencidos
   const cliMap={};
-  ant.filter(r=>r.vencido>0).forEach(r=>{if(!cliMap[r.cliente])cliMap[r.cliente]={saldo:0,vencido:0,maxD:0};cliMap[r.cliente].vencido+=r.vencido;cliMap[r.cliente].saldo+=r.saldo;cliMap[r.cliente].maxD=Math.max(cliMap[r.cliente].maxD,r.diasVenc);});
+  ant.filter(r=>r.vencido>0).forEach(r=>{
+    if(!cliMap[r.cliente])cliMap[r.cliente]={saldo:0,vencido:0,maxD:0,seg:r.segmento};
+    cliMap[r.cliente].vencido+=r.vencido;
+    cliMap[r.cliente].saldo+=r.saldo;
+    cliMap[r.cliente].maxD=Math.max(cliMap[r.cliente].maxD,r.diasVenc);
+  });
   const topCli=Object.entries(cliMap).sort((a,b)=>b[1].vencido-a[1].vencido).slice(0,10);
 
-  // ── Inventory summary by segment ──
   const invBySeg={};
   inv.forEach(r=>{if(!invBySeg[r.segmento])invBySeg[r.segmento]={und:0,val:0};invBySeg[r.segmento].und+=r.unidades;invBySeg[r.segmento].val+=r.valor;});
   const invSegs=Object.entries(invBySeg).sort((a,b)=>b[1].val-a[1].val);
 
   // ── P&L rows ──
-  const plRows=[
-    {label:'Ingresos Netos',    real:t.rev,    ppto:t.ppRev,  aa:t.aaRev,  bold:true,  border:false},
-    {label:'Costo de Ventas',   real:-t.cost,  ppto:t.ppCost!=null?-t.ppCost:null, aa:t.aaCost!=null?-t.aaCost:null},
-    {label:'Utilidad Bruta',    real:t.gp,     ppto:t.ppGp,   aa:t.aaGp,   bold:true,  border:true},
-    {label:'Gastos de Venta',   real:-t.gv,    ppto:t.ppGv!=null?-t.ppGv:null, aa:t.aaGv!=null?-t.aaGv:null},
-    {label:'Utilidad Contribución',real:t.utMC,ppto:t.ppMC,  aa:t.aaMC,   bold:true,  border:true, highlight:true},
-  ];
   const hasPpto=t.hasPpto, has25=t.has25;
-  const plHtml=plRows.map(row=>{
-    const varP=row.ppto!=null?row.real-row.ppto:null;
-    const varA=row.aa!=null?row.real-row.aa:null;
-    return `<tr class="${row.highlight?'hl-row':''}" style="${row.border?'border-top:2px solid #dee2e6':''}">
-      <td style="font-weight:${row.bold?700:400}">${row.label}</td>
-      <td class="num" style="font-weight:${row.bold?700:400}">${fM(row.real)}</td>
-      ${hasPpto?`<td class="num">${row.ppto!=null?fM(row.ppto):'—'}</td><td class="num" style="color:${row.ppto!=null?vColor(varP):'#666'}">${row.ppto!=null?(varP>=0?'+':'')+fM(varP):'—'}</td>`:''}
-      ${has25?`<td class="num">${row.aa!=null?fM(row.aa):'—'}</td><td class="num" style="color:${row.aa!=null?vColor(varA):'#666'}">${row.aa!=null?(varA>=0?'+':'')+fM(varA):'—'}</td>`:''}
+  const colSpanComp = (hasPpto?2:0)+(has25?2:0);
+  const numCols = 2 + (hasPpto?2:0) + (has25?2:0);
+
+  function plRow(label, real, ppto2, aa2, opts={}){
+    const varP = ppto2!=null ? real-ppto2 : null;
+    const varA = aa2!=null   ? real-aa2   : null;
+    const bold = opts.bold ? 'font-weight:700;' : '';
+    const bg   = opts.hl   ? 'background:#eff6ff;' : opts.star ? 'background:#e0f2fe;' : '';
+    const color = opts.star ? 'color:#1e3a5f;' : '';
+    const fmt  = v => v!=null ? fM(v) : '—';
+    const varFmt = (v,base) => v!=null
+      ? `<span style="color:${vColor(v)}">${v>=0?'+':''}${fM(v)}</span>`
+      : '—';
+    return `<tr style="${bg}${opts.borderTop?'border-top:2px solid #dee2e6;':''}">
+      <td style="${bold}${color}${opts.indent?'padding-left:20px':''}">${label}</td>
+      <td class="num" style="${bold}${color}">${fmt(real)}</td>
+      <td class="num" style="${bold}color:#64748b">${real!=null&&t.rev?((real/t.rev)*100).toFixed(1)+'%':'—'}</td>
+      ${hasPpto?`<td class="num">${fmt(ppto2)}</td><td class="num">${varFmt(varP,ppto2)}</td>`:''}
+      ${has25?`<td class="num">${fmt(aa2)}</td><td class="num">${varFmt(varA,aa2)}</td>`:''}
     </tr>`;
-  }).join('');
+  }
+  function pctRow(label, num, den, num2, den2, num3, den3){
+    const f=v=>v!=null&&den?((num/den)*100).toFixed(1)+'%':'—';
+    const fp=(n,d)=>n!=null&&d?(((n/d)*100).toFixed(1)+'%'):'—';
+    const diff=(a,b)=>a!=null&&b!=null?((a/den*100)-(b/den2*100)).toFixed(1)+'pp':null;
+    return `<tr style="background:#f8fafc">
+      <td style="font-style:italic;color:#64748b;font-size:9px">${label}</td>
+      <td class="num" style="color:#64748b">${den?((num/den)*100).toFixed(1)+'%':'—'}</td>
+      <td class="num">—</td>
+      ${hasPpto?`<td class="num" style="color:#64748b">${fp(num2,den2)}</td><td class="num" style="color:#64748b">${diff(num,num2)?diff(num,num2)+'pp':'—'}</td>`:''}
+      ${has25?`<td class="num" style="color:#64748b">${fp(num3,den3)}</td><td class="num" style="color:#64748b">${diff(num,num3)?diff(num,num3)+'pp':'—'}</td>`:''}
+    </tr>`;
+  }
+  function starRow(label, real, ppto2, aa2){
+    const varP=ppto2!=null?real-ppto2:null, varA=aa2!=null?real-aa2:null;
+    return `<tr style="background:#1e3a5f">
+      <td style="font-weight:800;color:#fff">${label}</td>
+      <td class="num" style="font-weight:800;color:${real>=0?'#34d399':'#f87171'}">${fM(real)}</td>
+      <td class="num" style="color:#94a3b8">${t.rev?((real/t.rev)*100).toFixed(1)+'%':'—'}</td>
+      ${hasPpto?`<td class="num" style="color:#94a3b8">${ppto2!=null?fM(ppto2):'—'}</td><td class="num" style="color:${varP!=null?vColor(varP):'#94a3b8'}">${varP!=null?(varP>=0?'+':'')+fM(varP):'—'}</td>`:''}
+      ${has25?`<td class="num" style="color:#94a3b8">${aa2!=null?fM(aa2):'—'}</td><td class="num" style="color:${varA!=null?vColor(varA):'#94a3b8'}">${varA!=null?(varA>=0?'+':'')+fM(varA):'—'}</td>`:''}
+    </tr>`;
+  }
 
-  // ── Margin % row ──
-  const mbReal=t.rev>0?(t.gp/t.rev*100).toFixed(1):0;
-  const mbPpto=t.ppRev>0&&t.ppGp!=null?(t.ppGp/t.ppRev*100).toFixed(1):null;
-  const mbAA=t.aaRev>0&&t.aaGp!=null?(t.aaGp/t.aaRev*100).toFixed(1):null;
-  const mcReal=t.rev>0?(t.utMC/t.rev*100).toFixed(1):0;
-  const mcPpto=t.ppRev>0&&t.ppMC!=null?(t.ppMC/t.ppRev*100).toFixed(1):null;
-  const mcAA=t.aaRev>0&&t.aaMC!=null?(t.aaMC/t.aaRev*100).toFixed(1):null;
+  const plHtml=`
+    ${plRow('Ingresos Netos', t.rev, t.ppRev, t.aaRev, {bold:true})}
+    ${plRow('(-) Costo de Ventas', -t.cost, t.ppCost!=null?-t.ppCost:null, t.aaCost!=null?-t.aaCost:null, {indent:true})}
+    ${starRow('★ UTILIDAD BRUTA', t.gp, t.ppGp, t.aaGp)}
+    ${pctRow('% Margen Bruto', t.gp, t.rev, t.ppGp, t.ppRev, t.aaGp, t.aaRev)}
+    ${plRow('(-) Gastos de Venta', -t.gv, t.ppGv!=null?-t.ppGv:null, t.aaGv!=null?-t.aaGv:null, {indent:true})}
+    ${starRow('★ UTILIDAD CONTRIBUCIÓN', t.utMC, t.ppMC, t.aaMC)}
+    ${pctRow('% Margen Contribución', t.utMC, t.rev, t.ppMC, t.ppRev, t.aaMC, t.aaRev)}
+    ${t.ppPiso ? plRow('(-) Intereses Plan Piso', -t.ppPiso, t.ppPisoPpto!=null?-t.ppPisoPpto:null, t.ppPiso25!=null?-t.ppPiso25:null, {indent:true, borderTop:true}) : ''}
+    ${plRow('(-) Gastos Administración', -t.gi, t.ppGi!=null?-t.ppGi:null, t.aaGi!=null?-t.aaGi:null, {indent:true})}
+    ${starRow('★ UTILIDAD OPERACIÓN', t.utOp, t.ppOp, t.aaOp)}
+    ${pctRow('% Margen Operación', t.utOp, t.rev, t.ppOp, t.ppRev, t.aaOp, t.aaRev)}
+    ${plRow('(+/-) Otros Ingresos / (Gastos)', t.otros, t.ppOtros, t.aaOtros, {indent:true, borderTop:true})}
+    ${starRow('★ UTILIDAD ANTES DE IMPUESTOS', t.uait, t.ppUait, t.aaUait)}
+    ${pctRow('% UAIT / Ingresos', t.uait, t.rev, t.ppUait, t.ppRev, t.aaUait, t.aaRev)}
+  `;
 
-  const compLabel = wfMode==='ppto'?'Presupuesto':'Año Anterior';
+  // ── Indicadores por Unidad (recompute) ──
+  const pers2 = t.pers||[1];
+  function sumD(dataset, tipo, seg){
+    if(!dataset) return 0;
+    return dataset.filter(r=>pers2.includes(r.periodo)&&r.ctaTipo===tipo&&(!seg||r.seg===seg)).reduce((a,r)=>a+r.importe,0);
+  }
+  const ALL_SS=['TRACTO','PASAJE','CARGA','SEMIREMOLQUES','REFACCIONES','TALLER','VEHICULOS SEMINUEVOS','FL360','VANES','COLLISION CENTER Y HYP'];
+  const sf4 = t.edoSeg||null;
+  const DS2 = sf4 ? [sf4] : ALL_SS;
+  function totals2(dataset){
+    if(!dataset) return null;
+    const rev=-sumD(dataset,'4',sf4), cost=sumD(dataset,'5',sf4);
+    const gv=DS2.reduce((s,seg)=>s+sumD(dataset,'6',seg),0);
+    return {rev,cost,ub:rev-cost,gv,mc:rev-cost-gv};
+  }
+  const cx2=fCx(), cxP2=window._ppto?fCxPpto():null, cx252=window._bdd25?fCx25():null;
+  const real2=totals2(cx2), ppto2=totals2(cxP2), aa2=totals2(cx252);
+  const und2=(window._bdd?.unidades||[]).filter(r=>pers2.includes(r.periodo)&&(!sf4||r.segmento===sf4)).reduce((a,r)=>a+r.unidades,0);
+  const undP2=cxP2?(window._ppto?.unidades||[]).filter(r=>pers2.includes(r.periodo)&&(!sf4||r.segmento===sf4)).reduce((a,r)=>a+r.unidades,0):null;
+  const undA2=cx252?(window._bdd25?.unidades||[]).filter(r=>pers2.includes(r.periodo)&&(!sf4||r.segmento===sf4)).reduce((a,r)=>a+r.unidades,0):null;
+  const ppu2=(v,u)=>u?v/u:null;
+  const fK2=v=>v==null||!isFinite(v)?'—':(v<0?'-':'')+fM(Math.abs(v));
+  const fP2=v=>v==null?'—':((v*100).toFixed(1)+'%');
+  function indRow(label, rv, pv, av, opts={}){
+    const varP=pv!=null?rv-pv:null, varA=av!=null?rv-av:null;
+    const fv=v=>v==null||!isFinite(v)?'—':opts.pct?fP2(v):fK2(v);
+    const fvar=v=>v==null?'—':`<span style="color:${v>=0?'#00875a':'#cc0000'}">${v>=0?'+':''}${opts.pct?(v*100).toFixed(1)+'pp':fK2(Math.abs(v))}</span>`;
+    const bg=opts.star?'background:#1e3a5f;':'opts.sub'?'background:#f0fdf4;':'';
+    const fc=opts.star?'color:#fff;font-weight:800;':opts.bold?'font-weight:700;':'';
+    return `<tr style="${bg}">
+      <td style="${fc}${opts.indent?'padding-left:16px':''}">${label}</td>
+      <td class="num" style="${fc}${opts.star?(rv>=0?'color:#34d399':'color:#f87171'):''}">${fv(rv)}</td>
+      ${hasPpto?`<td class="num" style="color:#64748b">${fv(pv)}</td><td class="num">${fvar(varP)}</td>`:''}
+      ${has25?`<td class="num" style="color:#64748b">${fv(av)}</td><td class="num">${fvar(varA)}</td>`:''}
+    </tr>`;
+  }
+  const indHtml=`
+    <tr style="background:#e8f4fd"><td colspan="${numCols}" style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;padding:5px 8px">📦 Volumen</td></tr>
+    ${indRow('Unidades vendidas', und2, undP2, undA2, {bold:true})}
+    <tr style="background:#e8f4fd"><td colspan="${numCols}" style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;padding:5px 8px">💰 Precio por Unidad</td></tr>
+    ${indRow('Precio promedio / Und', ppu2(real2?.rev,und2), ppu2(ppto2?.rev,undP2), ppu2(aa2?.rev,undA2))}
+    <tr style="background:#e8f4fd"><td colspan="${numCols}" style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;padding:5px 8px">📊 Rentabilidad por Unidad</td></tr>
+    ${indRow('Ut. Bruta / Und', ppu2(real2?.ub,und2), ppu2(ppto2?.ub,undP2), ppu2(aa2?.ub,undA2))}
+    ${indRow('% Margen Bruto', real2?.rev?(real2.ub/real2.rev):null, ppto2?.rev?(ppto2.ub/ppto2.rev):null, aa2?.rev?(aa2.ub/aa2.rev):null, {pct:true, indent:true})}
+    ${indRow('Gasto Venta / Und', ppu2(real2?.gv,und2), ppu2(ppto2?.gv,undP2), ppu2(aa2?.gv,undA2), {indent:true})}
+    ${indRow('★ Mg. Contribución / Und', ppu2(real2?.mc,und2), ppu2(ppto2?.mc,undP2), ppu2(aa2?.mc,undA2), {star:true})}
+    ${indRow('% Mg. Contribución', real2?.rev?(real2.mc/real2.rev):null, ppto2?.rev?(ppto2.mc/ppto2.rev):null, aa2?.rev?(aa2.mc/aa2.rev):null, {pct:true, indent:true})}
+  `;
 
-  // ═══════════════════════════════════════════════════════════════
-  // BUILD HTML
-  // ═══════════════════════════════════════════════════════════════
+  const compLabel = _wfmMode==='ppto'?'Presupuesto':'Año Anterior';
+
   const html=`<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -5017,77 +5113,50 @@ function generarReporteEjecutivo(){
 <title>Reporte Ejecutivo — ${perLabel}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1a1a2e;background:#fff;}
-  @page{size:A4 landscape;margin:14mm 16mm;}
-
-  /* ── Page breaks ── */
-  .page{page-break-after:always;padding:0;min-height:185mm;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a2e;background:#fff;}
+  @page{size:A4 landscape;margin:12mm 14mm;}
+  .page{page-break-after:always;padding:0;min-height:182mm;}
   .page:last-child{page-break-after:avoid;}
-
-  /* ── Cover ── */
   .cover{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 60%,#0f4c75 100%);
          color:#fff;display:flex;flex-direction:column;justify-content:center;
-         align-items:flex-start;padding:20mm 24mm;min-height:185mm;}
-  .cover-title{font-size:28px;font-weight:800;letter-spacing:-0.5px;margin-bottom:8px;color:#fff;}
-  .cover-sub{font-size:15px;color:#93c5fd;margin-bottom:6px;}
-  .cover-period{font-size:20px;font-weight:700;color:#34d399;margin:16px 0 8px;}
-  .cover-soc{font-size:13px;color:#94a3b8;}
-  .cover-date{position:absolute;bottom:16mm;right:16mm;font-size:10px;color:#64748b;}
-  .cover-line{width:60px;height:4px;background:#34d399;margin:16px 0;}
-
-  /* ── Section headers ── */
-  .section-header{display:flex;align-items:center;gap:10px;padding:8px 0 6px;
-                  border-bottom:3px solid #1e3a5f;margin-bottom:10px;}
-  .section-title{font-size:16px;font-weight:800;color:#1e3a5f;}
-  .section-period{font-size:10px;color:#64748b;margin-left:auto;}
-
-  /* ── KPI cards ── */
-  .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px;}
-  .kpi-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;text-align:center;}
-  .kpi-label{font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
-  .kpi-val{font-size:20px;font-weight:800;font-family:'Courier New',monospace;}
-  .kpi-sub{font-size:9px;color:#94a3b8;margin-top:3px;}
-
-  /* ── Tables ── */
-  table{width:100%;border-collapse:collapse;font-size:10px;}
-  th{background:#1e3a5f;color:#fff;padding:5px 8px;text-align:left;font-weight:600;}
+         align-items:flex-start;padding:20mm 24mm;min-height:182mm;position:relative;}
+  .cover-title{font-size:26px;font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;}
+  .cover-sub{font-size:13px;color:#93c5fd;margin-bottom:4px;}
+  .cover-period{font-size:18px;font-weight:700;color:#34d399;margin:14px 0 6px;}
+  .cover-soc{font-size:12px;color:#94a3b8;}
+  .cover-date{position:absolute;bottom:14mm;right:14mm;font-size:9px;color:#64748b;}
+  .cover-line{width:50px;height:4px;background:#34d399;margin:14px 0;}
+  .sh{display:flex;align-items:center;gap:8px;padding:6px 0 5px;border-bottom:3px solid #1e3a5f;margin-bottom:8px;}
+  .st{font-size:14px;font-weight:800;color:#1e3a5f;}
+  .sp{font-size:9px;color:#64748b;margin-left:auto;}
+  .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px;}
+  .kpi-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 10px;text-align:center;}
+  .kpi-label{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+  .kpi-val{font-size:18px;font-weight:800;font-family:'Courier New',monospace;}
+  .kpi-sub{font-size:8px;color:#94a3b8;margin-top:2px;}
+  table{width:100%;border-collapse:collapse;font-size:9px;}
+  th{background:#1e3a5f;color:#fff;padding:5px 7px;text-align:left;font-weight:600;font-size:9px;}
   th.num,td.num{text-align:right;}
-  td{padding:4px 8px;border-bottom:1px solid #f1f5f9;}
-  tr:hover{background:#f8fafc;}
-  .hl-row{background:#eff6ff !important;}
-  .hl-row td{font-weight:700;color:#1e3a5f;}
-  .tot-row{background:#1e3a5f !important;}
-  .tot-row td{color:#fff !important;font-weight:700;}
-
-  /* ── Waterfall grid ── */
-  .wf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-  .wf-card{border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;}
-  .wf-title{background:#1e3a5f;color:#fff;font-size:10px;font-weight:700;
-             padding:6px 10px;display:flex;justify-content:space-between;align-items:center;}
-  .wf-uc{font-size:9px;color:#93c5fd;}
-  .wf-body{padding:4px 6px 2px;}
-  .wf-legend{display:flex;gap:10px;justify-content:center;font-size:8px;
-              color:#64748b;padding:2px 0 4px;}
-  .wf-dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:3px;vertical-align:middle;}
-
-  /* ── Aging bars ── */
-  .aging-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin:10px 0;}
-  .aging-card{text-align:center;padding:10px 6px;border-radius:8px;}
-  .aging-val{font-size:15px;font-weight:800;font-family:'Courier New',monospace;}
-  .aging-label{font-size:8px;color:#64748b;margin-top:3px;}
-  .aging-pct{font-size:9px;font-weight:600;margin-top:2px;}
-
-  /* ── Print ── */
-  @media print{
-    body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .no-print{display:none!important;}
-  }
+  td{padding:3px 7px;border-bottom:1px solid #f1f5f9;}
+  .wf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+  .wf-card{border:1px solid #e2e8f0;border-radius:7px;overflow:hidden;}
+  .wf-title{background:#1e3a5f;color:#fff;font-size:9px;font-weight:700;padding:5px 8px;display:flex;justify-content:space-between;align-items:center;}
+  .wf-uc{font-size:8px;color:#93c5fd;}
+  .wf-body{padding:2px 4px 0;}
+  .wf-legend{display:flex;gap:8px;justify-content:center;font-size:7px;color:#64748b;padding:2px 0 3px;}
+  .wf-dot{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:2px;vertical-align:middle;}
+  .aging-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0;}
+  .aging-card{text-align:center;padding:8px 4px;border-radius:7px;}
+  .aging-val{font-size:13px;font-weight:800;font-family:'Courier New',monospace;}
+  .aging-label{font-size:7px;color:#64748b;margin-top:2px;}
+  .aging-pct{font-size:8px;font-weight:600;margin-top:1px;}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.no-print{display:none!important;}}
 </style>
 </head>
 <body>
 
-<!-- ════════════════════ PORTADA ════════════════════ -->
-<div class="page cover" style="position:relative">
+<!-- PORTADA -->
+<div class="page cover">
   <div class="cover-title">Reporte Ejecutivo</div>
   <div class="cover-sub">Análisis de Resultados Financieros</div>
   <div class="cover-line"></div>
@@ -5096,12 +5165,9 @@ function generarReporteEjecutivo(){
   <div class="cover-date">Generado: ${fechaHoy}</div>
 </div>
 
-<!-- ════════════════════ KPIs ════════════════════ -->
+<!-- KPIs + WATERFALL GLOBAL + P&L + INDICADORES -->
 <div class="page">
-  <div class="section-header">
-    <span class="section-title">📊 Indicadores Clave</span>
-    <span class="section-period">${perLabel} · ${socLabel}</span>
-  </div>
+  <div class="sh"><span class="st">📊 Indicadores Clave</span><span class="sp">${perLabel} · ${socLabel}</span></div>
   <div class="kpi-grid">
     ${kpiCard('DSO — Días Cartera', r.dso.toFixed(0)+' d', 'Cartera: '+fM(r.cartTotal), '#1a56db')}
     ${kpiCard('DPO — Días Pago', r.dpo.toFixed(0)+' d', 'AP+PlanPiso: '+fM(r.provTotal), '#d97706')}
@@ -5109,67 +5175,58 @@ function generarReporteEjecutivo(){
     ${kpiCard('Margen Bruto', (r.margenBruto*100).toFixed(1)+'%', 'GP: '+fM(r.gpTotal), r.margenBruto>0.2?'#00875a':'#cc0000')}
     ${kpiCard('Rot. Inventario', r.rotInv.toFixed(1)+'x', 'Inv: '+fM(r.invTotal), '#7c3aed')}
   </div>
-  <div class="kpi-grid">
-    ${kpiCard('Ingresos', fM(r.revTotal), perLabel, '#1e3a5f')}
-    ${kpiCard('Costo de Ventas', fM(r.costTotal), pct(r.costTotal,r.revTotal)+' de ingresos', '#64748b')}
-    ${kpiCard('Cartera Vencida', fM(r.cartVencida), pct(r.cartVencida,r.cartTotal)+' del total', r.pctVenc>30?'#cc0000':r.pctVenc>15?'#d97706':'#00875a')}
-    ${kpiCard('DII — Días Inv.', r.dii.toFixed(0)+' d', 'Inv: '+fM(r.invTotal), '#0891b2')}
-    ${kpiCard('Unidades en Inv.', r.invUnidades.toLocaleString(), 'Unidades totales', '#64748b')}
-  </div>
 
-  <!-- P&L Summary -->
-  <div class="section-header" style="margin-top:10px">
-    <span class="section-title">💰 Estado de Resultados</span>
-  </div>
+  ${wfGlobalSvg ? `
+  <div class="sh" style="margin-top:6px"><span class="st">🌊 Puente de UC — Real vs Presupuesto</span></div>
+  <div style="border:1px solid #e2e8f0;border-radius:7px;padding:4px 8px 2px;margin-bottom:10px">
+    ${wfGlobalSvg}
+    <div style="display:flex;gap:12px;justify-content:center;font-size:8px;color:#64748b;padding:2px 0 4px">
+      <span><span style="display:inline-block;width:8px;height:8px;background:#00d4aa;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Favorable</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Desfavorable</span>
+      <span><span style="display:inline-block;width:8px;height:8px;background:#3b82f6;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Base</span>
+    </div>
+  </div>` : ''}
+
+  <div class="sh"><span class="st">💰 Estado de Resultados</span></div>
   <table>
     <thead><tr>
-      <th style="width:32%">Concepto</th>
+      <th style="width:30%">Concepto</th>
       <th class="num">Real</th>
       <th class="num">% Ing.</th>
       ${hasPpto?'<th class="num">Presupuesto</th><th class="num">Var. Ppto</th>':''}
       ${has25?'<th class="num">Año Ant.</th><th class="num">Var. AA</th>':''}
     </tr></thead>
-    <tbody>
-      ${plHtml}
-      <tr style="background:#f0fdf4">
-        <td style="font-style:italic;color:#666">% Margen Bruto</td>
-        <td class="num" style="color:#00875a;font-weight:700">${mbReal}%</td>
-        <td class="num">—</td>
-        ${hasPpto?`<td class="num" style="color:#666">${mbPpto?mbPpto+'%':'—'}</td><td class="num">—</td>`:''}
-        ${has25?`<td class="num" style="color:#666">${mbAA?mbAA+'%':'—'}</td><td class="num">—</td>`:''}
-      </tr>
-      <tr style="background:#eff6ff">
-        <td style="font-style:italic;color:#1a56db;font-weight:600">% Margen Contribución</td>
-        <td class="num" style="color:#1a56db;font-weight:700">${mcReal}%</td>
-        <td class="num">—</td>
-        ${hasPpto?`<td class="num" style="color:#666">${mcPpto?mcPpto+'%':'—'}</td><td class="num">—</td>`:''}
-        ${has25?`<td class="num" style="color:#666">${mcAA?mcAA+'%':'—'}</td><td class="num">—</td>`:''}
-      </tr>
-    </tbody>
+    <tbody>${plHtml}</tbody>
+  </table>
+
+  <div class="sh" style="margin-top:8px"><span class="st">📊 Indicadores por Unidad</span></div>
+  <table>
+    <thead><tr>
+      <th style="width:30%">Indicador</th>
+      <th class="num">Real</th>
+      ${hasPpto?'<th class="num">Presupuesto</th><th class="num">Var. Ppto</th>':''}
+      ${has25?'<th class="num">Año Ant.</th><th class="num">Var. AA</th>':''}
+    </tr></thead>
+    <tbody>${indHtml}</tbody>
   </table>
 </div>
 
-<!-- ════════════════════ WATERFALL ════════════════════ -->
+<!-- WATERFALL POR SEGMENTO -->
 <div class="page">
-  <div class="section-header">
-    <span class="section-title">🌊 Puente de Utilidad Contribución vs ${compLabel}</span>
-    <span class="section-period">${perLabel} · ${socLabel}</span>
-  </div>
+  <div class="sh"><span class="st">🌊 Puente de UC por Segmento vs ${compLabel}</span><span class="sp">${perLabel} · ${socLabel}</span></div>
   <div class="wf-grid">
     ${wfSVGs.map(({seg,svg,td})=>{
       const label=WFM_LABELS[seg]||seg;
-      const usePpto=wfMode==='ppto';
+      const usePpto=_wfmMode==='ppto';
       const ucComp=td?(usePpto?td.ppMC:td.aaMC):null;
       const varTot=td&&ucComp!=null?td.utMC-ucComp:null;
       const varStr=varTot!=null?`<span style="color:${varTot>=0?'#34d399':'#f87171'}">${varTot>=0?'+':''}${fM(varTot)}</span>`:'';
       return `<div class="wf-card">
         <div class="wf-title">
           <span>${label}</span>
-          <span class="wf-uc">UC: ${td?fM(td.utMC):'—'} ${varStr?'| Δ: '+varStr:''}</span>
+          <span class="wf-uc">UC: ${td?fM(td.utMC):'—'} ${varStr?'| Δ '+varStr:''}</span>
         </div>
-        <div class="wf-body">
-          ${svg||`<div style="padding:20px;text-align:center;color:#64748b;font-size:10px">Sin datos comparativos</div>`}
-        </div>
+        <div class="wf-body">${svg||'<div style="padding:16px;text-align:center;color:#64748b">Sin datos</div>'}</div>
         <div class="wf-legend">
           <span><span class="wf-dot" style="background:#00d4aa"></span>Favorable</span>
           <span><span class="wf-dot" style="background:#ef4444"></span>Desfavorable</span>
@@ -5180,67 +5237,42 @@ function generarReporteEjecutivo(){
   </div>
 </div>
 
-<!-- ════════════════════ CARTERA ════════════════════ -->
+<!-- CARTERA -->
 <div class="page">
-  <div class="section-header">
-    <span class="section-title">📋 Cartera de Clientes</span>
-    <span class="section-period">${perLabel} · ${socLabel}</span>
-  </div>
-
-  <!-- Aging KPIs -->
+  <div class="sh"><span class="st">📋 Cartera de Clientes</span><span class="sp">${perLabel} · ${socLabel}</span></div>
   <div class="aging-grid">
-    ${BKT.map((b,i)=>{
-      const v=bktTots[i]; const p=totalCart?((v/totalCart)*100).toFixed(1)+'%':'0%';
+    ${BKT.map((b,i)=>{const v=bktTots[i];const p=totalCart?((v/totalCart)*100).toFixed(1)+'%':'0%';
       return `<div class="aging-card" style="background:${BKC[i]}18;border:1px solid ${BKC[i]}44">
         <div class="aging-val" style="color:${BKC[i]}">${fM(v)}</div>
         <div class="aging-label">${b}</div>
         <div class="aging-pct" style="color:${BKC[i]}">${p}</div>
-      </div>`;
-    }).join('')}
-  </div>
-
-  <!-- Top clientes vencidos -->
-  <div class="section-header" style="margin-top:8px">
-    <span class="section-title" style="font-size:13px">Top 10 Clientes con Cartera Vencida</span>
+      </div>`;}).join('')}
   </div>
   <table>
-    <thead><tr>
-      <th>Cliente</th><th>Segmento</th>
-      <th class="num">Saldo Total</th>
-      <th class="num">Vencido</th>
-      <th class="num">% Vencido</th>
-      <th class="num">Días Máx</th>
-    </tr></thead>
+    <thead><tr><th>Cliente</th><th>Segmento</th><th class="num">Saldo Total</th><th class="num">Vencido</th><th class="num">% Vencido</th><th class="num">Días Máx</th></tr></thead>
     <tbody>
-      ${topCli.map(([nombre,v])=>{
-        const seg=(ant.find(r=>r.cliente===nombre)||{}).segmento||'—';
-        const saldo=(ant.filter(r=>r.cliente===nombre).reduce((s,r)=>s+r.saldo,0));
-        return `<tr>
-          <td>${nombre.length>40?nombre.slice(0,40)+'…':nombre}</td>
-          <td>${seg}</td>
-          <td class="num">${fC(saldo)}</td>
-          <td class="num" style="color:#cc0000;font-weight:600">${fC(v.vencido)}</td>
-          <td class="num" style="color:${v.vencido/saldo>0.8?'#cc0000':v.vencido/saldo>0.5?'#d97706':'#666'}">${saldo?(v.vencido/saldo*100).toFixed(1)+'%':'—'}</td>
-          <td class="num"><span style="color:${v.maxD>120?'#7c3aed':v.maxD>90?'#cc0000':v.maxD>60?'#ea580c':'#d97706'};font-weight:600">${v.maxD}d</span></td>
-        </tr>`;
-      }).join('')}
-      <tr class="tot-row">
-        <td colspan="2">TOTAL CARTERA</td>
-        <td class="num">${fC(totalCart)}</td>
-        <td class="num">${fC(ant.reduce((s,r)=>s+r.vencido,0))}</td>
-        <td class="num">${pct(ant.reduce((s,r)=>s+r.vencido,0),totalCart)}</td>
+      ${topCli.map(([nombre,v])=>`<tr>
+        <td>${nombre.length>42?nombre.slice(0,42)+'…':nombre}</td>
+        <td>${v.seg||'—'}</td>
+        <td class="num">${fC(v.saldo)}</td>
+        <td class="num" style="color:#cc0000;font-weight:600">${fC(v.vencido)}</td>
+        <td class="num" style="color:${v.vencido/v.saldo>0.8?'#cc0000':v.vencido/v.saldo>0.5?'#d97706':'#666'}">${v.saldo?(v.vencido/v.saldo*100).toFixed(1)+'%':'—'}</td>
+        <td class="num"><span style="color:${v.maxD>120?'#7c3aed':v.maxD>90?'#cc0000':v.maxD>60?'#ea580c':'#d97706'};font-weight:600">${v.maxD}d</span></td>
+      </tr>`).join('')}
+      <tr style="background:#1e3a5f">
+        <td colspan="2" style="color:#fff;font-weight:700">TOTAL CARTERA</td>
+        <td class="num" style="color:#fff;font-weight:700">${fC(totalCart)}</td>
+        <td class="num" style="color:#f87171;font-weight:700">${fC(ant.reduce((s,r)=>s+r.vencido,0))}</td>
+        <td class="num" style="color:#94a3b8">${pct(ant.reduce((s,r)=>s+r.vencido,0),totalCart)}</td>
         <td></td>
       </tr>
     </tbody>
   </table>
 </div>
 
-<!-- ════════════════════ INVENTARIO ════════════════════ -->
+<!-- INVENTARIO -->
 <div class="page" style="page-break-after:avoid">
-  <div class="section-header">
-    <span class="section-title">🏭 Inventario</span>
-    <span class="section-period">${fechaHoy} · ${socLabel}</span>
-  </div>
+  <div class="sh"><span class="st">🏭 Inventario</span><span class="sp">${fechaHoy} · ${socLabel}</span></div>
   <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
     ${kpiCard('Valor Total', fM(r.invTotal), r.invUnidades.toLocaleString()+' unidades', '#1e3a5f')}
     ${kpiCard('Días Inventario', r.dii.toFixed(0)+' d', 'DII acumulado', r.dii>90?'#cc0000':r.dii>60?'#d97706':'#00875a')}
@@ -5248,48 +5280,35 @@ function generarReporteEjecutivo(){
     ${kpiCard('En Riesgo >180d', fM(inv.filter(r=>r.antiguedad>180).reduce((s,r)=>s+r.valor,0)), inv.filter(r=>r.antiguedad>180).length+' unidades', '#cc0000')}
   </div>
   <table>
-    <thead><tr>
-      <th>Segmento</th>
-      <th class="num">Unidades</th>
-      <th class="num">Valor</th>
-      <th class="num">% del Total</th>
-      <th class="num">Valor / Unidad</th>
-    </tr></thead>
+    <thead><tr><th>Segmento</th><th class="num">Unidades</th><th class="num">Valor</th><th class="num">% del Total</th><th class="num">Valor / Unidad</th></tr></thead>
     <tbody>
       ${invSegs.map(([seg,v])=>`<tr>
-        <td>${seg}</td>
-        <td class="num">${v.und.toLocaleString()}</td>
-        <td class="num">${fM(v.val)}</td>
+        <td>${seg}</td><td class="num">${v.und.toLocaleString()}</td><td class="num">${fM(v.val)}</td>
         <td class="num">${r.invTotal?(v.val/r.invTotal*100).toFixed(1)+'%':'—'}</td>
         <td class="num">${v.und>0?fM(v.val/v.und):'—'}</td>
       </tr>`).join('')}
-      <tr class="tot-row">
-        <td>TOTAL</td>
-        <td class="num">${r.invUnidades.toLocaleString()}</td>
-        <td class="num">${fM(r.invTotal)}</td>
-        <td class="num">100%</td>
-        <td class="num">${r.invUnidades>0?fM(r.invTotal/r.invUnidades):'—'}</td>
+      <tr style="background:#1e3a5f">
+        <td style="color:#fff;font-weight:700">TOTAL</td>
+        <td class="num" style="color:#fff;font-weight:700">${r.invUnidades.toLocaleString()}</td>
+        <td class="num" style="color:#fff;font-weight:700">${fM(r.invTotal)}</td>
+        <td class="num" style="color:#94a3b8">100%</td>
+        <td class="num" style="color:#94a3b8">${r.invUnidades>0?fM(r.invTotal/r.invUnidades):'—'}</td>
       </tr>
     </tbody>
   </table>
 </div>
 
-<!-- Print button (hidden when printing) -->
 <div class="no-print" style="position:fixed;bottom:20px;right:20px;z-index:999">
-  <button onclick="window.print()" style="background:#1e3a5f;color:#fff;border:none;padding:10px 20px;
-    border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)">
-    🖨️ Imprimir / Guardar PDF
-  </button>
-  <button onclick="window.close()" style="background:#64748b;color:#fff;border:none;padding:10px 16px;
-    border-radius:8px;font-size:13px;cursor:pointer;margin-left:8px">✕ Cerrar</button>
+  <button onclick="window.print()" style="background:#1e3a5f;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)">🖨️ Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:#64748b;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;margin-left:8px">✕ Cerrar</button>
 </div>
-
 </body></html>`;
 
-  const win = window.open('','_blank','width=1200,height=800');
+  const win=window.open('','_blank','width=1200,height=800');
   win.document.write(html);
   win.document.close();
 }
+
 // ═══════════════════════════════════════════
 // SNAPSHOTS AUXILIARES — Presupuesto y Año Anterior
 // Se guardan solo cuando el admin sube esos archivos.
@@ -6209,3 +6228,4 @@ function exportOFIExcel(){
 </script>
 </body>
 </html>
+
