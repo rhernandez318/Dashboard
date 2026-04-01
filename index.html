@@ -1159,42 +1159,71 @@ function parsePpto(data){
 function parseBalance(data){
   if(!data)return null;
   const wb=XLSX.read(data,{type:'array'});
-  const shName=wb.SheetNames.find(s=>s.includes('BDD')||s.includes('Balance'));
-  // header:1 to handle duplicate 'Cuenta de mayor' column names in Excel
+  const shName=wb.SheetNames.find(s=>!s.startsWith('_'))||wb.SheetNames[0];
   const rawArr=XLSX.utils.sheet_to_json(wb.Sheets[shName],{header:1,defval:null});
   if(rawArr.length<2)return null;
   const hdr=rawArr[0].map(h=>normKey(String(h||'')));
-  const allCtaIdx=hdr.reduce((a,h,i)=>{if(h==='cuenta de mayor')a.push(i);return a;},[]);
-  const iDiv2 =hdr.findIndex(h=>h==='division'||h.includes('divisi'));
-  const iCebe2=hdr.indexOf('cebe');
-  const iPer  =hdr.findIndex(h=>h.replace(/\s/g,'').includes('periodocontable')||h.includes('período')||h.includes('periodo'));
-  const iImp  =hdr.findIndex(h=>h.startsWith('impte'));
-  let iCtaTxt=allCtaIdx[0]??-1, iCtaNum=allCtaIdx[1]??-1;
-  if(iCtaTxt<0||iCtaNum<0){
-    for(let i=0;i<rawArr[0].length;i++){
-      if(i===iDiv2||i===iCebe2||i===iPer||i===iImp)continue;
-      const sample=rawArr.slice(1,5).map(r=>r[i]).find(v=>v!=null);
-      if(sample==null)continue;
-      if(isNaN(+sample)&&String(sample).length>2&&iCtaTxt<0)iCtaTxt=i;
-      else if(!isNaN(+sample)&&String(sample).length>6&&iCtaNum<0&&i!==iCebe2)iCtaNum=i;
+
+  // Detect format: new format has 'periodo de ejercicio' and PUCC/ account codes
+  const hasPeriodoEjercicio = hdr.some(h=>h.includes('periodo de ejercicio')||h.includes('periodo eje'));
+  const hasSaldo = hdr.some(h=>h.includes('saldo final'));
+
+  let iDiv2, iSeg, iPer, iImp, iCtaTxt, iCtaNum;
+
+  if(hasPeriodoEjercicio || hasSaldo){
+    // ── NEW FORMAT: División / Segmento / Sociedad / Cuenta / Período / Saldo ──
+    // Cols: 0=División, 1=División(txt), 2=Seg(num), 3=Seg(txt), 4=Soc(num), 5=Soc(txt)
+    //       6=Cuenta(PUCC/xxxx), 7=Cuenta(txt), 8=Período(2026001), 9=Saldo final
+    iDiv2   = 0;
+    iSeg    = 3; // Segmento texto
+    iPer    = hdr.findIndex(h=>h.includes('periodo'));
+    iImp    = hdr.findIndex(h=>h.includes('saldo'));
+    iCtaNum = 6; // PUCC/xxxxxxxx
+    iCtaTxt = 7; // nombre cuenta
+    console.log('[parseBalance] NEW format detected — cols:', {iDiv2,iSeg,iPer,iImp,iCtaNum,iCtaTxt});
+  } else {
+    // ── OLD FORMAT ──
+    const allCtaIdx=hdr.reduce((a,h,i)=>{if(h==='cuenta de mayor')a.push(i);return a;},[]);
+    iDiv2 = hdr.findIndex(h=>h==='division'||h.includes('divisi'));
+    const iCebe2=hdr.indexOf('cebe');
+    iPer  = hdr.findIndex(h=>h.replace(/\s/g,'').includes('periodocontable')||h.includes('período')||h.includes('periodo'));
+    iImp  = hdr.findIndex(h=>h.startsWith('impte'));
+    iCtaTxt=allCtaIdx[0]??-1; iCtaNum=allCtaIdx[1]??-1;
+    if(iCtaTxt<0||iCtaNum<0){
+      for(let i=0;i<rawArr[0].length;i++){
+        if(i===iDiv2||i===iCebe2||i===iPer||i===iImp)continue;
+        const sample=rawArr.slice(1,5).map(r=>r[i]).find(v=>v!=null);
+        if(sample==null)continue;
+        if(isNaN(+sample)&&String(sample).length>2&&iCtaTxt<0)iCtaTxt=i;
+        else if(!isNaN(+sample)&&String(sample).length>6&&iCtaNum<0&&i!==iCebe2)iCtaNum=i;
+      }
     }
+    iSeg=hdr.reduceRight((found,h,i)=>{
+      if(found>=0||i<=5||!h)return found;
+      const sample=rawArr.slice(1).map(r=>r[i]).find(v=>v&&isNaN(+v)&&String(v).length>2);
+      return sample?i:-1;
+    },-1);
+    console.log('[parseBalance] OLD format — cols:', {iDiv2,iSeg,iPer,iImp,iCtaTxt,iCtaNum});
   }
-  // Segment column: rightmost non-numeric text column after col 5
-  const iSeg=hdr.reduceRight((found,h,i)=>{
-    if(found>=0||i<=5||!h)return found;
-    const sample=rawArr.slice(1).map(r=>r[i]).find(v=>v&&isNaN(+v)&&String(v).length>2);
-    return sample?i:-1;
-  },-1);
+
   const rows=rawArr.slice(1).filter(r=>r[iCtaTxt]&&r[iPer]!=null).map(r=>{
-    const numStr=r[iCtaNum]!=null?String(Math.round(+r[iCtaNum])):'';
+    // Account number: strip PUCC/ prefix if present, then get first digit
+    const ctaRaw = String(r[iCtaNum]||'').replace('PUCC/','').trim();
+    const numStr = ctaRaw.replace(/\D/g,'').slice(-10); // keep numeric part
+    // Period: new format 2026001 → 1, old format 1,2,3
+    const perRaw = String(r[iPer]||'');
+    const periodo = perRaw.length >= 7
+      ? parseInt(perRaw.slice(-3), 10)   // 2026001 → 1
+      : Math.round(+(r[iPer]||0));        // 1,2,3 directly
     return{
       cuenta:String(r[iCtaTxt]||'').trim(),
       ctaTipo:numStr[0]||'',
-      periodo:Math.round(+(r[iPer]||0)),
+      periodo,
       importe:+(r[iImp]||0),
       seg:iSeg>=0?String(r[iSeg]||'').trim():'',
+      div:String(r[iDiv2]||'').trim(),
     };
-  });
+  }).filter(r=>r.periodo>0);
 
   // Accounts that are balance-sheet / clearing / IVA / financing — NOT opex
   const BAL_EXCL=new Set([
@@ -5262,16 +5291,22 @@ function ofiSumBy(cuenta, per){
 // Better: filter by division code in seg field if available, else use all rows for the soc
 function ofiSumByCta(cuenta, per){
   if(!window._bal) return 0;
-  // Balance rows don't have seg for BS accounts — filter by division prefix via seg field if available
   return window._bal.rows
     .filter(r => {
       if(r.cuenta!==cuenta || r.periodo!==per) return false;
       if(!activeSoc) return true;
-      // Try to filter by division prefix stored in seg field
+      // Filter by division code (new format) or segment text (old format)
+      const d = r.div||'';
       const s = r.seg||'';
-      if(activeSoc==='ZAPATA CAMIONES')    return s.startsWith('41')||s.startsWith('4105')||s.startsWith('4106')||s.startsWith('4111')||['CARGA','PASAJE','TRACTO','VANES','VEHICULOS SEMINUEVOS','REFACCIONES','TALLER','SEMIREMOLQUES','FL360','COLLISION','#'].some(x=>s.includes(x));
-      if(activeSoc==='NORTRACK DE MEXICO') return s.startsWith('43')||s.startsWith('4305')||s.startsWith('4306');
-      if(activeSoc==='FORZA ZAPATA')       return s.startsWith('60')||s.startsWith('6056');
+      if(d){ // new format has div field
+        if(activeSoc==='ZAPATA CAMIONES')    return d.startsWith('41');
+        if(activeSoc==='NORTRACK DE MEXICO') return d.startsWith('43');
+        if(activeSoc==='FORZA ZAPATA')       return d.startsWith('60');
+      } else {
+        if(activeSoc==='ZAPATA CAMIONES')    return ['CARGA','PASAJE','TRACTO','VANES','VEHICULOS SEMINUEVOS','REFACCIONES','TALLER','SEMIREMOLQUES','FL360','COLLISION'].some(x=>s.includes(x));
+        if(activeSoc==='NORTRACK DE MEXICO') return s.includes('430')||s.includes('NORTRACK');
+        if(activeSoc==='FORZA ZAPATA')       return s.includes('605')||s.includes('FORZA');
+      }
       return true;
     })
     .reduce((s,r)=>s+r.importe, 0);
