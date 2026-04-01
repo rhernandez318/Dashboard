@@ -467,13 +467,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
       </div>
     </div>
     <div class="kgrid" id="kpi-fin"></div>
-    <div class="crow">
-      <div class="ccard"><h4>Ingresos por Línea</h4><div class="cwrap"><canvas id="ch-ing2"></canvas></div></div>
-      <div class="ccard"><h4>Estructura de Costos</h4><div class="cwrap"><canvas id="ch-cost"></canvas></div></div>
-    </div>
-    <div class="tcard"><div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="edo-title">📊 Estado de Resultados</h4><button onclick="exportTableExcel('tbl-edo','Estado_Resultados')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
-
-    <!-- WATERFALL BRIDGE CHART -->
+    <!-- WATERFALL BRIDGE CHART — moved above Estado de Resultados -->
     <div class="tcard mt4" id="wrap-waterfall">
       <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <h4 id="wf-title">🌊 Puente de Utilidad Contribución</h4>
@@ -498,6 +492,8 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
         </div>
       </div>
     </div>
+    <div class="tcard" style="margin-top:14px"><div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="edo-title">📊 Estado de Resultados</h4><button onclick="exportTableExcel('tbl-edo','Estado_Resultados')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
+
     <div class="tcard mt4" id="wrap-indicadores"><div class="thead2"><h4 id="ind-title">📊 Indicadores por Unidad<span class="hint" id="ind-seg-hint"></span></h4></div><div class="tscroll"><table id="tbl-indicadores"><thead><tr></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4" id="wrap-margen-seg">
       <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
@@ -3197,33 +3193,7 @@ function buildFinCharts(p){
     return v/1e6;
   }
 
-  dch('ch-ing2');
-  const showPers=p===0?f.PERS:[p];
-  const ingDatasets=showPers.map((per,i)=>({
-    label:NAMES[per-1],
-    data:SEGS.map(s=>revSeg(s,per)),
-    backgroundColor:PALS[i]||PALS[0],borderRadius:4
-  }));
-  CH['ch-ing2']=new Chart(document.getElementById('ch-ing2'),{type:'bar',
-    data:{labels:SEG_SHORT,datasets:ingDatasets},
-    options:{...bOpts('M MXN',true),plugins:{...bOpts('M MXN',true).plugins,
-      legend:{display:p===0,labels:{color:'#94a3b8',font:{size:9}}}}}});
-
-  // Costo vs Gasto por segmento
-  function costSeg(seg,per){
-    let v=cx.filter(r=>r.ctaTipo==='5'&&r.seg===seg&&(per===0||r.periodo===per)).reduce((s,r)=>s+r.importe,0);
-    if(window._bal && per>=3) v+=window._bal.rows.filter(r=>r.ctaTipo==='5'&&r.seg===seg&&r.periodo===per).reduce((s,r)=>s+r.importe,0);
-    return v/1e6;
-  }
-  dch('ch-cost');
-  CH['ch-cost']=new Chart(document.getElementById('ch-cost'),{type:'bar',
-    data:{labels:SEG_SHORT,datasets:[
-      {label:'Costo (5)',data:SEGS.map(s=>costSeg(s,p)),backgroundColor:'#ef4444aa',borderRadius:4},
-      {label:'Gasto (6)',data:SEGS.map(s=>(f.gvBySeg[s]?.['p'+p]||0)/1e6),backgroundColor:'#f59e0baa',borderRadius:4}
-    ]},
-    options:{...bOpts('M MXN',true),plugins:{...bOpts('M MXN',true).plugins,
-      legend:{display:true,labels:{color:'#94a3b8',font:{size:9}}}}}});
-}
+}  // buildEdo end
 
 // ═══════════════════════════════════════════
 // CHART HELPERS
