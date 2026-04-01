@@ -321,6 +321,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <button class="tbtn" onclick="showTab('inventario',this)">🏭 Inventario</button>
     <button class="tbtn" onclick="showTab('forecast',this)" style="color:#f59e0b;border-bottom-color:transparent">🔮 Forecast</button>
     <button class="tbtn" id="tab-btn-avance" onclick="showTab('avance',this)" style="color:#22d3ee">📊 Avance vs FC</button>
+    <button class="tbtn" onclick="showTab('waterfall',this)" style="color:#a78bfa">🌊 Waterfall</button>
   </div>
 
   <!-- SOCIETY FILTER BAR -->
@@ -675,6 +676,24 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     </div>
     <!-- Report area -->
     <div id="ec-report" style="padding:16px 0 32px"></div>
+  </div>
+
+  <!-- WATERFALL MULTI-SEGMENTO -->
+  <div class="tcontent" id="tab-waterfall">
+    <div class="shdr" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div class="stitle" style="color:#a78bfa">🌊 Puente de Utilidad por Segmento</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:10px;color:var(--text-muted)">Comparar vs:</span>
+        <button id="wfm-btn-ppto" class="tbtn active" onclick="setWfmMode('ppto',this)"
+          style="padding:4px 12px;font-size:10px;border-radius:6px;border:1px solid var(--border)">Presupuesto</button>
+        <button id="wfm-btn-aa" class="tbtn" onclick="setWfmMode('aa',this)"
+          style="padding:4px 12px;font-size:10px;border-radius:6px;border:1px solid var(--border)">Año Previo</button>
+      </div>
+    </div>
+    <div id="wfm-nodata" style="display:none;text-align:center;padding:40px;color:var(--text-muted);font-size:12px">
+      Carga archivo de Presupuesto o Año Anterior para ver el análisis de variaciones
+    </div>
+    <div id="wfm-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;padding-top:14px"></div>
   </div>
 
   <!-- FORECAST -->
@@ -3258,6 +3277,7 @@ function showTab(tab,btn){
   if(tab==='usuarios') renderUsersTable();
   if(tab==='avance') buildAvance();
   if(tab==='razones') buildOFI();
+  if(tab==='waterfall') buildWaterfallMulti();
   const cdw = document.getElementById('cart-div-wrap');
   if(tab==='cartera'){ populateCartDivSelect(); if(cdw) cdw.style.display='flex'; }
   else { if(cdw) cdw.style.display='none'; activeCartDiv=null; }
@@ -4694,6 +4714,205 @@ function buildWaterfall(){
   svg.innerHTML = svgHtml;
   document.getElementById('wf-title').textContent =
     `🌊 Puente de Utilidad Contribución${t.edoSeg ? ' — ' + t.edoSeg : ''} — Real vs ${compLabel}`;
+}
+
+
+// ═══════════════════════════════════════════
+// WATERFALL MULTI-SEGMENTO
+// ═══════════════════════════════════════════
+let _wfmMode = 'ppto';
+const WFM_SEGS = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES','PASAJE'];
+const WFM_LABELS = {
+  'TRACTO':'Tracto','CARGA':'Carga','FL360':'FL360',
+  'VEHICULOS SEMINUEVOS':'Veh. Seminuevos','SEMIREMOLQUES':'Semiremolques','PASAJE':'Pasaje'
+};
+
+function setWfmMode(mode, btn){
+  _wfmMode = mode;
+  document.querySelectorAll('#wfm-btn-ppto,#wfm-btn-aa').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  buildWaterfallMulti();
+}
+
+function _wfmCalcSeg(seg){
+  // Compute bridge totals for one segment using current period/mode
+  const f = window._fin; if(!f) return null;
+  const p = currentPer;
+  const isAccum = edoMode==='acum';
+  const pers = (p===0||isAccum) ? Array.from({length:p===0?f.maxPer:p},(_,i)=>i+1) : [p];
+
+  function sumD(dataset, tipo, s){
+    return dataset.filter(r=>pers.includes(r.periodo)&&r.ctaTipo===tipo&&(!s||r.seg===s)).reduce((a,r)=>a+r.importe,0);
+  }
+  const cx     = fCx();
+  const cx25   = window._bdd25 ? fCx25()   : null;
+  const cxPpto = window._ppto  ? fCxPpto() : null;
+
+  const rev  = -sumD(cx,'4',seg);
+  const cost =  sumD(cx,'5',seg);
+  const gp   = rev - cost;
+  const gv   =  sumD(cx,'6',seg);
+  const utMC = gp - gv;
+
+  const und  = (window._bdd?.unidades||[]).filter(r=>pers.includes(r.periodo)&&r.segmento===seg).reduce((s,r)=>s+r.unidades,0);
+
+  const ppRev  = cxPpto ? -sumD(cxPpto,'4',seg) : null;
+  const ppCost = cxPpto ?  sumD(cxPpto,'5',seg)  : null;
+  const ppGp   = ppRev!=null ? ppRev-ppCost : null;
+  const ppGv   = cxPpto ?  sumD(cxPpto,'6',seg)  : null;
+  const ppMC   = ppGp!=null&&ppGv!=null ? ppGp-ppGv : null;
+  const ppUnd  = cxPpto ? (window._ppto?.unidades||[]).filter(r=>pers.includes(r.periodo)&&r.segmento===seg).reduce((s,r)=>s+r.unidades,0) : null;
+
+  const aaRev  = cx25 ? -sumD(cx25,'4',seg) : null;
+  const aaCost = cx25 ?  sumD(cx25,'5',seg)  : null;
+  const aaGp   = aaRev!=null ? aaRev-aaCost : null;
+  const aaGv   = cx25 ?  sumD(cx25,'6',seg)  : null;
+  const aaMC   = aaGp!=null&&aaGv!=null ? aaGp-aaGv : null;
+  const aaUnd  = cx25 ? (window._bdd25?.unidades||[]).filter(r=>pers.includes(r.periodo)&&r.segmento===seg).reduce((s,r)=>s+r.unidades,0) : null;
+
+  return { seg, rev, cost, gp, gv, utMC, und,
+    ppRev, ppGp, ppGv, ppMC, ppUnd, hasPpto:!!cxPpto,
+    aaRev, aaGp, aaGv, aaMC, aaUnd, has25:!!cx25 };
+}
+
+function _wfmDrawSvg(t, mode, containerW){
+  const usePpto = mode==='ppto';
+  const ucComp  = usePpto ? t.ppMC  : t.aaMC;
+  const revComp = usePpto ? t.ppRev : t.aaRev;
+  const gpComp  = usePpto ? t.ppGp  : t.aaGp;
+  const gvComp  = usePpto ? t.ppGv  : t.aaGv;
+  const undComp = usePpto ? t.ppUnd : t.aaUnd;
+  const compLabel = usePpto ? 'Ppto' : 'AA';
+
+  if(ucComp==null||revComp==null) return null;
+
+  const undR=t.und||0, revR=t.rev||0, gpR=t.gp||0, gvR=t.gv||0, ucR=t.utMC||0;
+  const undC=undComp||0, revC=revComp||0, gpC=gpComp||0, gvC=gvComp||0;
+
+  const ppu_R=undR>0?revR/undR:0, ppu_C=undC>0?revC/undC:0;
+  const mbR=revR>0?gpR/revR:0, mbC=revC>0?gpC/revC:0;
+  const gpPorUnd_C=undC>0?gpC/undC:0;
+
+  const varVol    = (undR-undC)*gpPorUnd_C;
+  const varPrecio = (ppu_R-ppu_C)*undR*mbR;
+  const varMargen = undR*ppu_C*(mbR-mbC);
+  const varGastos = -(gvR-gvC);
+
+  const bars = [
+    {label:`UC\n${compLabel}`,   value:ucComp,   type:'base', isTotal:true},
+    {label:'Var.\nVol.',         value:varVol,    type:varVol>=0?'pos':'neg'},
+    {label:'Var.\nPrecio',       value:varPrecio, type:varPrecio>=0?'pos':'neg'},
+    {label:'Var.\nMargen',       value:varMargen, type:varMargen>=0?'pos':'neg'},
+    {label:'Var.\nGastos',       value:varGastos, type:varGastos>=0?'pos':'neg'},
+    {label:`UC Real`,            value:ucR,       type:'base', isTotal:true},
+  ];
+
+  const W=containerW||560, PAD={top:44,right:16,bottom:56,left:58}, H=240;
+  const barW=Math.floor((W-PAD.left-PAD.right)/bars.length*0.55);
+  const barGap=Math.floor((W-PAD.left-PAD.right)/bars.length);
+  const COLORS={pos:'#00d4aa',neg:'#ef4444',base:'#3b82f6'};
+
+  let running=ucComp;
+  const rects=bars.map((b,i)=>{
+    let floatBase,floatTop;
+    if(b.isTotal){floatBase=Math.min(0,b.value);floatTop=Math.max(0,b.value);}
+    else{floatBase=Math.min(running,running+b.value);floatTop=Math.max(running,running+b.value);running+=b.value;}
+    return{...b,floatBase,floatTop,x:PAD.left+i*barGap+(barGap-barW)/2};
+  });
+
+  const allVals=rects.flatMap(r=>[r.floatBase,r.floatTop,0]);
+  let yMin=Math.min(...allVals),yMax=Math.max(...allVals);
+  const yRange=yMax-yMin||1,yPad=yRange*0.2;
+  yMin-=yPad;yMax+=yPad;
+  const yScale=v=>PAD.top+(1-(v-yMin)/(yMax-yMin))*(H-PAD.top-PAD.bottom);
+  const y0=yScale(0);
+  const fM=v=>{const a=Math.abs(v),s=v<0?'-':'';return a>=1e6?s+'$'+(a/1e6).toFixed(1)+'M':a>=1e3?s+'$'+(a/1e3).toFixed(0)+'K':s+'$'+a.toFixed(0);};
+
+  let svg='';
+  // Grid
+  for(let i=0;i<=4;i++){
+    const v=yMin+(yMax-yMin)*i/4,y=yScale(v),isZ=Math.abs(v)<(yMax-yMin)*0.04;
+    svg+=`<line x1="${PAD.left}" y1="${y.toFixed(1)}" x2="${W-PAD.right}" y2="${y.toFixed(1)}" stroke="${isZ?'rgba(255,255,255,.25)':'rgba(255,255,255,.06)'}" stroke-width="${isZ?1.5:1}" stroke-dasharray="${isZ?'':'4,4'}"/>`;
+    svg+=`<text x="${PAD.left-4}" y="${(y+3).toFixed(1)}" text-anchor="end" fill="#64748b" font-size="9" font-family="IBM Plex Mono,monospace">${fM(v)}</text>`;
+  }
+  // Connectors
+  let hl=ucComp;
+  for(let i=0;i<rects.length-1;i++){
+    const r=rects[i],r2=rects[i+1];
+    hl=r.isTotal?r.value:r.value>=0?r.floatTop:r.floatBase;
+    const cy=yScale(hl);
+    svg+=`<line x1="${(r.x+barW).toFixed(1)}" y1="${cy.toFixed(1)}" x2="${r2.x.toFixed(1)}" y2="${cy.toFixed(1)}" stroke="#475569" stroke-width="1.2" stroke-dasharray="4,3"/>`;
+  }
+  // Bars
+  rects.forEach(r=>{
+    const yTop=yScale(r.floatTop),yBot=yScale(r.floatBase),bH=Math.max(2,yBot-yTop),col=COLORS[r.type];
+    svg+=`<rect x="${r.x.toFixed(1)}" y="${yTop.toFixed(1)}" width="${barW}" height="${bH.toFixed(1)}" fill="${col}" rx="3" opacity="${r.isTotal?1:0.88}"/>`;
+    const vs=r.isTotal?fM(r.value):(r.value>=0?'+':'')+fM(r.value);
+    const lY=r.value>=0?yTop-5:yBot+11;
+    svg+=`<text x="${(r.x+barW/2).toFixed(1)}" y="${lY.toFixed(1)}" text-anchor="middle" fill="${r.isTotal?'#e2e8f0':col}" font-size="9" font-weight="${r.isTotal?700:600}" font-family="IBM Plex Mono,monospace">${vs}</text>`;
+    const lbY=H-PAD.bottom+14;
+    r.label.split('\n').forEach((ln,li)=>{
+      svg+=`<text x="${(r.x+barW/2).toFixed(1)}" y="${(lbY+li*11).toFixed(1)}" text-anchor="middle" fill="#94a3b8" font-size="9" font-family="Inter,sans-serif">${ln}</text>`;
+    });
+  });
+  // Zero line
+  svg+=`<line x1="${PAD.left}" y1="${y0.toFixed(1)}" x2="${W-PAD.right}" y2="${y0.toFixed(1)}" stroke="rgba(255,255,255,.3)" stroke-width="1"/>`;
+
+  return `<svg width="100%" height="${H}" style="display:block;overflow:visible">${svg}</svg>`;
+}
+
+function buildWaterfallMulti(){
+  if(!window._fin){
+    document.getElementById('wfm-grid').innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:40px">Sin datos — genera el dashboard primero</div>';
+    return;
+  }
+  const hasPpto = !!window._ppto;
+  const has25   = !!window._bdd25;
+  if(!hasPpto && !has25){
+    document.getElementById('wfm-nodata').style.display='block';
+    document.getElementById('wfm-grid').innerHTML='';
+    return;
+  }
+  document.getElementById('wfm-nodata').style.display='none';
+
+  const grid = document.getElementById('wfm-grid');
+  const cardW = Math.floor((grid.clientWidth||900)/2) - 20;
+
+  grid.innerHTML = WFM_SEGS.map(seg=>{
+    const t = _wfmCalcSeg(seg);
+    if(!t) return `<div class="tcard"><div class="thead2"><h4>${WFM_LABELS[seg]||seg}</h4></div><div style="padding:20px;color:var(--text-muted);font-size:11px">Sin datos</div></div>`;
+
+    const svgHtml = _wfmDrawSvg(t, _wfmMode, cardW);
+    const usePpto = _wfmMode==='ppto';
+    const ucComp = usePpto?t.ppMC:t.aaMC;
+    const compLabel = usePpto?'Ppto':'AA';
+
+    const varTotal = ucComp!=null ? t.utMC-ucComp : null;
+    const varStr   = varTotal!=null ? `<span style="color:${varTotal>=0?'#00d4aa':'#ef4444'};font-weight:700">${varTotal>=0?'+':''}${(varTotal/1e6).toFixed(1)}M</span>` : '';
+
+    if(!svgHtml){
+      return `<div class="tcard">
+        <div class="thead2"><h4>🌊 ${WFM_LABELS[seg]||seg}</h4></div>
+        <div style="padding:20px;color:var(--text-muted);font-size:11px">Carga ${usePpto?'Presupuesto':'Año Anterior'} para ver variación</div>
+      </div>`;
+    }
+
+    return `<div class="tcard">
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px">
+        <h4 style="margin:0">🌊 ${WFM_LABELS[seg]||seg}</h4>
+        <div style="font-size:11px;color:var(--text-muted)">
+          UC Real: <span style="color:#60a5fa;font-weight:700;font-family:monospace">${(t.utMC/1e6).toFixed(1)}M</span>
+          &nbsp;vs ${compLabel}: ${varStr}
+        </div>
+      </div>
+      <div style="padding:8px 12px 4px">${svgHtml}</div>
+      <div style="display:flex;gap:12px;justify-content:center;padding:0 12px 10px;font-size:9px;font-family:'Inter',sans-serif;color:#64748b">
+        <span><span style="display:inline-block;width:10px;height:10px;background:#00d4aa;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Favorable</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#ef4444;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Desfavorable</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Base</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════
