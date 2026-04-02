@@ -2236,35 +2236,60 @@ function renderRazones(){
   const top5=Object.entries(cliGroup).map(([n,rows])=>sb2(rows,'saldo')).sort((a,b)=>b-a).slice(0,5);
   const concTop5=cartTotal>0?(top5.reduce((a,b)=>a+b,0)/cartTotal)*100:0;
 
-  // ── Balance-based ratios ──
+  // ── Balance-based ratios (respetan filtro de sociedad via campo div) ──
   let activoTotal=0,pasivoTotal=0,capitalContable=0,utilidadNeta=0;
   let activoCirculante=0,pasivoCirculante=0,inventariosBal=0,deudaFinanciera=0,utilidadOp=0;
   if(window._bal){
-    const rows=window._bal.rows;
+    const allRows=window._bal.rows;
     const lastP=window._bal.maxBalPer;
-    const sf=tipo=>rows.filter(r=>r.ctaTipo===tipo&&r.periodo===lastP).reduce((s,r)=>s+r.importe,0);
+    // Filter by activeSoc using division field (same logic as ofiSumByCta)
+    function balRowsFiltered(extraFilter){
+      return allRows.filter(r=>{
+        if(r.periodo!==lastP) return false;
+        if(extraFilter && !extraFilter(r)) return false;
+        if(!activeSoc) return true;
+        const d=r.div||'';
+        if(d){
+          if(activeSoc==='ZAPATA CAMIONES')    return d.startsWith('41');
+          if(activeSoc==='NORTRACK DE MEXICO') return d.startsWith('43');
+          if(activeSoc==='FORZA ZAPATA')       return d.startsWith('60');
+        }
+        return true;
+      });
+    }
+    const sf=tipo=>balRowsFiltered(r=>r.ctaTipo===tipo).reduce((s,r)=>s+r.importe,0);
     activoTotal    = Math.abs(sf('1'));
     pasivoTotal    = Math.abs(sf('2'));
     capitalContable= Math.abs(sf('3'));
     utilidadNeta   = -(sf('4')+sf('5')+sf('6')+sf('7')+sf('8'));
-    // Activo circulante: tipo 1 excluyendo activo fijo (cuentas 121x/122x y depreciaciones)
     const ACTFIJO=['Dep. Acum','Rev Dep'];
-    activoCirculante=Math.abs(rows.filter(r=>r.ctaTipo==='1'&&r.periodo===lastP&&
-      !ACTFIJO.some(k=>r.cuenta.startsWith(k))&&
-      !['1210500009','1210500010'].includes(r.cuenta)
+    activoCirculante=Math.abs(balRowsFiltered(r=>r.ctaTipo==='1'&&
+      !ACTFIJO.some(k=>r.cuenta.startsWith(k))
     ).reduce((s,r)=>s+r.importe,0));
-    inventariosBal=Math.abs(rows.filter(r=>['Inventarios Nuevos','Inventario Semi-Nvos','Inv. Refacciones','Mercancias Transito'].includes(r.cuenta)&&r.periodo===lastP).reduce((s,r)=>s+r.importe,0));
-    // Pasivo circulante: tipo 2 excluyendo largo plazo
+    inventariosBal=Math.abs(balRowsFiltered(r=>
+      ['Inventarios Nuevos','Inventario Semi-Nvos','Inv. Refacciones','Mercancias Transito'].includes(r.cuenta)
+    ).reduce((s,r)=>s+r.importe,0));
     const PASLP=['Pasivo Arrend L.P.','Indemnización Legal','Prima de Antigüedad','Plan de Pensiones'];
-    pasivoCirculante=Math.abs(rows.filter(r=>r.ctaTipo==='2'&&r.periodo===lastP&&!PASLP.includes(r.cuenta)).reduce((s,r)=>s+r.importe,0));
-    deudaFinanciera=Math.abs(rows.filter(r=>['Obligacion Fin BBVA','Obligacion Fin Banor','Obligacion Fin Sant','Oblig Fin Planta','DXP Tercer CP Bancos','Pasivo Arrend L.P.'].includes(r.cuenta)&&r.periodo===lastP).reduce((s,r)=>s+r.importe,0));
+    pasivoCirculante=Math.abs(balRowsFiltered(r=>r.ctaTipo==='2'&&!PASLP.includes(r.cuenta)).reduce((s,r)=>s+r.importe,0));
+    deudaFinanciera=Math.abs(balRowsFiltered(r=>
+      ['Obligacion Fin BBVA','Obligacion Fin Banor','Obligacion Fin Sant','Oblig Fin Planta','DXP Tercer CP Bancos','Pasivo Arrend L.P.'].includes(r.cuenta)
+    ).reduce((s,r)=>s+r.importe,0));
+    // utilidadOp: usar datos ya filtrados de BDD (cx = fCx() ya respeta activeSoc)
     const allP=Array.from({length:lastP},(_,i)=>i+1);
-    const cxAll=window._bdd?.cuentas||[];
-    const revA=-cxAll.filter(r=>r.ctaTipo==='4'&&allP.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
-    const cstA= cxAll.filter(r=>r.ctaTipo==='5'&&allP.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
-    const gvA = cxAll.filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN'&&allP.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
-    const giA = cxAll.filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN'&&allP.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
-    utilidadOp=revA-cstA-gvA-giA;
+    const cxFilt=fCx(); // ya filtrado por activeSoc y periodo via PERS acumulado
+    const cxAllP=window._bdd?.cuentas?.filter(r=>allP.includes(r.periodo)&&
+      (!activeSoc||div2soc(r.division||r.div||'')||true)) ||[];
+    // Para utlidadOp usamos cx (respeta activeSoc) sumando todos los periodos
+    function cxSum(dataset,tipo,seg){
+      return dataset.filter(r=>allP.includes(r.periodo)&&r.ctaTipo===tipo&&(!seg||r.seg===seg)).reduce((s,r)=>s+r.importe,0);
+    }
+    const revA =-cxSum(fCx(),'4',null);
+    const cstA = cxSum(fCx(),'5',null);
+    const gvA  = cxSum(fCx(),'6',null)-cxSum(fCx(),'6','ADMINISTRACIÓN');
+    const giA  = cxSum(fCx(),'6','ADMINISTRACIÓN');
+    utilidadOp = revA-cstA-gvA-giA;
+    // utilidadNeta desde Balance también puede aproximarse con BDD si sin ISR en Balance
+    // Mantenemos la del Balance (ya filtrada) para consistencia
   }
 
   window._razones={dso,dii,dpo,cce,rotInv,margenBruto,margenPP,pctVenc,ppVsGB,pctRisk,concTop5,
