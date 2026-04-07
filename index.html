@@ -3432,6 +3432,7 @@ function setEdoMode(mode,btn){
   document.getElementById(mirrorId)?.classList.add('active');
   buildEdo(currentPer);
   renderMargenSeg();
+  if(document.getElementById('tab-waterfall')?.classList.contains('active')) buildWaterfallMulti();
 }
 function setPeriodo(p,btn){
   currentPer=p;
