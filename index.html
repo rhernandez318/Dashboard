@@ -2724,15 +2724,20 @@ function renderInvAgingBars(inv){
   const AB=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
   const AC2=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
   const AC=AB.map(b=>inv.filter(r=>r.bucket===b).length);
+  const AV=AB.map(b=>inv.filter(r=>r.bucket===b).reduce((s,r)=>s+r.valor,0));
   const mx=Math.max(...AC,1);
-  document.getElementById('inv-aging-bars').innerHTML=AB.map((b,i)=>{
-    const ia=activeBucket===b;
-    const dim=activeBucket&&!ia;
+  const mxV=Math.max(...AV,1);
+  function mkAgingRow(b,i,val,label,mx2){
+    const ia=activeBucket===b, dim=activeBucket&&!ia;
     return`<div class="abrow${ia?' abactive':''}" onclick="applyBucketFilter('${b}')">
       <div class="ablabel" style="${dim?'opacity:.4':''}">${b}</div>
-      <div class="abtrack"><div class="abfill" style="width:${AC[i]/mx*100}%;background:${AC2[i]}${dim?'40':''};"></div></div>
-      <div class="abval" style="${dim?'opacity:.4':''}">${AC[i]} und</div></div>`;
-  }).join('');
+      <div class="abtrack"><div class="abfill" style="width:${(val/mx2*100).toFixed(1)}%;background:${AC2[i]}${dim?'40':''}"></div></div>
+      <div class="abval" style="${dim?'opacity:.4':''}">${label}</div></div>`;
+  }
+  document.getElementById('inv-aging-bars').innerHTML=
+    AB.map((b,i)=>mkAgingRow(b,i,AC[i],AC[i]+' und',mx)).join('');
+  const elV=document.getElementById('inv-aging-bars-val');
+  if(elV) elV.innerHTML=AB.map((b,i)=>mkAgingRow(b,i,AV[i],fmtM(AV[i]),mxV)).join('');
 }
 
 // ═══════════════════════════════════════════
