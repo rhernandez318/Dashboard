@@ -1777,6 +1777,7 @@ async function applySession(user){
         document.getElementById('upload-section').style.display='none';
         document.getElementById('dashboard').style.display='block';
         document.getElementById('soc-bar').style.display='flex';
+        window._dashLoaded=true;
         const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
         document.getElementById('report-date').textContent='Cartera de Clientes';
         // Mostrar combo de divisiones (solo las permitidas)
@@ -1823,6 +1824,7 @@ async function applySession(user){
         document.getElementById('upload-section').style.display='none';
         document.getElementById('dashboard').style.display='block';
         document.getElementById('soc-bar').style.display='flex';
+        window._dashLoaded=true;
         const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
         document.getElementById('report-date').textContent='Datos del administrador';
       } catch(e){
@@ -2163,6 +2165,8 @@ function buildPeriodButtons(maxPer){
   }
   html+=`<button class="pbtn${currentPer===0?' active':''}" onclick="setPeriodo(0,this)">Acumulado</button>`;
   wrap.innerHTML=html;
+  // Mirror to waterfall tab period selector
+  setTimeout(()=>{const w2=document.getElementById('ptoggle-wrap-wfm');if(w2)w2.innerHTML=html;},0);
   // Update Estado de Resultados table header
   const thead=document.querySelector('#tbl-edo thead tr');
   if(thead){
