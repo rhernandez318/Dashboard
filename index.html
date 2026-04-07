@@ -3382,7 +3382,7 @@ function showTab(tab,btn){
   if(tab==='avance') buildAvance();
   if(tab==='financiero') setTimeout(buildWaterfall, 0);
   if(tab==='razones') buildOFI();
-  if(tab==='waterfall') buildWaterfallMulti();
+  if(tab==='waterfall'){ if(window._fin) buildPeriodButtons(window._fin.maxPer); buildWaterfallMulti(); }
   const cdw = document.getElementById('cart-div-wrap');
   if(tab==='cartera'){ populateCartDivSelect(); if(cdw) cdw.style.display='flex'; }
   else { if(cdw) cdw.style.display='none'; activeCartDiv=null; }
@@ -3406,9 +3406,13 @@ function setEdoSeg(val){
 }
 function setEdoMode(mode,btn){
   edoMode=mode;
-  document.getElementById('edo-btn-mes')?.classList.remove('active');
-  document.getElementById('edo-btn-acum')?.classList.remove('active');
+  ['edo-btn-mes','edo-btn-acum','wfm-edo-btn-mes','wfm-edo-btn-acum'].forEach(id=>{
+    document.getElementById(id)?.classList.remove('active');
+  });
   btn.classList.add('active');
+  // Sync mirror button
+  const mirrorId = btn.id.startsWith('wfm-') ? btn.id.replace('wfm-','') : 'wfm-'+btn.id;
+  document.getElementById(mirrorId)?.classList.add('active');
   buildEdo(currentPer);
   renderMargenSeg();
 }
