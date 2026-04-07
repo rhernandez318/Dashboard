@@ -575,7 +575,10 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
       <div class="ccard"><h4>Distribución de Antigüedad (días)</h4><div class="cwrap"><canvas id="ch-inv-a"></canvas></div></div>
     </div>
     <div class="tcard"><div class="thead2"><h4>📦 Detalle por Segmento<span class="hint">· toca fila para filtrar</span></h4></div><div class="tscroll"><table id="tbl-inv-s"><thead><tr><th>Segmento</th><th>Unidades</th><th>Valor</th><th>$/Und</th><th>Días Prom</th><th>Días Máx</th><th>Alerta</th></tr></thead><tbody></tbody></table></div></div>
-    <div class="tcard mt4"><div class="thead2"><h4>📅 Antigüedad por Rango</h4></div><div style="padding:14px 17px;" id="inv-aging-bars"></div></div>
+    <div class="g2 mt4">
+      <div class="tcard"><div class="thead2"><h4>📅 Antigüedad por Rango — Unidades</h4></div><div style="padding:14px 17px;" id="inv-aging-bars"></div></div>
+      <div class="tcard"><div class="thead2"><h4>📅 Antigüedad por Rango — Monto</h4></div><div style="padding:14px 17px;" id="inv-aging-bars-val"></div></div>
+    </div>
     <div class="tcard mt4">
       <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4>🔑 Unidades más vencidas<span class="hint" id="inv-uni-hint"> · top 25</span></h4><button onclick="exportTableExcel('tbl-inv-uni','Inventario_Unidades')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
       <div class="tscroll"><table id="tbl-inv-uni">
