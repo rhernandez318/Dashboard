@@ -3396,7 +3396,9 @@ function showTab(tab,btn){
     if(window._fin) buildPeriodButtons(window._fin.maxPer);
     setTimeout(buildWaterfallMulti,0);
   } else {
-    if(window._dashLoaded) document.getElementById('soc-bar').style.display='flex';
+    // Restore soc-bar ONLY if we're leaving the waterfall tab (where it was hidden)
+    const sb=document.getElementById('soc-bar');
+    if(sb && sb.style.display==='none' && window._dashLoaded) sb.style.display='flex';
   }
   const cdw = document.getElementById('cart-div-wrap');
   if(tab==='cartera'){ populateCartDivSelect(); if(cdw) cdw.style.display='flex'; }
