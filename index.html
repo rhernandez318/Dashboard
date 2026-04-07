@@ -3391,7 +3391,13 @@ function showTab(tab,btn){
   if(tab==='avance') buildAvance();
   if(tab==='financiero') setTimeout(buildWaterfall, 0);
   if(tab==='razones') buildOFI();
-  if(tab==='waterfall'){ if(window._fin) buildPeriodButtons(window._fin.maxPer); buildWaterfallMulti(); }
+  if(tab==='waterfall'){
+    document.getElementById('soc-bar').style.display='none';
+    if(window._fin) buildPeriodButtons(window._fin.maxPer);
+    setTimeout(buildWaterfallMulti,0);
+  } else {
+    if(window._dashLoaded) document.getElementById('soc-bar').style.display='flex';
+  }
   const cdw = document.getElementById('cart-div-wrap');
   if(tab==='cartera'){ populateCartDivSelect(); if(cdw) cdw.style.display='flex'; }
   else { if(cdw) cdw.style.display='none'; activeCartDiv=null; }
@@ -3427,12 +3433,22 @@ function setEdoMode(mode,btn){
 }
 function setPeriodo(p,btn){
   currentPer=p;
-  document.querySelectorAll('#ptoggle-wrap .pbtn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  // Deactivate all period buttons in both selectors
+  document.querySelectorAll('#ptoggle-wrap .pbtn, #ptoggle-wrap-wfm .pbtn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  // Sync mirror selector
+  const inWfm = btn?.closest('#ptoggle-wrap-wfm');
+  const mirrorWrap = document.getElementById(inWfm ? 'ptoggle-wrap' : 'ptoggle-wrap-wfm');
+  if(mirrorWrap){
+    const btns = mirrorWrap.querySelectorAll('.pbtn');
+    const idx  = p===0 ? btns.length-1 : p-1;
+    if(btns[idx]) btns[idx].classList.add('active');
+  }
   renderFinKPIs(p);
   buildFinCharts(p);
   buildEdo(p);
   renderMargenSeg();
+  if(document.getElementById('tab-waterfall')?.classList.contains('active')) buildWaterfallMulti();
 }
 
 // ═══════════════════════════════════════════════════════════════
