@@ -2517,9 +2517,12 @@ function renderResumenCharts(ant,inv){
 function renderTopClientes(ant){
   const top=Object.entries(gb(ant,'cliente')).map(([n,rows])=>({nombre:n,saldo:sb2(rows,'saldo'),vencida:sb2(rows,'vencido'),seg:rows[0]?.segmento||''})).sort((a,b)=>b.saldo-a.saldo).slice(0,10);
   document.querySelector('#tbl-top tbody').innerHTML=top.map(c=>`
-    <tr><td class="tdn">${c.nombre.length>32?c.nombre.slice(0,32)+'…':c.nombre}</td><td>${fmtC(c.saldo)}</td>
-    <td>${sb(c.seg,true)}</td>
-    <td>${c.vencida>0?`<span class="pill pr">Venc. ${pct(c.vencida,c.saldo)}</span>`:`<span class="pill pg">Corriente</span>`}</td></tr>`).join('');
+    <tr style="cursor:pointer" title="Ver estado de cuenta de ${c.nombre}" onclick="irAEstadoCuenta('${c.nombre.replace(/'/g,"\\'")}')">
+      <td class="tdn">${c.nombre.length>32?c.nombre.slice(0,32)+'…':c.nombre} <span style="color:#3b82f6;font-size:9px">↗</span></td>
+      <td>${fmtC(c.saldo)}</td>
+      <td>${sb(c.seg,true)}</td>
+      <td>${c.vencida>0?`<span class="pill pr">Venc. ${pct(c.vencida,c.saldo)}</span>`:`<span class="pill pg">Corriente</span>`}</td>
+    </tr>`).join('');
 }
 
 // ═══════════════════════════════════════════
@@ -2602,8 +2605,12 @@ function renderCartTables(ant){
   const colLabel=hayVencidos?'Vencido':'Saldo';
   document.querySelector('#tbl-cli-v thead tr').innerHTML=`<th>Cliente</th><th>Saldo</th><th>${colLabel}</th><th>Días</th>`;
   document.querySelector('#tbl-cli-v tbody').innerHTML=top.map(c=>`
-    <tr><td class="tdn">${c.nombre.length>32?c.nombre.slice(0,32)+'…':c.nombre}</td><td>${fmtC(c.saldo)}</td><td>${fmtC(hayVencidos?c.vencida:c.saldo)}</td>
-    <td><span class="pill ${c.maxD>120?'pr':c.maxD>60?'pa':c.maxD>0?'pb':'pg'}">${c.maxD>0?c.maxD+'d venc.':Math.abs(c.maxD)+'d x venc.'}</span></td></tr>`).join('');
+    <tr style="cursor:pointer" title="Ver estado de cuenta de ${c.nombre}" onclick="irAEstadoCuenta('${c.nombre.replace(/'/g,"\\'")}')">
+      <td class="tdn">${c.nombre.length>32?c.nombre.slice(0,32)+'…':c.nombre} <span style="color:#3b82f6;font-size:9px">↗</span></td>
+      <td>${fmtC(c.saldo)}</td>
+      <td>${fmtC(hayVencidos?c.vencida:c.saldo)}</td>
+      <td><span class="pill ${c.maxD>120?'pr':c.maxD>60?'pa':c.maxD>0?'pb':'pg'}">${c.maxD>0?c.maxD+'d venc.':Math.abs(c.maxD)+'d x venc.'}</span></td>
+    </tr>`).join('');
 }
 
 // ═══════════════════════════════════════════
@@ -3721,7 +3728,8 @@ async function buildRefTable(){
     const diasTxt = r.diasVenc<=0 ? `Por vencer ${Math.abs(r.diasVenc)}d` : `${r.diasVenc}d vencido`;
     return `<tr data-ref="${r.ref}" data-cliente="${r.cliente.toLowerCase()}">
       <td style="font-family:monospace;font-size:11px;color:var(--text-muted)">${r.ref}</td>
-      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.cliente}">${r.cliente}</td>
+      <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:#60a5fa" title="Ver estado de cuenta de ${r.cliente}" onclick="irAEstadoCuenta('${r.cliente.replace(/'/g,"\\'")}')">
+        ${r.cliente} <span style="font-size:9px">↗</span></td>
       <td>${sb(r.segmento,false)}</td>
       <td style="text-align:right;font-weight:600">${fmtC(r.saldo)}</td>
       <td style="text-align:right"><span style="color:${dColor};font-weight:600">${diasTxt}</span></td>
@@ -5757,6 +5765,16 @@ function ecOnInput(){
 
 function ecHideList(){
   const dd=document.getElementById('ec-dropdown'); if(dd) dd.style.display='none';
+}
+
+function irAEstadoCuenta(nombre){
+  // Navegar a tab estados, seleccionar cliente y generar reporte
+  const btn = document.getElementById('tab-btn-estados');
+  if(btn) showTab('estados', btn);
+  setTimeout(()=>{
+    ecSelectClient(nombre);
+    generarEstado();
+  }, 80);
 }
 
 function ecSelectClient(nombre){
