@@ -527,10 +527,10 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
   <div class="tcontent" id="tab-cartera">
     <div class="shdr"><div class="stitle">Cartera de Clientes <small>Al <span id="fecha-analisis"></span></small></div></div>
     <div class="kgrid" id="kpi-cart"></div>
-    <div class="tcard" style="margin-bottom:18px;"><div class="thead2"><h4>📅 Antigüedad Recalculada por Vencimiento Neto<span class="hint">· toca fila para filtrar</span></h4></div><div style="padding:14px 17px;" id="aging-bars"></div></div>
-    <div class="crow">
+    <div class="crow" style="margin-bottom:18px">
       <div class="ccard"><h4>Por Vencer vs Vencida<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-venc-d"></canvas></div></div>
       <div class="ccard"><h4>Vencida por Bucket<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-buck-b"></canvas></div></div>
+      <div class="ccard"><h4>Cartera por Segmento<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-cart-s2"></canvas></div></div>
     </div>
     <div class="g2">
       <div class="tcard"><div class="thead2"><h4>🏢 Cartera por Segmento<span class="hint">· toca para filtrar</span></h4></div><div class="tscroll"><table id="tbl-cart-s"><thead><tr><th>Segmento</th><th>Saldo</th><th>Por Vencer</th><th>Vencida</th><th>% Venc.</th></tr></thead><tbody></tbody></table></div></div>
@@ -2434,7 +2434,6 @@ function refreshAll(){
   renderResumenCharts(ant,inv);
   renderTopClientes(ant);
   renderCartKPIs(ant);
-  renderAgingBars(ant);
   renderCartCharts(ant);
   renderCartTables(ant);
   buildRefTable();
@@ -2572,6 +2571,17 @@ function renderCartCharts(ant){
   const cbar=new Chart(document.getElementById('ch-buck-b'),{type:'bar',data:{labels:VBK,datasets:[{label:'Saldo',data:VBK.map(b=>sb2(antSeg.filter(r=>r.bucket===b),'saldo')),backgroundColor:VBK.map((b,i)=>activeBucket&&activeBucket!==b?VBC[i]+'35':VBC[i]),borderRadius:4}]},options:bOpts('MXN')});
   document.getElementById('ch-buck-b').onclick=e=>bucketChartClick(cbar,e,VBK);
   CH['ch-buck-b']=cbar;
+
+  // Cartera por Segmento donut (duplicate of resumen, but in cartera tab)
+  const abys2=gb(fAnt().filter(r=>r.saldo!==0),'segmento');
+  const anames2=Object.keys(abys2).sort((a,b)=>sb2(abys2[b],'saldo')-sb2(abys2[a],'saldo')).slice(0,9);
+  dch('ch-cart-s2');
+  const cs2=new Chart(document.getElementById('ch-cart-s2'),{
+    type:'doughnut',
+    data:{labels:anames2,datasets:[{data:anames2.map(s=>sb2(abys2[s],'saldo')),backgroundColor:anames2.map(s=>activeSeg&&activeSeg!==s?sc(s,.2):sc(s)),borderWidth:0,borderRadius:3}]},
+    options:dOpts()});
+  document.getElementById('ch-cart-s2').onclick=e=>chartClick(cs2,e,anames2);
+  CH['ch-cart-s2']=cs2;
 }
 
 function renderCartTables(ant){
