@@ -3380,6 +3380,7 @@ function showTab(tab,btn){
   btn.classList.add('active');
   if(tab==='usuarios') renderUsersTable();
   if(tab==='avance') buildAvance();
+  if(tab==='financiero') setTimeout(buildWaterfall, 0);
   if(tab==='razones') buildOFI();
   if(tab==='waterfall') buildWaterfallMulti();
   const cdw = document.getElementById('cart-div-wrap');
@@ -4703,7 +4704,8 @@ function buildWaterfall(){
   ];
 
   const svg    = document.getElementById('wf-svg');
-  const W      = svg.parentElement.clientWidth || 700;
+  const wfWrap  = svg.parentElement;
+  const W      = wfWrap.offsetWidth || wfWrap.clientWidth || wfWrap.getBoundingClientRect().width || 700;
   const PAD    = { top: 60, right: 20, bottom: 70, left: 70 };
   const H      = 320;
   const barW   = Math.floor((W - PAD.left - PAD.right) / bars.length * 0.55);
@@ -4819,6 +4821,15 @@ function buildWaterfall(){
   svg.innerHTML = svgHtml;
   document.getElementById('wf-title').textContent =
     `🌊 Puente de Utilidad Contribución${t.edoSeg ? ' — ' + t.edoSeg : ''} — Real vs ${compLabel}`;
+
+  // ResizeObserver: redraw on container resize (debounced)
+  if(!svg._wfResizeObs){
+    svg._wfResizeObs = new ResizeObserver(()=>{
+      clearTimeout(svg._wfResizeTimer);
+      svg._wfResizeTimer = setTimeout(buildWaterfall, 60);
+    });
+    svg._wfResizeObs.observe(svg.parentElement);
+  }
 }
 
 
