@@ -695,8 +695,13 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
   <div class="tcontent" id="tab-waterfall">
     <div class="shdr" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div class="stitle" style="color:#a78bfa">🌊 Puente de Utilidad por Segmento</div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:10px;color:var(--text-muted)">Comparar vs:</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="ptoggle" id="ptoggle-wrap-wfm"></div>
+        <div style="display:flex;gap:3px;background:rgba(255,255,255,.04);border-radius:8px;padding:3px">
+          <button id="wfm-edo-btn-mes"  class="pbtn active" onclick="setEdoMode('mes',this)"  style="font-size:10px;padding:4px 11px">Mes</button>
+          <button id="wfm-edo-btn-acum" class="pbtn"        onclick="setEdoMode('acum',this)" style="font-size:10px;padding:4px 11px">Acumulado</button>
+        </div>
+        <span style="font-size:10px;color:var(--text-muted)">vs:</span>
         <button id="wfm-btn-ppto" class="tbtn active" onclick="setWfmMode('ppto',this)"
           style="padding:4px 12px;font-size:10px;border-radius:6px;border:1px solid var(--border)">Presupuesto</button>
         <button id="wfm-btn-aa" class="tbtn" onclick="setWfmMode('aa',this)"
