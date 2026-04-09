@@ -4937,11 +4937,9 @@ function buildMesesVenta(){
   const invTotal  = inv.reduce((s,r)=>s+r.valor,0);
   const costTotal = costSeg(null);
 
-  // Segmentos con inventario físico de unidades/refacciones
-  const SEGS_INV = new Set(['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES',
-    'PASAJE','REFACCIONES','VANES']);
-  const SEGS = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES','PASAJE',
-                'REFACCIONES','TALLER','VANES','COLLISION CENTER Y HYP'];
+  // Solo segmentos con inventario físico
+  const SEGS = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES',
+                'PASAJE','REFACCIONES','VANES'];
   const SEG_SHORT = {
     'TRACTO':'Tracto','CARGA':'Carga','FL360':'FL360','VEHICULOS SEMINUEVOS':'Semi-Nvos',
     'SEMIREMOLQUES':'Semiremolq.','PASAJE':'Pasaje','REFACCIONES':'Refacc.',
@@ -4992,18 +4990,17 @@ function buildMesesVenta(){
     const inv2  = invBySeg[seg]||0;
     const rev2  = revSeg(seg);
     const cost2 = costSeg(seg);
-    const mC    = meses(cart, rev2);
-    const hasInv = SEGS_INV.has(seg);
-    const mI    = hasInv ? meses(inv2, rev2) : null;
-    const scC   = SC[statusM(mC,'cart')];
-    const scI   = SC[statusM(mI,'inv')];
+    const mC = meses(cart, rev2);
+    const mI = meses(inv2, rev2);
+    const scC = SC[statusM(mC,'cart')];
+    const scI = SC[statusM(mI,'inv')];
     return `<tr>
       <td style="font-weight:600">${SEG_SHORT[seg]||seg}</td>
       <td style="text-align:right">${fmtM(cart)}</td>
       <td style="text-align:right">${fmtM(rev2)}/mes</td>
       <td style="text-align:right;font-weight:700;color:${scC}">${fmtMes(mC)}</td>
-      <td style="text-align:right">${hasInv?fmtM(inv2):'—'}</td>
-      <td style="text-align:right">${hasInv?fmtM(rev2)+'/mes':'—'}</td>
+      <td style="text-align:right">${fmtM(inv2)}</td>
+      <td style="text-align:right">${fmtM(rev2)}/mes</td>
       <td style="text-align:right;font-weight:700;color:${scI}">${fmtMes(mI)}</td>
     </tr>`;
   }).join('');
