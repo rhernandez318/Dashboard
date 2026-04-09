@@ -4909,20 +4909,19 @@ function buildMesesVenta(){
   const f = window._fin;
   if(!f){ el.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:8px">Sin datos BDD</div>'; return; }
 
-  const maxPer = f.maxPer;
-  const cx     = fCx();
-  const ant    = fAnt();
-  const inv    = window._inv || [];
+  // Respect period selector (same logic as renderRazones)
+  const razPers = (currentPer===0||(edoMode==='acum'&&currentPer>0))
+    ? Array.from({length:currentPer===0?f.maxPer:currentPer},(_,i)=>i+1)
+    : [currentPer];
+  const nMeses = razPers.length;
 
-  // Helper: ventas mensuales promedio por segmento (cuentas tipo 4)
-  const PERS = Array.from({length:maxPer},(_,i)=>i+1);
+  const cx  = fCx();
+  const ant = fAnt();
+  const inv = window._inv || [];
+
   function revSeg(seg){
-    return -cx.filter(r=>r.ctaTipo==='4'&&PERS.includes(r.periodo)&&(!seg||r.seg===seg))
-              .reduce((s,r)=>s+r.importe,0) / maxPer;
-  }
-  function costSeg(seg){
-    return cx.filter(r=>r.ctaTipo==='5'&&PERS.includes(r.periodo)&&(!seg||r.seg===seg))
-             .reduce((s,r)=>s+r.importe,0) / maxPer;
+    return -cx.filter(r=>r.ctaTipo==='4'&&razPers.includes(r.periodo)&&(!seg||r.seg===seg))
+              .reduce((s,r)=>s+r.importe,0) / nMeses;
   }
 
   // Cartera por segmento
@@ -4934,16 +4933,14 @@ function buildMesesVenta(){
   // Inventario por segmento
   const invBySeg = {};
   inv.forEach(r=>{ if(!invBySeg[r.segmento]) invBySeg[r.segmento]=0; invBySeg[r.segmento]+=r.valor; });
-  const invTotal  = inv.reduce((s,r)=>s+r.valor,0);
-  const costTotal = costSeg(null);
+  const invTotal = inv.reduce((s,r)=>s+r.valor,0);
 
-  // Solo segmentos con inventario físico
+  // Solo segmentos con inventario físico — excluye Taller, Colisión, Admón, etc.
   const SEGS = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES',
                 'PASAJE','REFACCIONES','VANES'];
   const SEG_SHORT = {
     'TRACTO':'Tracto','CARGA':'Carga','FL360':'FL360','VEHICULOS SEMINUEVOS':'Semi-Nvos',
-    'SEMIREMOLQUES':'Semiremolq.','PASAJE':'Pasaje','REFACCIONES':'Refacc.',
-    'TALLER':'Taller','VANES':'Vanes','COLLISION CENTER Y HYP':'Collision'
+    'SEMIREMOLQUES':'Semiremolq.','PASAJE':'Pasaje','REFACCIONES':'Refacc.','VANES':'Vanes'
   };
 
   function meses(saldo, mensual){ return mensual>0 ? saldo/mensual : null; }
@@ -4956,9 +4953,9 @@ function buildMesesVenta(){
   }
   const SC = {good:'#00d4aa',warn:'#f59e0b',alert:'#ef4444',neutral:'#64748b'};
 
-  // ── Total row cards ──
   const mCart = meses(cartTotal, revTotal);
   const mInv  = meses(invTotal,  revTotal);
+
   const totalHtml = `
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
       <div class="kcard cb" style="border-top:3px solid ${SC[statusM(mCart,'cart')]}">
@@ -4973,51 +4970,27 @@ function buildMesesVenta(){
       </div>
       <div class="kcard cb">
         <div class="klabel">Período base</div>
-        <div class="kval" style="font-size:16px">${maxPer} ${maxPer===1?'mes':'meses'}</div>
+        <div class="kval" style="font-size:16px">${nMeses} ${nMeses===1?'mes':'meses'}</div>
         <div class="ksub">Promedio mensual calculado</div>
       </div>
       <div class="kcard cb">
-        <div class="klabel">Segmentos activos</div>
-        <div class="kval" style="font-size:16px">${Object.keys(antBySeg).length}</div>
-        <div class="ksub">Con saldo en cartera</div>
+        <div class="klabel">Segmentos con inventario</div>
+        <div class="kval" style="font-size:16px">${SEGS.filter(s=>(invBySeg[s]||0)>0).length}</div>
+        <div class="ksub">Con saldo de inventario</div>
       </div>
     </div>`;
 
-  // ── Segment table ──
-  const activeSEGS = SEGS.filter(s => (antBySeg[s]||0)>0 || (invBySeg[s]||0)>0);
-  const segRows = activeSEGS.map(seg=>{
+  // Solo filas de SEGS (segmentos con inventario físico)
+  const segRows = SEGS.map(seg=>{
     const cart = antBySeg[seg]||0;
-    const inv2  = invBySeg[seg]||0;
-    const rev2  = revSeg(seg);
-    const cost2 = costSeg(seg);
-    const mC = meses(cart, rev2);
-    const mI = meses(inv2, rev2);
-    const scC = SC[statusM(mC,'cart')];
-    const scI = SC[statusM(mI,'inv')];
+    const inv2 = invBySeg[seg]||0;
+    const rev2 = revSeg(seg);
+    const mC   = meses(cart, rev2);
+    const mI   = meses(inv2, rev2);
+    const scC  = SC[statusM(mC,'cart')];
+    const scI  = SC[statusM(mI,'inv')];
     return `<tr>
       <td style="font-weight:600">${SEG_SHORT[seg]||seg}</td>
-      <td style="text-align:right">${fmtM(cart)}</td>
-      <td style="text-align:right">${fmtM(rev2)}/mes</td>
-      <td style="text-align:right;font-weight:700;color:${scC}">${fmtMes(mC)}</td>
-      <td style="text-align:right">${fmtM(inv2)}</td>
-      <td style="text-align:right">${fmtM(rev2)}/mes</td>
-      <td style="text-align:right;font-weight:700;color:${scI}">${fmtMes(mI)}</td>
-    </tr>`;
-  }).join('');
-
-  // Add other segments from ant not in SEGS list
-  const otherSegs = Object.keys(antBySeg).filter(s=>!SEGS.includes(s));
-  const otherRows = otherSegs.map(seg=>{
-    const cart = antBySeg[seg]||0;
-    const inv2  = invBySeg[seg]||0;
-    const rev2  = revSeg(seg);
-    const cost2 = costSeg(seg);
-    const mC    = meses(cart, rev2);
-    const mI    = meses(inv2, rev2);
-    const scC   = SC[statusM(mC,'cart')];
-    const scI   = SC[statusM(mI,'inv')];
-    return `<tr style="opacity:.7">
-      <td>${seg}</td>
       <td style="text-align:right">${fmtM(cart)}</td>
       <td style="text-align:right">${rev2>0?fmtM(rev2)+'/mes':'—'}</td>
       <td style="text-align:right;font-weight:700;color:${scC}">${fmtMes(mC)}</td>
@@ -5044,7 +5017,7 @@ function buildMesesVenta(){
           <th style="padding:6px 10px;text-align:right;color:#f59e0b">Meses Inv.</th>
         </tr></thead>
         <tbody>
-          ${segRows}${otherRows}
+          ${segRows}
           <tr style="font-weight:800;border-top:2px solid rgba(255,255,255,.1);background:rgba(0,0,0,.2)">
             <td style="padding:5px 10px;color:#fff">TOTAL</td>
             <td style="text-align:right;padding:5px 10px;font-family:monospace">${fmtM(cartTotal)}</td>
@@ -5060,6 +5033,7 @@ function buildMesesVenta(){
 
   el.innerHTML = totalHtml + tableHtml;
 }
+
 
 // ═══════════════════════════════════════════
 // RAZONES DE BALANCE — Liquidez, Solvencia, DuPont, Z-Score
