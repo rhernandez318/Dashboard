@@ -4917,7 +4917,7 @@ function buildMesesVenta(){
 
   const cx  = fCx();
   const ant = fAnt();
-  const inv = window._inv || [];
+  const inv = fInv();  // fInv() respeta filtro activeSoc
 
   function revSeg(seg){
     return -cx.filter(r=>r.ctaTipo==='4'&&razPers.includes(r.periodo)&&(!seg||r.seg===seg))
