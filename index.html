@@ -4935,12 +4935,16 @@ function buildMesesVenta(){
   inv.forEach(r=>{ if(!invBySeg[r.segmento]) invBySeg[r.segmento]=0; invBySeg[r.segmento]+=r.valor; });
   const invTotal = inv.reduce((s,r)=>s+r.valor,0);
 
-  // Solo segmentos con inventario físico — excluye Taller, Colisión, Admón, etc.
+  // Segmentos con inventario físico (muestran cols Inventario + Meses Inv)
+  const SEGS_INV = new Set(['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES',
+                            'PASAJE','REFACCIONES','VANES']);
+  // Todos los segmentos de venta (incluye Taller y Colisión para meses cartera)
   const SEGS = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES',
-                'PASAJE','REFACCIONES','VANES'];
+                'PASAJE','REFACCIONES','VANES','TALLER','COLLISION CENTER Y HYP'];
   const SEG_SHORT = {
     'TRACTO':'Tracto','CARGA':'Carga','FL360':'FL360','VEHICULOS SEMINUEVOS':'Semi-Nvos',
-    'SEMIREMOLQUES':'Semiremolq.','PASAJE':'Pasaje','REFACCIONES':'Refacc.','VANES':'Vanes'
+    'SEMIREMOLQUES':'Semiremolq.','PASAJE':'Pasaje','REFACCIONES':'Refacc.',
+    'VANES':'Vanes','TALLER':'Taller','COLLISION CENTER Y HYP':'Colisión'
   };
 
   function meses(saldo, mensual){ return mensual>0 ? saldo/mensual : null; }
@@ -4985,17 +4989,18 @@ function buildMesesVenta(){
     const cart = antBySeg[seg]||0;
     const inv2 = invBySeg[seg]||0;
     const rev2 = revSeg(seg);
-    const mC   = meses(cart, rev2);
-    const mI   = meses(inv2, rev2);
-    const scC  = SC[statusM(mC,'cart')];
-    const scI  = SC[statusM(mI,'inv')];
+    const hasInv = SEGS_INV.has(seg);
+    const mC = meses(cart, rev2);
+    const mI = hasInv ? meses(inv2, rev2) : null;
+    const scC = SC[statusM(mC,'cart')];
+    const scI = SC[statusM(mI,'inv')];
     return `<tr>
       <td style="font-weight:600">${SEG_SHORT[seg]||seg}</td>
       <td style="text-align:right">${fmtM(cart)}</td>
       <td style="text-align:right">${rev2>0?fmtM(rev2)+'/mes':'—'}</td>
       <td style="text-align:right;font-weight:700;color:${scC}">${fmtMes(mC)}</td>
-      <td style="text-align:right">${fmtM(inv2)}</td>
-      <td style="text-align:right">${rev2>0?fmtM(rev2)+'/mes':'—'}</td>
+      <td style="text-align:right">${hasInv?fmtM(inv2):'—'}</td>
+      <td style="text-align:right">${hasInv&&rev2>0?fmtM(rev2)+'/mes':'—'}</td>
       <td style="text-align:right;font-weight:700;color:${scI}">${fmtMes(mI)}</td>
     </tr>`;
   }).join('');
