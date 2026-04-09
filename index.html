@@ -375,6 +375,10 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <div id="dupont-zscore-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px"></div>
 
     <div class="divider"></div>
+    <div class="shdr"><div class="stitle" style="font-size:14px;">📅 Meses de Venta — Cartera e Inventario <small>Total y por Segmento</small></div></div>
+    <div id="meses-venta-grid" style="margin-bottom:18px"></div>
+
+    <div class="divider"></div>
     <div class="shdr"><div class="stitle" style="font-size:14px;">Indicadores de Riesgo <small>Inventario & Cartera</small></div></div>
 
     <div class="g2">
@@ -2170,8 +2174,11 @@ function buildPeriodButtons(maxPer){
   }
   html+=`<button class="pbtn${currentPer===0?' active':''}" onclick="setPeriodo(0,this)">Acumulado</button>`;
   wrap.innerHTML=html;
-  // Mirror to waterfall tab period selector
-  setTimeout(()=>{const w2=document.getElementById('ptoggle-wrap-wfm');if(w2)w2.innerHTML=html;},0);
+  // Mirror to waterfall and razones selectors
+  setTimeout(()=>{
+    const w2=document.getElementById('ptoggle-wrap-wfm');if(w2)w2.innerHTML=html;
+    const w3=document.getElementById('ptoggle-wrap-raz');if(w3)w3.innerHTML=html;
+  },0);
   // Update Estado de Resultados table header
   const thead=document.querySelector('#tbl-edo thead tr');
   if(thead){
@@ -2188,14 +2195,15 @@ function buildPeriodButtons(maxPer){
 function renderRazones(){
   const f=window._fin;
   const cx=fCx();
+  const razPers=(currentPer===0||(edoMode==='acum'&&currentPer>0))?Array.from({length:currentPer===0?f.maxPer:currentPer},(_,i)=>i+1):[currentPer];
+  const NAMS2=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const el_rl=document.getElementById('raz-per-label');if(el_rl)el_rl.textContent=currentPer===0?'Acumulado':edoMode==='acum'?`Acum. Ene–${NAMS2[currentPer-1]}`:NAMS2[currentPer-1];
   const rev1=f.revP[0]||0, rev2=f.revP[1]||0;
   const cost1=f.costP[0]||0, cost2=f.costP[1]||0;
-  const revTotal=rev1+rev2;
-  const costTotal=cost1+cost2;
+  const revTotal=cx.filter(r=>r.ctaTipo==='4'&&razPers.includes(r.periodo)).reduce((s,r)=>s-r.importe,0);
+  const costTotal=cx.filter(r=>r.ctaTipo==='5'&&razPers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
   // Plan Piso: cuentas 6 que contienen 'Plan Piso' en el nombre
-  const pp1=cx.filter(r=>r.cuenta.includes('Plan Piso')&&r.periodo===1).reduce((s,r)=>s+r.importe,0);
-  const pp2=cx.filter(r=>r.cuenta.includes('Plan Piso')&&r.periodo===2).reduce((s,r)=>s+r.importe,0);
-  const ppTotal=pp1+pp2;
+  const ppTotal=cx.filter(r=>r.cuenta.includes('Plan Piso')&&razPers.includes(r.periodo)).reduce((s,r)=>s+r.importe,0);
   const gpTotal=revTotal-costTotal;
   const margenBruto=gpTotal/revTotal;
   const margenPP=(gpTotal-ppTotal)/revTotal;
@@ -2205,8 +2213,8 @@ function renderRazones(){
   const cartTotal=sb2(fAnt(),'saldo');
   const cartVencida=sb2(fAnt(),'vencido');
 
-  // Days in period
-  const D=DIAS_PERIODO;
+  const DMAS=[31,28,31,30,31,30,31,31,30,31,30,31];
+  const D=razPers.reduce((s,p)=>s+(DMAS[p-1]||30),0);
 
   // DSO - Days Sales Outstanding (cartera / ventas diarias)
   const dso=revTotal>0?(cartTotal/revTotal)*D:0;
@@ -2310,6 +2318,7 @@ function renderRazones(){
     inventariosBal,deudaFinanciera,utilidadOp};
   buildOFI();
   buildBalanceRatios();
+  buildMesesVenta();
 
   // ── CCE FLOW ──
   document.getElementById('cce-flow').innerHTML=`
@@ -3390,7 +3399,10 @@ function showTab(tab,btn){
   if(tab==='usuarios') renderUsersTable();
   if(tab==='avance') buildAvance();
   if(tab==='financiero') setTimeout(buildWaterfall, 0);
-  if(tab==='razones') buildOFI();
+  if(tab==='razones'){
+    if(window._fin) buildPeriodButtons(window._fin.maxPer);
+    buildOFI();
+  }
   if(tab==='waterfall'){
     document.getElementById('soc-bar').style.display='none';
     if(window._fin) buildPeriodButtons(window._fin.maxPer);
@@ -3423,16 +3435,14 @@ function setEdoSeg(val){
 }
 function setEdoMode(mode,btn){
   edoMode=mode;
-  ['edo-btn-mes','edo-btn-acum','wfm-edo-btn-mes','wfm-edo-btn-acum'].forEach(id=>{
-    document.getElementById(id)?.classList.remove('active');
-  });
-  btn.classList.add('active');
-  // Sync mirror button
-  const mirrorId = btn.id.startsWith('wfm-') ? btn.id.replace('wfm-','') : 'wfm-'+btn.id;
-  document.getElementById(mirrorId)?.classList.add('active');
+  const modeKey=mode==='mes'?'mes':'acum';
+  ['edo-btn-mes','edo-btn-acum','wfm-edo-btn-mes','wfm-edo-btn-acum','raz-edo-btn-mes','raz-edo-btn-acum'].forEach(id=>document.getElementById(id)?.classList.remove('active'));
+  ['edo-btn-','wfm-edo-btn-','raz-edo-btn-'].forEach(p=>document.getElementById(p+modeKey)?.classList.add('active'));
   buildEdo(currentPer);
   renderMargenSeg();
   if(document.getElementById('tab-waterfall')?.classList.contains('active')) buildWaterfallMulti();
+  if(document.getElementById('tab-razones')?.classList.contains('active')) renderRazones();
+  if(document.getElementById('tab-razones')?.classList.contains('active')) renderRazones();
 }
 function setPeriodo(p,btn){
   currentPer=p;
@@ -3440,18 +3450,19 @@ function setPeriodo(p,btn){
   document.querySelectorAll('#ptoggle-wrap .pbtn, #ptoggle-wrap-wfm .pbtn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   // Sync mirror selector
-  const inWfm = btn?.closest('#ptoggle-wrap-wfm');
-  const mirrorWrap = document.getElementById(inWfm ? 'ptoggle-wrap' : 'ptoggle-wrap-wfm');
-  if(mirrorWrap){
-    const btns = mirrorWrap.querySelectorAll('.pbtn');
-    const idx  = p===0 ? btns.length-1 : p-1;
-    if(btns[idx]) btns[idx].classList.add('active');
-  }
+  ['ptoggle-wrap','ptoggle-wrap-wfm','ptoggle-wrap-raz'].forEach(id=>{
+    const wrap2=document.getElementById(id);if(!wrap2)return;
+    if(btn?.closest('#'+id))return;
+    const btns2=wrap2.querySelectorAll('.pbtn');
+    const idx2=p===0?btns2.length-1:p-1;
+    if(btns2[idx2])btns2[idx2].classList.add('active');
+  });
   renderFinKPIs(p);
   buildFinCharts(p);
   buildEdo(p);
   renderMargenSeg();
   if(document.getElementById('tab-waterfall')?.classList.contains('active')) buildWaterfallMulti();
+  if(document.getElementById('tab-razones')?.classList.contains('active')) renderRazones();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4865,6 +4876,167 @@ function buildWaterfall(){
 }
 
 
+
+
+// ═══════════════════════════════════════════
+// MESES DE VENTA — Cartera e Inventario por Segmento
+// ═══════════════════════════════════════════
+function buildMesesVenta(){
+  const el = document.getElementById('meses-venta-grid');
+  if(!el) return;
+  const f = window._fin;
+  if(!f){ el.innerHTML='<div style="color:var(--text-muted);font-size:11px;padding:8px">Sin datos BDD</div>'; return; }
+
+  const maxPer = f.maxPer;
+  const cx     = fCx();
+  const ant    = fAnt();
+  const inv    = window._inv || [];
+
+  // Helper: ventas mensuales promedio por segmento (cuentas tipo 4)
+  const PERS = Array.from({length:maxPer},(_,i)=>i+1);
+  function revSeg(seg){
+    return -cx.filter(r=>r.ctaTipo==='4'&&PERS.includes(r.periodo)&&(!seg||r.seg===seg))
+              .reduce((s,r)=>s+r.importe,0) / maxPer;
+  }
+  function costSeg(seg){
+    return cx.filter(r=>r.ctaTipo==='5'&&PERS.includes(r.periodo)&&(!seg||r.seg===seg))
+             .reduce((s,r)=>s+r.importe,0) / maxPer;
+  }
+
+  // Cartera por segmento
+  const antBySeg = {};
+  ant.forEach(r=>{ if(!antBySeg[r.segmento]) antBySeg[r.segmento]=0; antBySeg[r.segmento]+=r.saldo; });
+  const cartTotal = ant.reduce((s,r)=>s+r.saldo,0);
+  const revTotal  = revSeg(null);
+
+  // Inventario por segmento
+  const invBySeg = {};
+  inv.forEach(r=>{ if(!invBySeg[r.segmento]) invBySeg[r.segmento]=0; invBySeg[r.segmento]+=r.valor; });
+  const invTotal  = inv.reduce((s,r)=>s+r.valor,0);
+  const costTotal = costSeg(null);
+
+  const SEGS = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES','PASAJE',
+                'REFACCIONES','TALLER','VANES','COLLISION CENTER Y HYP'];
+  const SEG_SHORT = {
+    'TRACTO':'Tracto','CARGA':'Carga','FL360':'FL360','VEHICULOS SEMINUEVOS':'Semi-Nvos',
+    'SEMIREMOLQUES':'Semiremolq.','PASAJE':'Pasaje','REFACCIONES':'Refacc.',
+    'TALLER':'Taller','VANES':'Vanes','COLLISION CENTER Y HYP':'Collision'
+  };
+
+  function meses(saldo, mensual){ return mensual>0 ? saldo/mensual : null; }
+  function fmtMes(v){ return v==null||!isFinite(v) ? '—' : v.toFixed(1)+' m'; }
+  function statusM(v, type){
+    if(v==null) return 'neutral';
+    if(type==='cart') return v<1?'good':v<2?'warn':'alert';
+    if(type==='inv')  return v<3?'good':v<5?'warn':'alert';
+    return 'neutral';
+  }
+  const SC = {good:'#00d4aa',warn:'#f59e0b',alert:'#ef4444',neutral:'#64748b'};
+
+  // ── Total row cards ──
+  const mCart = meses(cartTotal, revTotal);
+  const mInv  = meses(invTotal,  revTotal);
+  const totalHtml = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div class="kcard cb" style="border-top:3px solid ${SC[statusM(mCart,'cart')]}">
+        <div class="klabel">Meses Cartera Total</div>
+        <div class="kval" style="color:${SC[statusM(mCart,'cart')]}">${fmtMes(mCart)}</div>
+        <div class="ksub">${fmtM(cartTotal)} ÷ ${fmtM(revTotal)}/mes</div>
+      </div>
+      <div class="kcard cb" style="border-top:3px solid ${SC[statusM(mInv,'inv')]}">
+        <div class="klabel">Meses Inventario Total</div>
+        <div class="kval" style="color:${SC[statusM(mInv,'inv')]}">${fmtMes(mInv)}</div>
+        <div class="ksub">${fmtM(invTotal)} ÷ ${fmtM(revTotal)}/mes</div>
+      </div>
+      <div class="kcard cb">
+        <div class="klabel">Período base</div>
+        <div class="kval" style="font-size:16px">${maxPer} ${maxPer===1?'mes':'meses'}</div>
+        <div class="ksub">Promedio mensual calculado</div>
+      </div>
+      <div class="kcard cb">
+        <div class="klabel">Segmentos activos</div>
+        <div class="kval" style="font-size:16px">${Object.keys(antBySeg).length}</div>
+        <div class="ksub">Con saldo en cartera</div>
+      </div>
+    </div>`;
+
+  // ── Segment table ──
+  const activeSEGS = SEGS.filter(s => (antBySeg[s]||0)>0 || (invBySeg[s]||0)>0);
+  const segRows = activeSEGS.map(seg=>{
+    const cart = antBySeg[seg]||0;
+    const inv2  = invBySeg[seg]||0;
+    const rev2  = revSeg(seg);
+    const cost2 = costSeg(seg);
+    const mC    = meses(cart, rev2);
+    const mI    = meses(inv2, rev2);
+    const scC   = SC[statusM(mC,'cart')];
+    const scI   = SC[statusM(mI,'inv')];
+    return `<tr>
+      <td style="font-weight:600">${SEG_SHORT[seg]||seg}</td>
+      <td style="text-align:right">${fmtM(cart)}</td>
+      <td style="text-align:right">${fmtM(rev2)}/mes</td>
+      <td style="text-align:right;font-weight:700;color:${scC}">${fmtMes(mC)}</td>
+      <td style="text-align:right">${fmtM(inv2)}</td>
+      <td style="text-align:right">${fmtM(rev2)}/mes</td>
+      <td style="text-align:right;font-weight:700;color:${scI}">${fmtMes(mI)}</td>
+    </tr>`;
+  }).join('');
+
+  // Add other segments from ant not in SEGS list
+  const otherSegs = Object.keys(antBySeg).filter(s=>!SEGS.includes(s));
+  const otherRows = otherSegs.map(seg=>{
+    const cart = antBySeg[seg]||0;
+    const inv2  = invBySeg[seg]||0;
+    const rev2  = revSeg(seg);
+    const cost2 = costSeg(seg);
+    const mC    = meses(cart, rev2);
+    const mI    = meses(inv2, rev2);
+    const scC   = SC[statusM(mC,'cart')];
+    const scI   = SC[statusM(mI,'inv')];
+    return `<tr style="opacity:.7">
+      <td>${seg}</td>
+      <td style="text-align:right">${fmtM(cart)}</td>
+      <td style="text-align:right">${rev2>0?fmtM(rev2)+'/mes':'—'}</td>
+      <td style="text-align:right;font-weight:700;color:${scC}">${fmtMes(mC)}</td>
+      <td style="text-align:right">${fmtM(inv2)}</td>
+      <td style="text-align:right">${rev2>0?fmtM(rev2)+'/mes':'—'}</td>
+      <td style="text-align:right;font-weight:700;color:${scI}">${fmtMes(mI)}</td>
+    </tr>`;
+  }).join('');
+
+  const tableHtml = `
+    <div class="tcard">
+      <div class="thead2" style="display:flex;justify-content:space-between;align-items:center">
+        <h4>📅 Meses de Venta por Segmento</h4>
+        <span style="font-size:9px;color:var(--text-muted)">Cartera ÷ venta mensual prom. · Inv ÷ venta mensual prom.</span>
+      </div>
+      <div class="tscroll"><table style="font-size:11px;width:100%;border-collapse:collapse">
+        <thead><tr style="background:rgba(0,0,0,.2)">
+          <th style="padding:6px 10px;text-align:left">Segmento</th>
+          <th style="padding:6px 10px;text-align:right;color:#3b82f6">Cartera</th>
+          <th style="padding:6px 10px;text-align:right;color:#3b82f6">Venta/mes</th>
+          <th style="padding:6px 10px;text-align:right;color:#3b82f6">Meses Cart.</th>
+          <th style="padding:6px 10px;text-align:right;color:#f59e0b">Inventario</th>
+          <th style="padding:6px 10px;text-align:right;color:#f59e0b">Venta/mes</th>
+          <th style="padding:6px 10px;text-align:right;color:#f59e0b">Meses Inv.</th>
+        </tr></thead>
+        <tbody>
+          ${segRows}${otherRows}
+          <tr style="font-weight:800;border-top:2px solid rgba(255,255,255,.1);background:rgba(0,0,0,.2)">
+            <td style="padding:5px 10px;color:#fff">TOTAL</td>
+            <td style="text-align:right;padding:5px 10px;font-family:monospace">${fmtM(cartTotal)}</td>
+            <td style="text-align:right;padding:5px 10px;font-family:monospace">${fmtM(revTotal)}/mes</td>
+            <td style="text-align:right;padding:5px 10px;font-family:monospace;color:${SC[statusM(mCart,'cart')]}">${fmtMes(mCart)}</td>
+            <td style="text-align:right;padding:5px 10px;font-family:monospace">${fmtM(invTotal)}</td>
+            <td style="text-align:right;padding:5px 10px;font-family:monospace">${fmtM(revTotal)}/mes</td>
+            <td style="text-align:right;padding:5px 10px;font-family:monospace;color:${SC[statusM(mInv,'inv')]}">${fmtMes(mInv)}</td>
+          </tr>
+        </tbody>
+      </table></div>
+    </div>`;
+
+  el.innerHTML = totalHtml + tableHtml;
+}
 
 // ═══════════════════════════════════════════
 // RAZONES DE BALANCE — Liquidez, Solvencia, DuPont, Z-Score
