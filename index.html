@@ -2291,15 +2291,28 @@ function renderRazones(){
     pasivoTotal    = Math.abs(sf('2'));
     capitalContable= Math.abs(sf('3'));
     utilidadNeta   = -(sf('4')+sf('5')+sf('6')+sf('7')+sf('8'));
-    const ACTFIJO=['Dep. Acum','Rev Dep'];
-    activoCirculante=Math.abs(balRowsFiltered(r=>r.ctaTipo==='1'&&
-      !ACTFIJO.some(k=>r.cuenta.startsWith(k))
+    // Excluir: activo fijo (121x,123x,124x), depreciaciones, intercompany
+    const AC_EXCL_CTAS=['CXC Entre Divisiones','CXC  Empresas Grupo',
+      'Activo x Der de Uso','Aport Economicas',
+      'Mob y Eq de Oficina','Maquinaria y Equipo','Equipo de Transporte',
+      'Equipo de Computo','Herramentales','Mejoras al Local Arr'];
+    const AC_EXCL_PREF=['Dep. Acum','Rev Dep','Revaluación'];
+    const AC_EXCL_NUM=['121','123','124'];
+    activoCirculante=Math.abs(balRowsFiltered(r=>
+      r.ctaTipo==='1'&&
+      !AC_EXCL_CTAS.includes(r.cuenta)&&
+      !AC_EXCL_PREF.some(k=>r.cuenta.startsWith(k))&&
+      !AC_EXCL_NUM.some(k=>r.cuenta.startsWith(k))
     ).reduce((s,r)=>s+r.importe,0));
     inventariosBal=Math.abs(balRowsFiltered(r=>
       ['Inventarios Nuevos','Inventario Semi-Nvos','Inv. Refacciones','Mercancias Transito'].includes(r.cuenta)
     ).reduce((s,r)=>s+r.importe,0));
-    const PASLP=['Pasivo Arrend L.P.','Indemnización Legal','Prima de Antigüedad','Plan de Pensiones'];
-    pasivoCirculante=Math.abs(balRowsFiltered(r=>r.ctaTipo==='2'&&!PASLP.includes(r.cuenta)).reduce((s,r)=>s+r.importe,0));
+    const PASLP=['Pasivo Arrend L.P.','Indemnización Legal','Prima de Antigüedad','Plan de Pensiones',
+      'Recep Aport Economic','CXP entre Divisiones'];
+    pasivoCirculante=Math.abs(balRowsFiltered(r=>
+      r.ctaTipo==='2'&&!PASLP.includes(r.cuenta)&&
+      !r.cuenta.startsWith('224')
+    ).reduce((s,r)=>s+r.importe,0));
     deudaFinanciera=Math.abs(balRowsFiltered(r=>
       ['Obligacion Fin BBVA','Obligacion Fin Banor','Obligacion Fin Sant','Oblig Fin Planta','DXP Tercer CP Bancos','Pasivo Arrend L.P.'].includes(r.cuenta)
     ).reduce((s,r)=>s+r.importe,0));
