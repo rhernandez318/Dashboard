@@ -357,7 +357,16 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
   <!-- RAZONES FINANCIERAS -->
   <div class="tcontent" id="tab-razones">
-    <div class="shdr"><div class="stitle">Razones Financieras <small>Calculadas al período acumulado</small></div></div>
+    <div class="shdr" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div class="stitle">Razones Financieras <small id="raz-per-label">Acumulado</small></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div class="ptoggle" id="ptoggle-wrap-raz"></div>
+        <div style="display:flex;gap:3px;background:rgba(255,255,255,.04);border-radius:8px;padding:3px">
+          <button id="raz-edo-btn-mes"  class="pbtn active" onclick="setEdoMode('mes',this)"  style="font-size:10px;padding:4px 11px">Mes</button>
+          <button id="raz-edo-btn-acum" class="pbtn"        onclick="setEdoMode('acum',this)" style="font-size:10px;padding:4px 11px">Acumulado</button>
+        </div>
+      </div>
+    </div>
 
     <!-- CCE FLOW -->
     <div class="cce-flow" id="cce-flow"></div>
