@@ -5065,10 +5065,11 @@ function exportEstadoPDF(){
   rows.forEach(r=>{
     if(!byClient[r.cliente]) byClient[r.cliente]={
       cliente:r.cliente, sociedad:r.sociedad||'—', division:r.division||'—',
-      segmento:r.segmento||'—', saldo:0, docs:[],
+      segmentos:new Set(), saldo:0, docs:[],
       bkt:Object.fromEntries(BKT.map(b=>[b,0]))
     };
     const g=byClient[r.cliente]; g.saldo+=r.saldo;
+    if(r.segmento) g.segmentos.add(r.segmento);
     const bk=r.diasVenc<=0?'Por Vencer':r.bucket||'+120 días';
     g.bkt[bk]=(g.bkt[bk]||0)+r.saldo;
     g.docs.push(r);
@@ -5164,18 +5165,40 @@ function exportEstadoPDF(){
   }).join('');
 
   const clientSummaryRows = clients.map(cl=>{
-    const vp=cl.saldo>0?((cl.saldo-cl.bkt['Por Vencer'])/cl.saldo*100).toFixed(1):0;
     const maxD=Math.max(...cl.docs.map(d=>d.diasVenc),0);
-    return `<tr>
-      <td style="padding:4px 10px;font-weight:600">${cl.cliente.length>40?cl.cliente.slice(0,40)+'…':cl.cliente}</td>
-      <td style="padding:4px 10px">${cl.segmento}</td>
-      <td style="padding:4px 10px;text-align:right;font-family:monospace;color:#10b981">${fmtC2(cl.bkt['Por Vencer']||0)}</td>
-      <td style="padding:4px 10px;text-align:right;font-family:monospace;color:#ef4444">${fmtC2(cl.saldo-(cl.bkt['Por Vencer']||0))}</td>
-      <td style="padding:4px 10px;text-align:right;font-family:monospace;font-weight:700">${fmtC2(cl.saldo)}</td>
-      <td style="padding:4px 10px;text-align:right">
-        <span style="padding:2px 8px;border-radius:10px;font-size:8px;font-weight:700;${pillCss(maxD)}">${maxD>0?maxD+'d venc.':'Corriente'}</span>
+    const segs=[...cl.segmentos].sort();
+    const nSegs=segs.length;
+    // Row per segment
+    const segRows=segs.map((seg,si)=>{
+      const segDocs=cl.docs.filter(d=>d.segmento===seg);
+      const segSaldo=segDocs.reduce((s,d)=>s+d.saldo,0);
+      const segPV=segDocs.filter(d=>d.diasVenc<=0).reduce((s,d)=>s+d.saldo,0);
+      const segVenc=segSaldo-segPV;
+      const segMaxD=Math.max(...segDocs.map(d=>d.diasVenc),0);
+      const clientCell=si===0?`<td style="padding:4px 10px;font-weight:700;border-bottom:${si===nSegs-1?'2px solid #c8dcea':'none'}" rowspan="${nSegs}">${cl.cliente.length>38?cl.cliente.slice(0,38)+'…':cl.cliente}</td>`:'';
+      return `<tr style="background:${si%2===0?'#f7fafd':'#fff'}">
+        ${clientCell}
+        <td style="padding:3px 10px;font-size:9px;color:#4a6a8a">${seg}</td>
+        <td style="padding:3px 10px;text-align:right;font-family:monospace;color:#10b981;font-size:9px">${fmtC2(segPV)}</td>
+        <td style="padding:3px 10px;text-align:right;font-family:monospace;color:#ef4444;font-size:9px">${segVenc>0?fmtC2(segVenc):'—'}</td>
+        <td style="padding:3px 10px;text-align:right;font-family:monospace;font-weight:700;font-size:9px">${fmtC2(segSaldo)}</td>
+        <td style="padding:3px 10px;text-align:right">
+          <span style="padding:2px 6px;border-radius:8px;font-size:8px;font-weight:700;${pillCss(segMaxD)}">${segMaxD>0?segMaxD+'d venc.':'Corriente'}</span>
+        </td>
+      </tr>`;
+    }).join('');
+    // Client subtotal row (only if >1 segment)
+    const subRow=nSegs>1?`<tr style="background:#e8f0f7;border-top:2px solid #c8dcea">
+      <td></td>
+      <td style="padding:3px 10px;font-size:9px;font-weight:700;color:#4a6a8a;font-style:italic">Subtotal</td>
+      <td style="padding:3px 10px;text-align:right;font-family:monospace;color:#10b981;font-weight:700;font-size:9px">${fmtC2(cl.bkt['Por Vencer']||0)}</td>
+      <td style="padding:3px 10px;text-align:right;font-family:monospace;color:#ef4444;font-weight:700;font-size:9px">${fmtC2(cl.saldo-(cl.bkt['Por Vencer']||0))}</td>
+      <td style="padding:3px 10px;text-align:right;font-family:monospace;font-weight:800;font-size:10px">${fmtC2(cl.saldo)}</td>
+      <td style="padding:3px 10px;text-align:right">
+        <span style="padding:2px 6px;border-radius:8px;font-size:8px;font-weight:700;${pillCss(maxD)}">${maxD>0?maxD+'d':'✓'}</span>
       </td>
-    </tr>`;
+    </tr>`:'';
+    return segRows+subRow;
   }).join('');
 
   // ── Page 2: Full invoice detail ──
