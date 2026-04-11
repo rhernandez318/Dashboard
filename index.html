@@ -5270,6 +5270,13 @@ function exportEstadoPDF(){
     <title>Estado de Cuenta — ${tituloCliente}</title>
     <style>${css}</style></head><body>
 
+  <!-- Fixed action bar -->
+  <div class="no-print" style="position:sticky;top:0;z-index:999;background:#0d1b2a;padding:8px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(0,0,0,.4);margin-bottom:16px">
+    <span style="font-size:11px;color:#8fa8bf;font-family:monospace;letter-spacing:.5px;flex:1">DISTRIBUIDORAS ZAPATA · ESTADO DE CUENTA</span>
+    <button onclick="window.print()" style="background:linear-gradient(135deg,#00b4a0,#007a6b);color:#fff;border:none;padding:8px 20px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>
+    <button onclick="window.close()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:8px 14px;border-radius:7px;font-size:12px;cursor:pointer">✕ Cerrar</button>
+  </div>
+
   <!-- ═══ PAGE 1: RESUMEN ═══ -->
   <div class="page">
     <div class="hdr">
@@ -5391,12 +5398,7 @@ function exportEstadoPDF(){
     </div>
   </div>  <!-- end page-detail -->
 
-  <!-- Fixed action bar at top -->
-  <div class="no-print" style="position:sticky;top:0;z-index:999;background:#0d1b2a;padding:8px 22px;display:flex;align-items:center;gap:10px;box-shadow:0 2px 12px rgba(0,0,0,.4);margin-bottom:16px">
-    <span style="font-size:11px;color:#8fa8bf;font-family:monospace;letter-spacing:.5px;flex:1">DISTRIBUIDORAS ZAPATA · ESTADO DE CUENTA</span>
-    <button onclick="window.print()" style="background:linear-gradient(135deg,#00b4a0,#007a6b);color:#fff;border:none;padding:8px 20px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px">🖨️ Imprimir / Guardar PDF</button>
-    <button onclick="window.close()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:8px 14px;border-radius:7px;font-size:12px;cursor:pointer">✕ Cerrar</button>
-  </div>
+
   </body></html>`;
 
   const win = window.open('','_blank','width=1200,height=800');
