@@ -5230,15 +5230,9 @@ function exportEstadoPDF(){
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a2a3a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     @page{size:A4 landscape;margin:10mm 12mm;}
-    @page detail{size:A4 portrait;margin:8mm 10mm;}
     .page{page-break-after:always;min-height:185mm;}
     .page:last-child{page-break-after:avoid;}
-    .page-detail{page:detail;break-before:page;}
-    .page-detail table{font-size:8.5px;}
-    .page-detail .card-hdr{font-size:9px;padding:5px 10px;}
-    .page-detail .hdr{padding:10px 16px;}
-    .page-detail .hdr-logo{font-size:13px;}
-    .page-detail .hdr-title{font-size:14px;}
+    .page-detail{break-before:page;}
     .hdr{background:#0d1b2a;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;position:relative;}
     .hdr::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(to right,#00b4a0,#c8a45a,#00b4a0);}
     .hdr-logo{font-size:16px;font-weight:700;color:#fff;}
