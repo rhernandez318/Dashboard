@@ -5209,7 +5209,7 @@ function exportEstadoPDF(){
   }).map((d,i,arr)=>{
     const isNewClient = i===0||d.cliente!==arr[i-1].cliente;
     const clientRow = isNewClient ? `<tr style="background:#0d1b2a">
-      <td colspan="9" style="padding:5px 10px;font-weight:700;color:#fff;font-size:10px;letter-spacing:.3px">${d.cliente}</td>
+      <td colspan="9" style="padding:4px 10px;font-weight:700;color:#fff;font-size:9px;letter-spacing:.3px">${d.cliente}</td>
     </tr>` : '';
     return clientRow+`<tr style="${i%2===0?'background:#f7fafd':''}">
       <td style="padding:4px 10px;font-family:monospace;font-size:9px;color:#4a6a8a">${d.ndoc||'—'}</td>
@@ -5230,8 +5230,15 @@ function exportEstadoPDF(){
     *{margin:0;padding:0;box-sizing:border-box;}
     body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a2a3a;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     @page{size:A4 landscape;margin:10mm 12mm;}
+    @page detail{size:A4 portrait;margin:8mm 10mm;}
     .page{page-break-after:always;min-height:185mm;}
     .page:last-child{page-break-after:avoid;}
+    .page-detail{page:detail;break-before:page;}
+    .page-detail table{font-size:8.5px;}
+    .page-detail .card-hdr{font-size:9px;padding:5px 10px;}
+    .page-detail .hdr{padding:10px 16px;}
+    .page-detail .hdr-logo{font-size:13px;}
+    .page-detail .hdr-title{font-size:14px;}
     .hdr{background:#0d1b2a;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;position:relative;}
     .hdr::after{content:'';position:absolute;bottom:0;left:0;right:0;height:3px;background:linear-gradient(to right,#00b4a0,#c8a45a,#00b4a0);}
     .hdr-logo{font-size:16px;font-weight:700;color:#fff;}
@@ -5349,7 +5356,7 @@ function exportEstadoPDF(){
   </div>
 
   <!-- ═══ PAGE 2: DETALLE DE FACTURAS ═══ -->
-  <div class="page">
+  <div class="page-detail">
     <div class="hdr">
       <div>
         <div class="hdr-logo">Distribuidoras <span>Zapata</span></div>
@@ -5360,7 +5367,7 @@ function exportEstadoPDF(){
         <div class="hdr-meta">${tituloCliente.toUpperCase().slice(0,60)} &nbsp;·&nbsp; ${rows.length} DOCUMENTOS</div>
       </div>
     </div>
-    <div style="padding:12px 22px">
+    <div style="padding:8px 14px">
       <div class="card">
         <div class="card-hdr">📄 Facturas — Ordenadas por Cliente y Antigüedad</div>
         <table>
@@ -5388,7 +5395,7 @@ function exportEstadoPDF(){
       <div class="ftr-line"></div>
       <div class="ftr-txt">PÁG. 2 / 2</div>
     </div>
-  </div>
+  </div>  <!-- end page-detail -->
 
   <div class="no-print" style="text-align:center;padding:20px 0 40px">
     <button onclick="window.print()" style="background:#0d1b2a;color:#fff;border:none;padding:10px 22px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.2)">🖨️ Imprimir / Guardar PDF</button>
