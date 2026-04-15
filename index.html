@@ -53,6 +53,8 @@ header h1 span{color:var(--accent);}
 #user-badge .urole{color:var(--text-muted);}
 /* Hide upload for gerente */
 body.role-gerente #upload-section,
+body.role-gerente #btn-pdf,
+body.role-cartera #btn-pdf,
 body.role-gerente #btn-reload,
 body.role-gerente #btn-process{display:none!important;}
 body.role-gerente #fc-upload-ventas,
@@ -2074,7 +2076,6 @@ function procesarDatos(){
   document.getElementById('soc-bar').style.display='flex';
       const gw=document.getElementById('gerente-wait'); if(gw)gw.style.display='none';
       document.getElementById('btn-reload').style.display='inline-block';
-      document.getElementById('btn-pdf').style.display='inline-block';
       document.getElementById('report-date').textContent='Al '+TODAY.toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
       document.getElementById('fecha-analisis').textContent=TODAY.toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
       await loadFcSnapshot();
