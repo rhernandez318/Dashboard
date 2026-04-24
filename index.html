@@ -709,9 +709,12 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <!-- Pivot table (always visible with segment filter) -->
     <div id="ec-pivot-wrap" style="padding:14px 0 0">
       <div class="tcard">
-        <div class="thead2" style="display:flex;align-items:center;justify-content:space-between">
+        <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
           <h4 id="ec-pivot-title">📊 Cartera por Cliente</h4>
-          <span style="font-size:9px;color:var(--text-muted)">Clic en cliente → Estado de Cuenta detallado · Clic en encabezado → ordenar</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:9px;color:var(--text-muted)">Clic en cliente → Estado de Cuenta · Clic en encabezado → ordenar</span>
+            <button onclick="exportTableExcel('tbl-ec-pivot','Cartera_por_Cliente')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button>
+          </div>
         </div>
         <div class="tscroll">
           <table id="tbl-ec-pivot" style="font-size:11px;width:100%;min-width:900px">
