@@ -6352,13 +6352,13 @@ function generarReporteEjecutivo(){
       }
       // Bucket donut
       const bktVals=bktTots;
-      const bktDonut=mkDonut(bktVals,BKC2,totalCart,150);
+      const bktDonut=mkDonut(bktVals,BKC2,totalCart,195);
       const bktLegend=BKT2.map((b,i)=>bktVals[i]>0?`<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px"><div style="width:8px;height:8px;border-radius:2px;background:${BKC2[i]};flex-shrink:0"></div><span style="font-size:8px;flex:1">${b}</span><span style="font-size:8px;font-family:monospace;font-weight:600;color:${BKC2[i]}">${fM(bktVals[i])}</span></div>`:'').join('');
       // Segment donut
       const abys={}; ant.forEach(r=>{if(!abys[r.segmento])abys[r.segmento]=0;abys[r.segmento]+=r.saldo;});
       const segsS=Object.entries(abys).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
       const segVals=segsS.map(([,v])=>v), segCols=segsS.map((_,i)=>COLS[i%COLS.length]);
-      const segDonut=mkDonut(segVals,segCols,totalCart,150);
+      const segDonut=mkDonut(segVals,segCols,totalCart,195);
       const segLegend=segsS.map(([seg,v],i)=>`<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px"><div style="width:8px;height:8px;border-radius:2px;background:${COLS[i%COLS.length]};flex-shrink:0"></div><span style="font-size:8px;flex:1">${seg.length>16?seg.slice(0,16)+'...':seg}</span><span style="font-size:8px;font-family:monospace;font-weight:600;color:${COLS[i%COLS.length]}">${(v/totalCart*100).toFixed(0)}%</span></div>`).join('');
       return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
         <div style="border:1px solid #e2e8f0;border-radius:7px;overflow:hidden">
