@@ -5818,7 +5818,7 @@ function _wfmDrawSvg(t, mode, containerW){
     {label:`UC Real`,            value:ucR,       type:'base', isTotal:true},
   ];
 
-  const W=containerW||560, PAD={top:44,right:16,bottom:56,left:58}, H=240;
+  const W=containerW||560, PAD={top:52,right:14,bottom:56,left:42}, H=270;
   const barW=Math.floor((W-PAD.left-PAD.right)/bars.length*0.55);
   const barGap=Math.floor((W-PAD.left-PAD.right)/bars.length);
   const COLORS={pos:'#00d4aa',neg:'#ef4444',base:'#3b82f6'};
@@ -5833,7 +5833,7 @@ function _wfmDrawSvg(t, mode, containerW){
 
   const allVals=rects.flatMap(r=>[r.floatBase,r.floatTop,0]);
   let yMin=Math.min(...allVals),yMax=Math.max(...allVals);
-  const yRange=yMax-yMin||1,yPad=yRange*0.2;
+  const yRange=yMax-yMin||1,yPad=yRange*0.28;
   yMin-=yPad;yMax+=yPad;
   const yScale=v=>PAD.top+(1-(v-yMin)/(yMax-yMin))*(H-PAD.top-PAD.bottom);
   const y0=yScale(0);
