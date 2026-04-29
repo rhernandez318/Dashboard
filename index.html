@@ -4162,8 +4162,8 @@ async function runForecast(manual=false){
     if(!hasPpto||pp==null) return '<td style="color:#475569">—</td><td style="color:#475569">—</td>';
     const d=fc-pp, pct=pp?d/Math.abs(pp)*100:null;
     const cl=d>=0?'#00d4aa':'#ef4444';
-    return `<td><span style="color:${cl}">${d<0?'('+fC(Math.abs(d))+')':fC(d)}</span></td>`+
-           `<td><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(1)+'%':'—'}</span></td>`;
+    return `<td><span style="color:${cl}">${d<0?'('+fC(Math.abs(d))+')':fC(d)}</span></td>`
+           +`<td><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(1)+'%':'--'}</span></td>`;
   }
   function sepRow(label){
     return `<tr style="background:rgba(245,158,11,.04)"><td colspan="5" style="padding:4px 12px;font-size:10px;color:#f59e0b;text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`;
@@ -6109,7 +6109,7 @@ function generarReporteEjecutivo(){
   const fP2=v=>v==null?'—':((v*100).toFixed(1)+'%');
   function indRow(label, rv, pv, av, opts={}){
     const varP=pv!=null?rv-pv:null, varA=av!=null?rv-av:null;
-    const fv=v=>v==null||!isFinite(v)?'—':opts.pct?fP2(v):fK2(v);
+    const fv=v=>v==null||!isFinite(v)?'—':opts.pct?fP2(v):opts.units?Math.round(v).toLocaleString('es-MX'):fK2(v);
     const fvar=v=>v==null?'—':`<span style="color:${v>=0?'#00875a':'#cc0000'}">${v>=0?'+':''}${opts.pct?(v*100).toFixed(1)+'pp':fK2(Math.abs(v))}</span>`;
     const bg=opts.star?'background:#1e3a5f;':'opts.sub'?'background:#f0fdf4;':'';
     const fc=opts.star?'color:#fff;font-weight:800;':opts.bold?'font-weight:700;':'';
@@ -6122,7 +6122,7 @@ function generarReporteEjecutivo(){
   }
   const indHtml=`
     <tr style="background:#e8f4fd"><td colspan="${numCols}" style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;padding:5px 8px">📦 Volumen</td></tr>
-    ${indRow('Unidades vendidas', und2, undP2, undA2, {bold:true})}
+    ${indRow('Unidades vendidas', und2, undP2, undA2, {bold:true, units:true})}
     <tr style="background:#e8f4fd"><td colspan="${numCols}" style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;padding:5px 8px">💰 Precio por Unidad</td></tr>
     ${indRow('Precio promedio / Und', ppu2(real2?.rev,und2), ppu2(ppto2?.rev,undP2), ppu2(aa2?.rev,undA2))}
     <tr style="background:#e8f4fd"><td colspan="${numCols}" style="font-size:9px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.5px;padding:5px 8px">📊 Rentabilidad por Unidad</td></tr>
@@ -6135,211 +6135,280 @@ function generarReporteEjecutivo(){
 
   const compLabel = _wfmMode==='ppto'?'Presupuesto':'Año Anterior';
 
-  const html=`<!DOCTYPE html>
-<html lang="es">
-<head>
-<meta charset="UTF-8">
-<title>Reporte Ejecutivo — ${perLabel}</title>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a2e;background:#fff;}
-  @page{size:A4 landscape;margin:12mm 14mm;}
-  .page{page-break-after:always;padding:0;min-height:182mm;}
-  .page:last-child{page-break-after:avoid;}
-  .cover{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 60%,#0f4c75 100%);
-         color:#fff;display:flex;flex-direction:column;justify-content:center;
-         align-items:flex-start;padding:20mm 24mm;min-height:182mm;position:relative;}
-  .cover-title{font-size:26px;font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;}
-  .cover-sub{font-size:13px;color:#93c5fd;margin-bottom:4px;}
-  .cover-period{font-size:18px;font-weight:700;color:#34d399;margin:14px 0 6px;}
-  .cover-soc{font-size:12px;color:#94a3b8;}
-  .cover-date{position:absolute;bottom:14mm;right:14mm;font-size:9px;color:#64748b;}
-  .cover-line{width:50px;height:4px;background:#34d399;margin:14px 0;}
-  .sh{display:flex;align-items:center;gap:8px;padding:6px 0 5px;border-bottom:3px solid #1e3a5f;margin-bottom:8px;}
-  .st{font-size:14px;font-weight:800;color:#1e3a5f;}
-  .sp{font-size:9px;color:#64748b;margin-left:auto;}
-  .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px;}
-  .kpi-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 10px;text-align:center;}
-  .kpi-label{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
-  .kpi-val{font-size:18px;font-weight:800;font-family:'Courier New',monospace;}
-  .kpi-sub{font-size:8px;color:#94a3b8;margin-top:2px;}
-  table{width:100%;border-collapse:collapse;font-size:9px;}
-  th{background:#1e3a5f;color:#fff;padding:5px 7px;text-align:left;font-weight:600;font-size:9px;}
-  th.num,td.num{text-align:right;}
-  td{padding:3px 7px;border-bottom:1px solid #f1f5f9;}
-  .wf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
-  .wf-card{border:1px solid #e2e8f0;border-radius:7px;overflow:hidden;}
-  .wf-title{background:#1e3a5f;color:#fff;font-size:9px;font-weight:700;padding:5px 8px;display:flex;justify-content:space-between;align-items:center;}
-  .wf-uc{font-size:8px;color:#93c5fd;}
-  .wf-body{padding:2px 4px 0;}
-  .wf-legend{display:flex;gap:8px;justify-content:center;font-size:7px;color:#64748b;padding:2px 0 3px;}
-  .wf-dot{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:2px;vertical-align:middle;}
-  .aging-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0;}
-  .aging-card{text-align:center;padding:8px 4px;border-radius:7px;}
-  .aging-val{font-size:13px;font-weight:800;font-family:'Courier New',monospace;}
-  .aging-label{font-size:7px;color:#64748b;margin-top:2px;}
-  .aging-pct{font-size:8px;font-weight:600;margin-top:1px;}
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.no-print{display:none!important;}}
-</style>
-</head>
-<body>
 
-<!-- PORTADA -->
-<div class="page cover">
-  <div class="cover-title">Reporte Ejecutivo</div>
-  <div class="cover-sub">Análisis de Resultados Financieros</div>
-  <div class="cover-line"></div>
-  <div class="cover-period">${perLabel}</div>
-  <div class="cover-soc">${socLabel}</div>
-  <div class="cover-date">Generado: ${fechaHoy}</div>
-</div>
+  // ── Meses de Venta data prep ──
+  const SEGS_PDF = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES','PASAJE','REFACCIONES','VANES','TALLER','COLLISION CENTER Y HYP'];
+  const SEG_SHORT_PDF = {'TRACTO':'Tracto','CARGA':'Carga','FL360':'FL360','VEHICULOS SEMINUEVOS':'Semi-Nvos','SEMIREMOLQUES':'Semiremolq.','PASAJE':'Pasaje','REFACCIONES':'Refacc.','VANES':'Vanes','TALLER':'Taller','COLLISION CENTER Y HYP':'Colisin'};
+  const SEGS_INV_PDF = new Set(['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES','PASAJE','REFACCIONES','VANES']);
+  const cxPdf = fCx(); const antPdf = fAnt(); const invPdf = fInv();
+  const allPersPdf = Array.from({length:fin.maxPer},(_,i)=>i+1);
+  const nMesesPdf = allPersPdf.length;
+  function revSegPdf(seg){ return -cxPdf.filter(r=>r.ctaTipo==='4'&&allPersPdf.includes(r.periodo)&&(!seg||r.seg===seg)).reduce((s,r)=>s+r.importe,0)/nMesesPdf; }
+  const antBySegPdf={}; antPdf.forEach(r=>{if(!antBySegPdf[r.segmento])antBySegPdf[r.segmento]=0;antBySegPdf[r.segmento]+=r.saldo;});
+  const invBySegPdf={}; invPdf.forEach(r=>{if(!invBySegPdf[r.segmento])invBySegPdf[r.segmento]=0;invBySegPdf[r.segmento]+=r.valor;});
+  const revTotalPdf=revSegPdf(null);
+  const cartTotalPdf=antPdf.reduce((s,r)=>s+r.saldo,0);
+  const invTotalPdf=invPdf.reduce((s,r)=>s+r.valor,0);
+  const mCartTotalPdf=revTotalPdf>0?(cartTotalPdf/revTotalPdf).toFixed(1)+'m':'N/D';
+  const mInvTotalPdf=revTotalPdf>0?(invTotalPdf/revTotalPdf).toFixed(1)+'m':'N/D';
+  const scPdf=v=>v==null?'#64748b':v<1?'#00875a':v<2?'#d97706':'#cc0000';
+  const scInvPdf=v=>v==null?'#64748b':v<3?'#00875a':v<5?'#d97706':'#cc0000';
+  const mesesSegRows = SEGS_PDF.filter(s=>(antBySegPdf[s]||0)>0||(invBySegPdf[s]||0)>0).map(seg=>{
+    const cart=antBySegPdf[seg]||0, inv2=invBySegPdf[seg]||0, rev2=revSegPdf(seg);
+    const mC=rev2>0?(cart/rev2):null, mI=SEGS_INV_PDF.has(seg)&&rev2>0?(inv2/rev2):null;
+    return `<tr>
+      <td style="padding:3px 8px;font-weight:600">${SEG_SHORT_PDF[seg]||seg}</td>
+      <td style="text-align:right;padding:3px 8px;font-family:monospace">${fM(cart)}</td>
+      <td style="text-align:right;padding:3px 8px;font-family:monospace;color:${scPdf(mC)};font-weight:700">${mC!=null?mC.toFixed(1)+'m':'—'}</td>
+      <td style="text-align:right;padding:3px 8px;font-family:monospace">${SEGS_INV_PDF.has(seg)?fM(inv2):'—'}</td>
+      <td style="text-align:right;padding:3px 8px;font-family:monospace;color:${scInvPdf(mI)};font-weight:700">${mI!=null?mI.toFixed(1)+'m':'—'}</td>
+    </tr>`;
+  }).join('');
 
-<!-- KPIs + WATERFALL GLOBAL + P&L + INDICADORES -->
-<div class="page">
-  <div class="sh"><span class="st">📊 Indicadores Clave</span><span class="sp">${perLabel} · ${socLabel}</span></div>
-  <div class="kpi-grid">
-    ${kpiCard('DSO — Días Cartera', r.dso.toFixed(0)+' d', 'Cartera: '+fM(r.cartTotal), '#1a56db')}
-    ${kpiCard('DPO — Días Pago', r.dpo.toFixed(0)+' d', 'AP+PlanPiso: '+fM(r.provTotal), '#d97706')}
-    ${kpiCard('CCE — Ciclo Efectivo', r.cce.toFixed(0)+' d', 'DSO+DII-DPO', r.cce>60?'#cc0000':r.cce>30?'#d97706':'#00875a')}
-    ${kpiCard('Margen Bruto', (r.margenBruto*100).toFixed(1)+'%', 'GP: '+fM(r.gpTotal), r.margenBruto>0.2?'#00875a':'#cc0000')}
-    ${kpiCard('Rot. Inventario', r.rotInv.toFixed(1)+'x', 'Inv: '+fM(r.invTotal), '#7c3aed')}
+  // ── Build meses de venta HTML string ──
+  const mesesHtmlStr =
+    '<div class="sh" style="margin-top:8px"><span class="st">&#128197; Meses de Venta &#x2014; Cartera e Inventario</span></div>'
+    +'<div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px">'
+    +'<div class="kpi-card"><div class="kpi-label">Meses Cartera Total</div><div class="kpi-val" style="font-size:15px;color:'+(revTotalPdf>0&&cartTotalPdf/revTotalPdf>2?'#cc0000':cartTotalPdf/revTotalPdf>1?'#d97706':'#00875a')+'">'+mCartTotalPdf+'</div><div class="kpi-sub">'+fM(cartTotalPdf)+' &divide; '+fM(revTotalPdf)+'/mes</div></div>'
+    +'<div class="kpi-card"><div class="kpi-label">Meses Inventario Total</div><div class="kpi-val" style="font-size:15px;color:'+(revTotalPdf>0&&invTotalPdf/revTotalPdf>5?'#cc0000':invTotalPdf/revTotalPdf>3?'#d97706':'#00875a')+'">'+mInvTotalPdf+'</div><div class="kpi-sub">'+fM(invTotalPdf)+' &divide; '+fM(revTotalPdf)+'/mes</div></div>'
+    +'<div class="kpi-card"><div class="kpi-label">Per&iacute;odo base</div><div class="kpi-val" style="font-size:15px">'+nMesesPdf+' '+(nMesesPdf===1?'mes':'meses')+'</div><div class="kpi-sub">Promedio mensual</div></div>'
+    +'<div class="kpi-card"><div class="kpi-label">Segmentos activos</div><div class="kpi-val" style="font-size:15px">'+Object.keys(antBySegPdf).length+'</div><div class="kpi-sub">Con saldo en cartera</div></div>'
+    +'</div>'
+    +'<table style="margin-bottom:10px;font-size:9px;width:100%;border-collapse:collapse">'
+    +'<thead><tr style="background:#1e3a5f">'
+    +'<th style="padding:4px 8px;text-align:left;color:#fff">Segmento</th>'
+    +'<th style="padding:4px 8px;text-align:right;color:#93c5fd">Cartera</th>'
+    +'<th style="padding:4px 8px;text-align:right;color:#93c5fd">Meses Cart.</th>'
+    +'<th style="padding:4px 8px;text-align:right;color:#fcd34d">Inventario</th>'
+    +'<th style="padding:4px 8px;text-align:right;color:#fcd34d">Meses Inv.</th>'
+    +'</tr></thead><tbody>'+mesesSegRows+'</tbody></table>';
+
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+    <title>Reporte Ejecutivo \u2014 ${perLabel}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box;}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#1a1a2e;background:#fff;}
+      @page{size:A4 landscape;margin:12mm 14mm;}
+      .page{page-break-after:always;padding:0;min-height:182mm;}
+      .page:last-child{page-break-after:avoid;}
+      .cover{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 60%,#0f4c75 100%);color:#fff;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:20mm 24mm;min-height:182mm;position:relative;}
+      .cover-title{font-size:26px;font-weight:800;letter-spacing:-0.5px;margin-bottom:6px;}
+      .cover-sub{font-size:13px;color:#93c5fd;margin-bottom:4px;}
+      .cover-period{font-size:18px;font-weight:700;color:#34d399;margin:14px 0 6px;}
+      .cover-soc{font-size:12px;color:#94a3b8;}
+      .cover-date{position:absolute;bottom:14mm;right:14mm;font-size:9px;color:#64748b;}
+      .cover-line{width:50px;height:4px;background:#34d399;margin:14px 0;}
+      .sh{display:flex;align-items:center;gap:8px;padding:6px 0 5px;border-bottom:3px solid #1e3a5f;margin-bottom:8px;}
+      .st{font-size:14px;font-weight:800;color:#1e3a5f;}
+      .sp{font-size:9px;color:#64748b;margin-left:auto;}
+      .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px;}
+      .kpi-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 10px;text-align:center;}
+      .kpi-label{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+      .kpi-val{font-size:18px;font-weight:800;font-family:'Courier New',monospace;}
+      .kpi-sub{font-size:8px;color:#94a3b8;margin-top:2px;}
+      table{width:100%;border-collapse:collapse;font-size:9px;}
+      th{background:#1e3a5f;color:#fff;padding:5px 7px;text-align:left;font-weight:600;font-size:9px;}
+      th.num,td.num{text-align:right;}
+      td{padding:3px 7px;border-bottom:1px solid #f1f5f9;}
+      .wf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+      .wf-card{border:1px solid #e2e8f0;border-radius:7px;overflow:hidden;}
+      .wf-title{background:#1e3a5f;color:#fff;font-size:9px;font-weight:700;padding:5px 8px;display:flex;justify-content:space-between;align-items:center;}
+      .wf-uc{font-size:8px;color:#93c5fd;}
+      .wf-body{padding:2px 4px 0;}
+      .wf-legend{display:flex;gap:8px;justify-content:center;font-size:7px;color:#64748b;padding:2px 0 3px;}
+      .wf-dot{display:inline-block;width:7px;height:7px;border-radius:2px;margin-right:2px;vertical-align:middle;}
+      .aging-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin:8px 0;}
+      .aging-card{text-align:center;padding:8px 4px;border-radius:7px;}
+      .aging-val{font-size:13px;font-weight:800;font-family:'Courier New',monospace;}
+      .aging-label{font-size:7px;color:#64748b;margin-top:2px;}
+      .aging-pct{font-size:8px;font-weight:600;margin-top:1px;}
+      @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.no-print{display:none!important;}}
+    </style>
+    </head><body>
+
+  <!-- PORTADA -->
+  <div class="page cover">
+    <div class="cover-title">Reporte Ejecutivo</div>
+    <div class="cover-sub">An&aacute;lisis de Resultados Financieros</div>
+    <div class="cover-line"></div>
+    <div class="cover-period">${perLabel}</div>
+    <div class="cover-soc">${socLabel}</div>
+    <div class="cover-date">Generado: ${fechaHoy}</div>
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:8px 0">${razHtml}</div>
-
-  ${wfGlobalSvg ? `
-  <div class="sh" style="margin-top:6px"><span class="st">🌊 Puente de UC — Real vs Presupuesto</span></div>
-  <div style="border:1px solid #e2e8f0;border-radius:7px;padding:4px 8px 2px;margin-bottom:10px">
-    ${wfGlobalSvg}
-    <div style="display:flex;gap:12px;justify-content:center;font-size:8px;color:#64748b;padding:2px 0 4px">
-      <span><span style="display:inline-block;width:8px;height:8px;background:#00d4aa;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Favorable</span>
-      <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Desfavorable</span>
-      <span><span style="display:inline-block;width:8px;height:8px;background:#3b82f6;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Base</span>
+  <!-- KPIs + MESES + WATERFALL GLOBAL -->
+  <div class="page">
+    <div class="sh"><span class="st">&#128202; Indicadores Clave</span><span class="sp">${perLabel} &middot; ${socLabel}</span></div>
+    <div class="kpi-grid">
+      ${kpiCard('DSO \u2014 D\u00edas Cartera', r.dso.toFixed(0)+' d', 'Cartera: '+fM(r.cartTotal), '#1a56db')}
+      ${kpiCard('DPO \u2014 D\u00edas Pago', r.dpo.toFixed(0)+' d', 'AP+PlanPiso: '+fM(r.provTotal), '#d97706')}
+      ${kpiCard('CCE \u2014 Ciclo Efectivo', r.cce.toFixed(0)+' d', 'DSO+DII-DPO', r.cce>60?'#cc0000':r.cce>30?'#d97706':'#00875a')}
+      ${kpiCard('Margen Bruto', (r.margenBruto*100).toFixed(1)+'%', 'GP: '+fM(r.gpTotal), r.margenBruto>0.2?'#00875a':'#cc0000')}
+      ${kpiCard('Rot. Inventario', r.rotInv.toFixed(1)+'x', 'Inv: '+fM(r.invTotal), '#7c3aed')}
     </div>
-  </div>` : ''}
-</div>
+    <div class="kpi-grid">
+      ${kpiCard('Ingresos', fM(r.revTotal), perLabel, '#1e3a5f')}
+      ${kpiCard('Costo de Ventas', fM(r.costTotal), pct(r.costTotal,r.revTotal)+'% de ingresos', '#64748b')}
+      ${kpiCard('Cartera Vencida', fM(r.cartVencida), pct(r.cartVencida,r.cartTotal)+'% del total', r.pctVenc>30?'#cc0000':r.pctVenc>15?'#d97706':'#00875a')}
+      ${kpiCard('DII \u2014 D\u00edas Inv.', r.dii.toFixed(0)+' d', 'Inv: '+fM(r.invTotal), '#0891b2')}
+      ${kpiCard('Unidades en Inv.', r.invUnidades.toLocaleString(), 'Unidades totales', '#64748b')}
+    </div>
 
-<!-- ESTADO DE RESULTADOS + INDICADORES -->
-<div class="page">
-  <div class="sh"><span class="st">💰 Estado de Resultados</span><span class="sp">${perLabel} · ${socLabel}</span></div>
-  <table>
-    <thead><tr>
-      <th style="width:30%">Concepto</th>
-      <th class="num">Real</th>
-      <th class="num">% Ing.</th>
-      ${hasPpto?'<th class="num">Presupuesto</th><th class="num">Var. Ppto</th>':''}
-      ${has25?'<th class="num">Año Ant.</th><th class="num">Var. AA</th>':''}
-    </tr></thead>
-    <tbody>${plHtml}</tbody>
-  </table>
+    MESES_INJECT
 
-  <div class="sh" style="margin-top:8px"><span class="st">📊 Indicadores por Unidad</span></div>
-  <table>
-    <thead><tr>
-      <th style="width:30%">Indicador</th>
-      <th class="num">Real</th>
-      ${hasPpto?'<th class="num">Presupuesto</th><th class="num">Var. Ppto</th>':''}
-      ${has25?'<th class="num">Año Ant.</th><th class="num">Var. AA</th>':''}
-    </tr></thead>
-    <tbody>${indHtml}</tbody>
-  </table>
-</div>
+    ${wfGlobalSvg ? `
+    <div class="sh" style="margin-top:6px"><span class="st">&#127754; Puente de UC \u2014 Real vs Presupuesto</span></div>
+    <div style="border:1px solid #e2e8f0;border-radius:7px;padding:4px 8px 2px;margin-bottom:10px">
+      ${wfGlobalSvg}
+      <div style="display:flex;gap:12px;justify-content:center;font-size:8px;color:#64748b;padding:2px 0 4px">
+        <span><span style="display:inline-block;width:8px;height:8px;background:#00d4aa;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Favorable</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#ef4444;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Desfavorable</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#3b82f6;border-radius:2px;margin-right:3px;vertical-align:middle"></span>Base</span>
+      </div>
+    </div>` : ''}
+  </div>
 
-<!-- WATERFALL POR SEGMENTO -->
-<div class="page">
-  <div class="sh"><span class="st">🌊 Puente de UC por Segmento vs ${compLabel}</span><span class="sp">${perLabel} · ${socLabel}</span></div>
-  <div class="wf-grid">
-    ${wfSVGs.map(({seg,svg,td})=>{
-      const label=WFM_LABELS[seg]||seg;
-      const usePpto=_wfmMode==='ppto';
-      const ucComp=td?(usePpto?td.ppMC:td.aaMC):null;
-      const varTot=td&&ucComp!=null?td.utMC-ucComp:null;
-      const varStr=varTot!=null?`<span style="color:${varTot>=0?'#34d399':'#f87171'}">${varTot>=0?'+':''}${fM(varTot)}</span>`:'';
-      return `<div class="wf-card">
-        <div class="wf-title">
-          <span>${label}</span>
-          <span class="wf-uc">UC: ${td?fM(td.utMC):'—'} ${varStr?'| Δ '+varStr:''}</span>
+  <!-- ESTADO DE RESULTADOS + INDICADORES -->
+  <div class="page">
+    <div class="sh"><span class="st">&#128176; Estado de Resultados</span><span class="sp">${perLabel} &middot; ${socLabel}</span></div>
+    <table>
+      <thead><tr>
+        <th style="width:30%">Concepto</th>
+        <th class="num">Real</th>
+        <th class="num">% Ing.</th>
+        ${hasPpto?'<th class="num">Presupuesto</th><th class="num">Var. Ppto</th>':''}
+        ${has25?'<th class="num">A\u00f1o Ant.</th><th class="num">Var. AA</th>':''}
+      </tr></thead>
+      <tbody>${plHtml}</tbody>
+    </table>
+    <div class="sh" style="margin-top:8px"><span class="st">&#128202; Indicadores por Unidad</span></div>
+    <table>
+      <thead><tr>
+        <th style="width:30%">Indicador</th>
+        <th class="num">Real</th>
+        ${hasPpto?'<th class="num">Presupuesto</th><th class="num">Var. Ppto</th>':''}
+        ${has25?'<th class="num">A\u00f1o Ant.</th><th class="num">Var. AA</th>':''}
+      </tr></thead>
+      <tbody>${indHtml}</tbody>
+    </table>
+  </div>
+
+  <!-- WATERFALL X 6 SEGMENTOS -->
+  <div class="page">
+    <div class="sh"><span class="st">&#127754; Puente de UC por Segmento vs ${compLabel}</span><span class="sp">${perLabel} &middot; ${socLabel}</span></div>
+    <div class="wf-grid">
+      ${wfSVGs.map(({seg,svg,td})=>{
+        const label=WFM_LABELS[seg]||seg;
+        const usePpto=_wfmMode==='ppto';
+        const ucComp=td?(usePpto?td.ppMC:td.aaMC):null;
+        const varTot=td&&ucComp!=null?td.utMC-ucComp:null;
+        const varStr=varTot!=null?`<span style="color:${varTot>=0?'#34d399':'#f87171'}">${varTot>=0?'+':''}${fM(varTot)}</span>`:'';
+        return `<div class="wf-card">
+          <div class="wf-title"><span>${label}</span><span class="wf-uc">UC: ${td?fM(td.utMC):'--'} ${varStr?'| &Delta;: '+varStr:''}</span></div>
+          <div class="wf-body">${svg||'<div style="padding:16px;text-align:center;color:#64748b">Sin datos</div>'}</div>
+          <div class="wf-legend">
+            <span><span class="wf-dot" style="background:#00d4aa"></span>Favorable</span>
+            <span><span class="wf-dot" style="background:#ef4444"></span>Desfavorable</span>
+            <span><span class="wf-dot" style="background:#3b82f6"></span>Base</span>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+
+  <!-- CARTERA + INVENTARIO -->
+  <div class="page" style="page-break-after:avoid">
+    <div class="sh"><span class="st">&#128203; Cartera de Clientes</span><span class="sp">${perLabel} &middot; ${socLabel}</span></div>
+    <div class="aging-grid">
+      ${BKT.map((b,i)=>{const v=bktTots[i];const p=totalCart?((v/totalCart)*100).toFixed(1)+'%':'0%';
+        return `<div class="aging-card" style="background:${BKC[i]}18;border:1px solid ${BKC[i]}44">
+          <div class="aging-val" style="color:${BKC[i]}">${fM(v)}</div>
+          <div class="aging-label">${b}</div>
+          <div class="aging-pct" style="color:${BKC[i]}">${p}</div>
+        </div>`;}).join('')}
+    </div>
+    ${(()=>{
+      const BKT2=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
+      const BKC2=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
+      const COLS=['#6366f1','#f59e0b','#10b981','#ef4444','#3b82f6','#f97316','#8b5cf6','#ec4899','#14b8a6','#f43f5e'];
+      function mkDonut(vals,colors,total,sz){
+        const cx=sz/2,cy=sz/2,r=sz/2-14,ri=r*0.58;
+        let angle=-Math.PI/2,paths='',labels='';
+        vals.forEach((v,i)=>{
+          if(!v)return;
+          const sweep=2*Math.PI*(v/total);
+          const midA=angle+sweep/2;
+          const lx=cx+(r+9)*Math.cos(midA),ly=cy+(r+9)*Math.sin(midA);
+          const x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
+          const x2=cx+r*Math.cos(angle+sweep),y2=cy+r*Math.sin(angle+sweep);
+          const xi1=cx+ri*Math.cos(angle),yi1=cy+ri*Math.sin(angle);
+          const xi2=cx+ri*Math.cos(angle+sweep),yi2=cy+ri*Math.sin(angle+sweep);
+          const lg=sweep>Math.PI?1:0;
+          paths+=`<path d="M${xi1.toFixed(1)},${yi1.toFixed(1)} L${x1.toFixed(1)},${y1.toFixed(1)} A${r},${r} 0 ${lg} 1 ${x2.toFixed(1)},${y2.toFixed(1)} L${xi2.toFixed(1)},${yi2.toFixed(1)} A${ri},${ri} 0 ${lg} 0 ${xi1.toFixed(1)},${yi1.toFixed(1)} Z" fill="${colors[i]}"/>`;
+          if(v/total>0.04) labels+=`<text x="${lx.toFixed(1)}" y="${(ly+3).toFixed(1)}" text-anchor="middle" font-size="7" font-weight="700" fill="#1e3a5f" font-family="monospace">${(v/total*100).toFixed(0)}%</text>`;
+          angle+=sweep;
+        });
+        return `<svg width="${sz}" height="${sz}" xmlns="http://www.w3.org/2000/svg">${paths}${labels}<text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="9" font-weight="700" fill="#1e3a5f" font-family="monospace">${fM(total)}</text></svg>`;
+      }
+      // Bucket donut
+      const bktVals=bktTots;
+      const bktDonut=mkDonut(bktVals,BKC2,totalCart,150);
+      const bktLegend=BKT2.map((b,i)=>bktVals[i]>0?`<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px"><div style="width:8px;height:8px;border-radius:2px;background:${BKC2[i]};flex-shrink:0"></div><span style="font-size:8px;flex:1">${b}</span><span style="font-size:8px;font-family:monospace;font-weight:600;color:${BKC2[i]}">${fM(bktVals[i])}</span></div>`:'').join('');
+      // Segment donut
+      const abys={}; ant.forEach(r=>{if(!abys[r.segmento])abys[r.segmento]=0;abys[r.segmento]+=r.saldo;});
+      const segsS=Object.entries(abys).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+      const segVals=segsS.map(([,v])=>v), segCols=segsS.map((_,i)=>COLS[i%COLS.length]);
+      const segDonut=mkDonut(segVals,segCols,totalCart,150);
+      const segLegend=segsS.map(([seg,v],i)=>`<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px"><div style="width:8px;height:8px;border-radius:2px;background:${COLS[i%COLS.length]};flex-shrink:0"></div><span style="font-size:8px;flex:1">${seg.length>16?seg.slice(0,16)+'...':seg}</span><span style="font-size:8px;font-family:monospace;font-weight:600;color:${COLS[i%COLS.length]}">${(v/totalCart*100).toFixed(0)}%</span></div>`).join('');
+      return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+        <div style="border:1px solid #e2e8f0;border-radius:7px;overflow:hidden">
+          <div style="background:#1e3a5f;color:#fff;font-size:9px;font-weight:700;padding:5px 10px">Vencida por Bucket</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px">${bktDonut}<div style="flex:1">${bktLegend}</div></div>
         </div>
-        <div class="wf-body">${svg||'<div style="padding:16px;text-align:center;color:#64748b">Sin datos</div>'}</div>
-        <div class="wf-legend">
-          <span><span class="wf-dot" style="background:#00d4aa"></span>Favorable</span>
-          <span><span class="wf-dot" style="background:#ef4444"></span>Desfavorable</span>
-          <span><span class="wf-dot" style="background:#3b82f6"></span>Base</span>
+        <div style="border:1px solid #e2e8f0;border-radius:7px;overflow:hidden">
+          <div style="background:#1e3a5f;color:#fff;font-size:9px;font-weight:700;padding:5px 10px">Cartera por Segmento</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 12px">${segDonut}<div style="flex:1">${segLegend}</div></div>
         </div>
       </div>`;
-    }).join('')}
+    })()}
+
+    <div style="margin-top:12px">
+      <div class="sh"><span class="st">&#127981; Inventario</span><span class="sp">${fechaHoy} &middot; ${socLabel}</span></div>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+        ${kpiCard('Valor Total', fM(r.invTotal), r.invUnidades.toLocaleString()+' unidades', '#1e3a5f')}
+        ${kpiCard('D\u00edas Inventario', r.dii.toFixed(0)+' d', 'DII acumulado', r.dii>90?'#cc0000':r.dii>60?'#d97706':'#00875a')}
+        ${kpiCard('Rotaci\u00f3n', r.rotInv.toFixed(1)+'x', 'Anualizada', r.rotInv>4?'#00875a':r.rotInv>2?'#d97706':'#cc0000')}
+        ${kpiCard('En Riesgo >180d', fM(inv.filter(r=>r.antiguedad>180).reduce((s,r)=>s+r.valor,0)), inv.filter(r=>r.antiguedad>180).length+' unidades', '#cc0000')}
+      </div>
+      <table>
+        <thead><tr><th>Segmento</th><th class="num">Unidades</th><th class="num">Valor</th><th class="num">% del Total</th><th class="num">Valor / Unidad</th></tr></thead>
+        <tbody>
+          ${invSegs.map(([seg,v])=>`<tr>
+            <td>${seg}</td><td class="num">${v.und.toLocaleString()}</td><td class="num">${fM(v.val)}</td>
+            <td class="num">${r.invTotal?(v.val/r.invTotal*100).toFixed(1)+'%':'--'}</td>
+            <td class="num">${v.und>0?fM(v.val/v.und):'--'}</td>
+          </tr>`).join('')}
+          <tr style="background:#1e3a5f">
+            <td style="color:#fff;font-weight:700">TOTAL</td>
+            <td class="num" style="color:#fff;font-weight:700">${r.invUnidades.toLocaleString()}</td>
+            <td class="num" style="color:#fff;font-weight:700">${fM(r.invTotal)}</td>
+            <td class="num" style="color:#94a3b8">100%</td>
+            <td class="num" style="color:#94a3b8">${r.invUnidades>0?fM(r.invTotal/r.invUnidades):'--'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
-</div>
 
-<!-- CARTERA + INVENTARIO -->
-<div class="page">
-  <div class="sh"><span class="st">📋 Cartera de Clientes</span><span class="sp">${perLabel} · ${socLabel}</span></div>
-  <div class="aging-grid">
-    ${BKT.map((b,i)=>{const v=bktTots[i];const p=totalCart?((v/totalCart)*100).toFixed(1)+'%':'0%';
-      return `<div class="aging-card" style="background:${BKC[i]}18;border:1px solid ${BKC[i]}44">
-        <div class="aging-val" style="color:${BKC[i]}">${fM(v)}</div>
-        <div class="aging-label">${b}</div>
-        <div class="aging-pct" style="color:${BKC[i]}">${p}</div>
-      </div>`;}).join('')}
+  <div class="no-print" style="text-align:center;margin:20px 0 40px">
+    <button onclick="window.print()" style="background:#1e3a5f;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)">&#128424;&#65039; Imprimir / Guardar PDF</button>
+    <button onclick="window.close()" style="background:#64748b;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;margin-left:8px">&#10005; Cerrar</button>
   </div>
-  <table>
-    <thead><tr><th>Cliente</th><th>Segmento</th><th class="num">Saldo Total</th><th class="num">Vencido</th><th class="num">% Vencido</th><th class="num">Días Máx</th></tr></thead>
-    <tbody>
-      ${topCli.map(([nombre,v])=>`<tr>
-        <td>${nombre.length>42?nombre.slice(0,42)+'…':nombre}</td>
-        <td>${v.seg||'—'}</td>
-        <td class="num">${fC(v.saldo)}</td>
-        <td class="num" style="color:#cc0000;font-weight:600">${fC(v.vencido)}</td>
-        <td class="num" style="color:${v.vencido/v.saldo>0.8?'#cc0000':v.vencido/v.saldo>0.5?'#d97706':'#666'}">${v.saldo?(v.vencido/v.saldo*100).toFixed(1)+'%':'—'}</td>
-        <td class="num"><span style="color:${v.maxD>120?'#7c3aed':v.maxD>90?'#cc0000':v.maxD>60?'#ea580c':'#d97706'};font-weight:600">${v.maxD}d</span></td>
-      </tr>`).join('')}
-      <tr style="background:#1e3a5f">
-        <td colspan="2" style="color:#fff;font-weight:700">TOTAL CARTERA</td>
-        <td class="num" style="color:#fff;font-weight:700">${fC(totalCart)}</td>
-        <td class="num" style="color:#f87171;font-weight:700">${fC(ant.reduce((s,r)=>s+r.vencido,0))}</td>
-        <td class="num" style="color:#94a3b8">${pct(ant.reduce((s,r)=>s+r.vencido,0),totalCart)}</td>
-        <td></td>
-      </tr>
-    </tbody>
-  </table>
+  </body></html>`;
 
-<!-- INVENTARIO (same page as cartera) -->
-<div style="margin-top:12px">
-  <div class="sh"><span class="st">🏭 Inventario</span><span class="sp">${fechaHoy} · ${socLabel}</span></div>
-  <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-    ${kpiCard('Valor Total', fM(r.invTotal), r.invUnidades.toLocaleString()+' unidades', '#1e3a5f')}
-    ${kpiCard('Días Inventario', r.dii.toFixed(0)+' d', 'DII acumulado', r.dii>90?'#cc0000':r.dii>60?'#d97706':'#00875a')}
-    ${kpiCard('Rotación', r.rotInv.toFixed(1)+'x', 'Anualizada', r.rotInv>4?'#00875a':r.rotInv>2?'#d97706':'#cc0000')}
-    ${kpiCard('En Riesgo >180d', fM(inv.filter(r=>r.antiguedad>180).reduce((s,r)=>s+r.valor,0)), inv.filter(r=>r.antiguedad>180).length+' unidades', '#cc0000')}
-  </div>
-  <table>
-    <thead><tr><th>Segmento</th><th class="num">Unidades</th><th class="num">Valor</th><th class="num">% del Total</th><th class="num">Valor / Unidad</th></tr></thead>
-    <tbody>
-      ${invSegs.map(([seg,v])=>`<tr>
-        <td>${seg}</td><td class="num">${v.und.toLocaleString()}</td><td class="num">${fM(v.val)}</td>
-        <td class="num">${r.invTotal?(v.val/r.invTotal*100).toFixed(1)+'%':'—'}</td>
-        <td class="num">${v.und>0?fM(v.val/v.und):'—'}</td>
-      </tr>`).join('')}
-      <tr style="background:#1e3a5f">
-        <td style="color:#fff;font-weight:700">TOTAL</td>
-        <td class="num" style="color:#fff;font-weight:700">${r.invUnidades.toLocaleString()}</td>
-        <td class="num" style="color:#fff;font-weight:700">${fM(r.invTotal)}</td>
-        <td class="num" style="color:#94a3b8">100%</td>
-        <td class="num" style="color:#94a3b8">${r.invUnidades>0?fM(r.invTotal/r.invUnidades):'—'}</td>
-      </tr>
-    </tbody>
-  </table>
-</div>  <!-- close inner inventario div -->
-</div>  <!-- close combined cartera+inventario page -->
-
-<div class="no-print" style="position:fixed;bottom:20px;right:20px;z-index:999">
-  <button onclick="window.print()" style="background:#1e3a5f;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)">🖨️ Imprimir / Guardar PDF</button>
-  <button onclick="window.close()" style="background:#64748b;color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:13px;cursor:pointer;margin-left:8px">✕ Cerrar</button>
-</div>
-</body></html>`;
-
+  const htmlFinal = html.replace('MESES_INJECT', mesesHtmlStr);
   const win=window.open('','_blank','width=1200,height=800');
-  win.document.write(html);
+  win.document.write(htmlFinal);
   win.document.close();
 }
 
