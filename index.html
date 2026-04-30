@@ -4314,14 +4314,14 @@ async function runForecast(manual=false){
         <td>${sb(r.seg,false)}</td>
         <td style="color:#94a3b8">${r.dist}</td>
         <td style="text-align:right;color:#94a3b8">${r.saldo?fC(r.saldo):'—'}</td>
-        <td style="text-align:right;color:#f59e0b">${fC(r.interes)}</td>
+        <td style="text-align:right;color:#f59e0b">${fmtC(r.interes)}</td>
         <td style="text-align:right">${r.count}</td>
         <td style="text-align:right">${r.count?'$'+Math.round(r.interes/r.count).toLocaleString('es-MX'):'—'}</td>
       </tr>`),
       `<tr style="border-top:2px solid rgba(0,212,170,.25);font-weight:700;background:rgba(0,212,170,.05)">
         <td>TOTAL</td><td colspan="2"></td>
         <td style="text-align:right">${fC(totSaldo)}</td>
-        <td style="text-align:right;color:#f59e0b">${fC(totInteres)}</td>
+        <td style="text-align:right;color:#f59e0b">${fmtC(totInteres)}</td>
         <td style="text-align:right">${totCount}</td>
         <td style="text-align:right">${totCount?'$'+Math.round(totInteres/totCount).toLocaleString('es-MX'):'—'}</td>
       </tr>`
