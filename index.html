@@ -6202,10 +6202,10 @@ function generarReporteEjecutivo(){
       .st{font-size:14px;font-weight:800;color:#1e3a5f;}
       .sp{font-size:9px;color:#64748b;margin-left:auto;}
       .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px;}
-      .kpi-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:8px 10px;text-align:center;}
-      .kpi-label{font-size:8px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
-      .kpi-val{font-size:18px;font-weight:800;font-family:'Courier New',monospace;}
-      .kpi-sub{font-size:8px;color:#94a3b8;margin-top:2px;}
+      .kpi-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:5px 8px;text-align:center;}
+      .kpi-label{font-size:7px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;}
+      .kpi-val{font-size:13px;font-weight:800;font-family:'Courier New',monospace;}
+      .kpi-sub{font-size:7px;color:#94a3b8;margin-top:1px;}
       table{width:100%;border-collapse:collapse;font-size:9px;}
       th{background:#1e3a5f;color:#fff;padding:5px 7px;text-align:left;font-weight:600;font-size:9px;}
       th.num,td.num{text-align:right;}
@@ -6326,6 +6326,13 @@ function generarReporteEjecutivo(){
         </div>`;}).join('')}
     </div>
 
+    <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-top:6px">
+      ${kpiCard('Inventario Total', fM(r.invTotal), r.invUnidades.toLocaleString()+' unidades', '#1e3a5f')}
+      ${kpiCard('D\u00edas Inventario', r.dii.toFixed(0)+' d', 'DII acumulado', r.dii>90?'#cc0000':r.dii>60?'#d97706':'#00875a')}
+      ${kpiCard('Rotaci\u00f3n', r.rotInv.toFixed(1)+'x', 'Anualizada', r.rotInv>4?'#00875a':r.rotInv>2?'#d97706':'#cc0000')}
+      ${kpiCard('En Riesgo >180d', fM(inv.filter(r=>r.antiguedad>180).reduce((s,r)=>s+r.valor,0)), inv.filter(r=>r.antiguedad>180).length+' unidades', '#cc0000')}
+    </div>
+
     MESES_INJECT
 
     ${(()=>{
@@ -6372,34 +6379,6 @@ function generarReporteEjecutivo(){
         </div>
       </div>`;
     })()}
-
-    <div style="margin-top:12px">
-      <div class="sh"><span class="st">&#127981; Inventario</span><span class="sp">${fechaHoy} &middot; ${socLabel}</span></div>
-      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
-        ${kpiCard('Valor Total', fM(r.invTotal), r.invUnidades.toLocaleString()+' unidades', '#1e3a5f')}
-        ${kpiCard('D\u00edas Inventario', r.dii.toFixed(0)+' d', 'DII acumulado', r.dii>90?'#cc0000':r.dii>60?'#d97706':'#00875a')}
-        ${kpiCard('Rotaci\u00f3n', r.rotInv.toFixed(1)+'x', 'Anualizada', r.rotInv>4?'#00875a':r.rotInv>2?'#d97706':'#cc0000')}
-        ${kpiCard('En Riesgo >180d', fM(inv.filter(r=>r.antiguedad>180).reduce((s,r)=>s+r.valor,0)), inv.filter(r=>r.antiguedad>180).length+' unidades', '#cc0000')}
-      </div>
-      <table>
-        <thead><tr><th>Segmento</th><th class="num">Unidades</th><th class="num">Valor</th><th class="num">% del Total</th><th class="num">Valor / Unidad</th></tr></thead>
-        <tbody>
-          ${invSegs.map(([seg,v])=>`<tr>
-            <td>${seg}</td><td class="num">${v.und.toLocaleString()}</td><td class="num">${fM(v.val)}</td>
-            <td class="num">${r.invTotal?(v.val/r.invTotal*100).toFixed(1)+'%':'--'}</td>
-            <td class="num">${v.und>0?fM(v.val/v.und):'--'}</td>
-          </tr>`).join('')}
-          <tr style="background:#1e3a5f">
-            <td style="color:#fff;font-weight:700">TOTAL</td>
-            <td class="num" style="color:#fff;font-weight:700">${r.invUnidades.toLocaleString()}</td>
-            <td class="num" style="color:#fff;font-weight:700">${fM(r.invTotal)}</td>
-            <td class="num" style="color:#94a3b8">100%</td>
-            <td class="num" style="color:#94a3b8">${r.invUnidades>0?fM(r.invTotal/r.invUnidades):'--'}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 
   <div class="no-print" style="text-align:center;margin:20px 0 40px">
     <button onclick="window.print()" style="background:#1e3a5f;color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3)">&#128424;&#65039; Imprimir / Guardar PDF</button>
