@@ -6254,8 +6254,6 @@ function generarReporteEjecutivo(){
       ${kpiCard('Unidades en Inv.', r.invUnidades.toLocaleString(), 'Unidades totales', '#64748b')}
     </div>
 
-    MESES_INJECT
-
     ${wfGlobalSvg ? `
     <div class="sh" style="margin-top:6px"><span class="st">&#127754; Puente de UC \u2014 Real vs Presupuesto</span></div>
     <div style="border:1px solid #e2e8f0;border-radius:7px;padding:4px 8px 2px;margin-bottom:10px">
@@ -6327,6 +6325,9 @@ function generarReporteEjecutivo(){
           <div class="aging-pct" style="color:${BKC[i]}">${p}</div>
         </div>`;}).join('')}
     </div>
+
+    MESES_INJECT
+
     ${(()=>{
       const BKT2=['Por Vencer','1-30 días','31-60 días','61-90 días','91-120 días','+120 días'];
       const BKC2=['#10b981','#3b82f6','#f59e0b','#f97316','#ef4444','#7c3aed'];
