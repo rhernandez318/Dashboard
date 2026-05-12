@@ -50,6 +50,8 @@
 /* Tables */
 [data-theme="light"] thead tr,[data-theme="dawn"] thead tr{background:#1e3a5f;}
 [data-theme="light"] tbody tr:nth-child(even),[data-theme="dawn"] tbody tr:nth-child(even){background:rgba(0,0,0,.03);}
+[data-theme="light"] tbody td,[data-theme="dawn"] tbody td{color:var(--text);}
+[data-theme="light"] tbody span,[data-theme="dawn"] tbody span{color:inherit;}
 [data-theme="light"] .tscroll,[data-theme="dawn"] .tscroll{background:var(--surface);}
 /* Charts area */
 [data-theme="light"] .cwrap,[data-theme="dawn"] .cwrap{background:var(--surface);}
@@ -898,7 +900,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
     <!-- P&L Table -->
     <div class="tcard mt4">
-      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4><button onclick="exportTableExcel('tbl-fc-edo','Forecast_EdoResultados')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4><button onclick="exportFcEdoMultiSheet()" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel (Todos los segmentos)</button></div>
       <div class="tscroll"><table id="tbl-fc-edo">
         <thead><tr>
           <th>Concepto</th><th style="text-align:right">Forecast</th>
@@ -4239,7 +4241,7 @@ async function runForecast(manual=false){
     const col = fc>=0 ? '#00d4aa' : '#ef4444';
     const ppTd = hasPpto&&pp!=null ? `<td style="color:#94a3b8">${fC(pp)}</td>` : `<td style="color:#475569">—</td>`;
     return `<tr style="${bg}${opts.style||''}">
-      <td style="font-weight:700;color:#fff">${label}</td>
+      <td style="font-weight:700;color:var(--text)">${label}</td>
       <td><span style="color:${col};font-weight:700">${fC(fc)}</span></td>
       ${ppTd}${varTds(fc,pp)}</tr>`;
   }
@@ -4340,7 +4342,7 @@ async function runForecast(manual=false){
     (()=>{
       const tMC = grandTotUB - totGVreal;
       return`<tr style="border-top:2px solid rgba(0,212,170,.25);font-weight:700;background:rgba(0,212,170,.05)">
-        <td>TOTAL</td>
+        <td style="color:var(--text)">TOTAL</td>
         <td style="text-align:right">${totUnd}</td>
         <td>${fC(grandTotRev)}</td><td>${fC(grandTotCosto)}</td>
         <td>${colored(grandTotUB)}</td><td>${pill(grandTotUB,grandTotRev)}</td>
@@ -4384,7 +4386,7 @@ async function runForecast(manual=false){
         <td style="text-align:right">${r.count?'$'+Math.round(r.interes/r.count).toLocaleString('es-MX'):'—'}</td>
       </tr>`),
       `<tr style="border-top:2px solid rgba(0,212,170,.25);font-weight:700;background:rgba(0,212,170,.05)">
-        <td>TOTAL</td><td colspan="2"></td>
+        <td style="color:var(--text)">TOTAL</td><td colspan="2"></td>
         <td style="text-align:right">${fC(totSaldo)}</td>
         <td style="text-align:right;color:#f59e0b">${fmtC(totInteres)}</td>
         <td style="text-align:right">${totCount}</td>
@@ -5793,6 +5795,87 @@ function buildBalanceRatios(){
   document.getElementById('dupont-zscore-grid').innerHTML = dupHtml + zHtml;
 }
 
+
+
+// ═══════════════════════════════════════════
+// FORECAST EDO — EXPORTAR MULTI-HOJA POR SEGMENTO
+// ═══════════════════════════════════════════
+function exportFcEdoMultiSheet(){
+  if(!window._fin || !window._fcCache) { alert('Genera el forecast primero.'); return; }
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mes   = +document.getElementById('fc-mes')?.value || 3;
+  const tasa  = +document.getElementById('fc-tasa')?.value || 12.5;
+  const mesNom= NAMES[mes-1];
+  const hasPpto = !!window._ppto;
+
+  // Use the same data pipeline as runForecast
+  const cxP   = fCxPpto();
+  const fcVen  = window._fcCache.ventas||[];
+
+  // Build per-segment data (same logic as runForecast)
+  const allSegs = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES',
+                   'PASAJE','REFACCIONES','TALLER','VANES','COLLISION CENTER Y HYP'];
+
+  function getFcRev(seg){ return fcVen.filter(r=>normSeg(r.segmento||r.Segmento||'')===normSeg(seg)).reduce((s,r)=>s+(+r.ingresos||0),0); }
+  function getFcCosto(seg){ return fcVen.filter(r=>normSeg(r.segmento||r.Segmento||'')===normSeg(seg)).reduce((s,r)=>s+(+r.costo||0),0); }
+  function getPptoRev(seg){ return -cxP.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&r.periodo===mes).reduce((s,r)=>s+r.importe,0); }
+  function getPptoCosto(seg){ return cxP.filter(r=>r.ctaTipo==='5'&&r.seg===seg&&r.periodo===mes).reduce((s,r)=>s+r.importe,0); }
+  function getPptoGV(seg){ return cxP.filter(r=>r.ctaTipo==='6'&&r.seg===seg&&r.periodo===mes).reduce((s,r)=>s+r.importe,0); }
+
+  const HDR = ['Concepto', `Forecast ${mesNom}`, ...(hasPpto?['Presupuesto','Var $','Var %']:[])];
+
+  function buildRows(seg){
+    const rev   = seg ? getFcRev(seg)   : allSegs.reduce((s,g)=>s+getFcRev(g),0);
+    const costo = seg ? getFcCosto(seg) : allSegs.reduce((s,g)=>s+getFcCosto(g),0);
+    const ub    = rev - costo;
+    const pRev  = hasPpto ? (seg?getPptoRev(seg)  :allSegs.reduce((s,g)=>s+getPptoRev(g),0))  : null;
+    const pCost = hasPpto ? (seg?getPptoCosto(seg) :allSegs.reduce((s,g)=>s+getPptoCosto(g),0)): null;
+    const pUB   = hasPpto ? (pRev-pCost) : null;
+    const gv    = seg ? getPptoGV(seg) : allSegs.reduce((s,g)=>s+getPptoGV(g),0);
+    const pGV   = hasPpto ? (seg?getPptoGV(seg):allSegs.reduce((s,g)=>s+getPptoGV(g),0)) : null;
+    const mc    = ub - gv;
+    const pMC   = hasPpto ? (pUB - pGV) : null;
+    function row(label,real,pp){
+      const varD = pp!=null ? real-pp : null;
+      const varP = pp!=null&&pp!==0 ? ((real-pp)/Math.abs(pp)*100).toFixed(1)+'%' : null;
+      return hasPpto
+        ? [label, real, pp||'', varD!=null?varD:'', varP!=null?varP:'']
+        : [label, real];
+    }
+    return [
+      HDR,
+      row('Ingresos Netos',    rev,   pRev),
+      row('(-) Costo Ventas',  -costo,-pCost),
+      row('Utilidad Bruta',    ub,    pUB),
+      [hasPpto?`% Margen Bruto`:null, rev?((ub/rev)*100).toFixed(1)+'%':null, hasPpto&&pRev?(pUB/pRev*100).toFixed(1)+'%':null].filter(v=>v!=null),
+      row('(-) Gastos Venta',  -gv,   -pGV),
+      row('★ Utilidad Contribución', mc, pMC),
+      [hasPpto?`% Margen Contribución`:null, rev?((mc/rev)*100).toFixed(1)+'%':null, hasPpto&&pRev?(pMC/pRev*100).toFixed(1)+'%':null].filter(v=>v!=null),
+    ];
+  }
+
+  // Build workbook with one sheet per segment + Total
+  const wb = XLSX.utils.book_new();
+
+  // Total sheet first
+  const totalRows = buildRows(null);
+  const wsTot = XLSX.utils.aoa_to_sheet(totalRows);
+  XLSX.utils.book_append_sheet(wb, wsTot, 'TOTAL');
+
+  // One sheet per segment
+  allSegs.forEach(seg=>{
+    const rows = buildRows(seg);
+    // Only add if has data
+    const hasData = rows.some((r,i)=>i>0&&r[1]&&r[1]!==0);
+    if(hasData){
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const sheetName = seg.length>31?seg.slice(0,31):seg;
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    }
+  });
+
+  XLSX.writeFile(wb, `Forecast_EdoResultados_${mesNom}.xlsx`);
+}
 
 // ═══════════════════════════════════════════
 // PALETA DE COLORES
