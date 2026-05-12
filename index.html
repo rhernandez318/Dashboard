@@ -4237,6 +4237,14 @@ async function runForecast(manual=false){
     return `<td><span style="color:${cl}">${d<0?'('+fC(Math.abs(d))+')':fC(d)}</span></td>`
            +`<td><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(1)+'%':'--'}</span></td>`;
   }
+  function aaTds(fc, aa){
+    if(!hasAA||aa==null) return '<td>—</td><td>—</td><td>—</td>';
+    const d=fc-aa, pct=aa?d/Math.abs(aa)*100:null;
+    const cl=d>=0?'#00d4aa':'#ef4444';
+    return `<td style="color:#8b5cf6;text-align:right">${fC(aa)}</td>`
+          +`<td style="text-align:right"><span style="color:${cl}">${d<0?'('+fC(Math.abs(d))+')':fC(d)}</span></td>`
+          +`<td style="text-align:right"><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(1)+'%':'--'}</span></td>`;
+  }
   function sepRow(label){
     return `<tr style="background:rgba(245,158,11,.04)"><td colspan="5" style="padding:4px 12px;font-size:10px;color:#f59e0b;text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`;
   }
