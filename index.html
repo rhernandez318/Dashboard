@@ -17,13 +17,49 @@
 [data-theme="dawn"]{--bg:#faf7f2;--surface:#ffffff;--surface2:#fdf6ee;--border:#e8d8c4;--accent:#b45309;--accent2:#7c3aed;--accent3:#0891b2;--text:#1c1917;--text-muted:#78716c;--text-dim:#a8a29e;--green:#15803d;--red:#dc2626;}
 /* Light theme header and table tweaks */
 [data-theme="light"] header,[data-theme="dawn"] header{background:linear-gradient(135deg,#1e3a5f,#2563eb)!important;}
+/* Light/Dawn — fix all white text to use CSS var */
+[data-theme="light"],[data-theme="dawn"]{color-scheme:light;}
 [data-theme="light"] .ratio-card,[data-theme="dawn"] .ratio-card{background:var(--surface2);border-color:var(--border);}
-[data-theme="light"] .tcard,[data-theme="dawn"] .tcard{background:var(--surface);}
-[data-theme="light"] .kcard,[data-theme="dawn"] .kcard{background:var(--surface2);}
-[data-theme="light"] thead tr,[data-theme="dawn"] thead tr{background:#1e3a5f!important;}
-[data-theme="light"] .tbtn,[data-theme="dawn"] .tbtn{color:var(--text);}
+[data-theme="light"] .tcard,[data-theme="dawn"] .tcard{background:var(--surface);border-color:var(--border);}
+[data-theme="light"] .kcard,[data-theme="dawn"] .kcard{background:var(--surface2);border-color:var(--border);}
+[data-theme="light"] .shdr,[data-theme="dawn"] .shdr{background:var(--surface);}
+[data-theme="light"] .soc-bar,[data-theme="dawn"] .soc-bar{background:var(--surface);border-color:var(--border);}
+/* Text colors */
+[data-theme="light"] .stitle,[data-theme="dawn"] .stitle{color:var(--text);}
+[data-theme="light"] .klabel,[data-theme="dawn"] .klabel{color:var(--text-muted);}
+[data-theme="light"] .kval,[data-theme="dawn"] .kval{color:var(--text);}
+[data-theme="light"] .ksub,[data-theme="dawn"] .ksub{color:var(--text-muted);}
+[data-theme="light"] td,[data-theme="dawn"] td{color:var(--text);}
+[data-theme="light"] .ratio-name,[data-theme="light"] .ratio-val,[data-theme="light"] .ratio-desc,[data-theme="light"] .ratio-unit{color:var(--text);}
+[data-theme="dawn"] .ratio-name,[data-theme="dawn"] .ratio-val,[data-theme="dawn"] .ratio-desc,[data-theme="dawn"] .ratio-unit{color:var(--text);}
+[data-theme="light"] .ratio-status,[data-theme="dawn"] .ratio-status{color:inherit;}
+[data-theme="light"] h4,[data-theme="dawn"] h4{color:var(--text);}
+[data-theme="light"] .hint,[data-theme="dawn"] .hint{color:var(--text-muted);}
+[data-theme="light"] .abval,[data-theme="dawn"] .abval{color:var(--text);}
+[data-theme="light"] .ablabel,[data-theme="dawn"] .ablabel{color:var(--text);}
+[data-theme="light"] .kpi-l,[data-theme="dawn"] .kpi-l{color:var(--text-muted);}
+[data-theme="light"] .kpi-v,[data-theme="dawn"] .kpi-v{color:var(--text);}
+[data-theme="light"] .kpi-s,[data-theme="dawn"] .kpi-s{color:var(--text-muted);}
+/* Nav and buttons */
+[data-theme="light"] .tbtn,[data-theme="dawn"] .tbtn{color:var(--text);background:var(--surface2);border-color:var(--border);}
+[data-theme="light"] .tbtn.active,[data-theme="dawn"] .tbtn.active{color:var(--accent);background:rgba(8,145,178,.1);}
 [data-theme="light"] .pbtn,[data-theme="dawn"] .pbtn{color:var(--text);}
-[data-theme="light"] .soc-bar,[data-theme="dawn"] .soc-bar{background:var(--surface);}
+[data-theme="light"] .pbtn.active,[data-theme="dawn"] .pbtn.active{background:var(--accent);color:#fff;}
+[data-theme="light"] .tnav,[data-theme="dawn"] .tnav{background:var(--surface);border-color:var(--border);}
+[data-theme="light"] .tcontent,[data-theme="dawn"] .tcontent{background:var(--bg);}
+/* Tables */
+[data-theme="light"] thead tr,[data-theme="dawn"] thead tr{background:#1e3a5f;}
+[data-theme="light"] tbody tr:nth-child(even),[data-theme="dawn"] tbody tr:nth-child(even){background:rgba(0,0,0,.03);}
+[data-theme="light"] .tscroll,[data-theme="dawn"] .tscroll{background:var(--surface);}
+/* Charts area */
+[data-theme="light"] .cwrap,[data-theme="dawn"] .cwrap{background:var(--surface);}
+[data-theme="light"] select,[data-theme="dawn"] select{background:var(--surface2);color:var(--text);border-color:var(--border);}
+[data-theme="light"] input,[data-theme="dawn"] input{background:var(--surface2);color:var(--text);border-color:var(--border);}
+/* Misc text */
+[data-theme="light"] .ratio-bench-label,[data-theme="dawn"] .ratio-bench-label{color:var(--text-muted);}
+[data-theme="light"] .ec-kpi-label,[data-theme="dawn"] .ec-kpi-label{color:var(--text-muted);}
+[data-theme="light"] label,[data-theme="dawn"] label{color:var(--text);}
+[data-theme="light"] small,[data-theme="dawn"] small{color:var(--text-muted);}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;font-size:14px;}
 header{background:linear-gradient(135deg,#0a0e1a,#111827);border-bottom:1px solid var(--border);padding:13px 26px;height:var(--hh);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
@@ -874,7 +910,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
     <!-- Margen por segmento forecast -->
     <div class="tcard mt4">
-      <div class="thead2"><h4>📊 Margen por Segmento — Forecast</h4></div>
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4>📊 Margen por Segmento — Forecast</h4><button onclick="exportTableExcel('tbl-fc-seg','Margen_Segmento_Forecast')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div>
       <div class="tscroll"><table id="tbl-fc-seg">
         <thead><tr><th>Segmento</th><th>Unidades</th><th>Ingresos</th><th>Costo</th><th>Ut. Bruta</th><th>% Mg.B</th><th>Gastos Vta</th><th>IPP est.</th><th>MC estimada</th><th>% MC</th></tr></thead>
         <tbody></tbody>
