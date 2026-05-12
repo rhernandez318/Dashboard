@@ -4258,7 +4258,7 @@ async function runForecast(manual=false){
       <td><span style="color:${col};font-weight:700">${fC(fc)}</span></td>
       ${ppTd}${varTds(fc,pp)}</tr>`;
   }
-  function dataRow(label, fc, pp, opts={}){
+  function dataRow(label, fc, pp, opts={}, aa=null){
     const ppTd = hasPpto&&pp!=null ? `<td style="color:#94a3b8">${fC(pp)}</td>` : `<td style="color:#475569">—</td>`;
     return `<tr style="${opts.style||''}">
       <td style="${opts.indent?'padding-left:22px;':''}color:${opts.color||'var(--text-dim)'}">${label}</td>
