@@ -4280,19 +4280,20 @@ async function runForecast(manual=false){
   function cxAAacum(seg){ return (cx25||[]).filter(r=>r.periodo<=mes&&(!fcSegFilter||r.seg===fcSegFilter)&&(!seg||r.seg===seg)); }
 
   // ── AA totals for P&L comparison ──
-  const aaRevMes   = hasAA ? -(cxAAmes(null)).filter(r=>r.ctaTipo==='4').reduce((s,r)=>s+r.importe,0)  : null;
-  const aaCostoMes = hasAA ?  (cxAAmes(null)).filter(r=>r.ctaTipo==='5').reduce((s,r)=>s+r.importe,0)  : null;
-  const aaUBmes    = hasAA ? aaRevMes - aaCostoMes : null;
-  const aaGVmes    = hasAA ?  (cxAAmes(null)).filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0) : null;
-  const aaGImes    = hasAA ?  (cxAAmes(null)).filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0) : null;
-  const aaMCmes    = hasAA ? aaUBmes - aaGVmes : null;
-  const aaOpMes    = hasAA ? aaMCmes - aaGImes : null;
-  const aaRevAcum  = hasAA ? -(cxAAacum(null)).filter(r=>r.ctaTipo==='4').reduce((s,r)=>s+r.importe,0) : null;
-  const aaCostoAcum= hasAA ?  (cxAAacum(null)).filter(r=>r.ctaTipo==='5').reduce((s,r)=>s+r.importe,0) : null;
-  const aaUBAcum   = hasAA ? aaRevAcum - aaCostoAcum : null;
-  const aaGVAcum   = hasAA ?  (cxAAacum(null)).filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0) : null;
-  const aaMCAcum   = hasAA ? aaUBAcum - aaGVAcum : null;
-  const aaOpAcum   = hasAA ? aaUBAcum - aaGVAcum - (hasAA?(cxAAacum(null)).filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0):0) : null;
+  // Use acumulado data for reliability (not all months may have actual data in BDD25)
+  const nMesesAA = mes; // number of months in the acumulado period
+  function aaSum(tipo, negSign, segFilter){
+    const rows = cxAAacum(null).filter(r=>r.ctaTipo===tipo&&(!segFilter||r.seg===segFilter));
+    const tot  = rows.reduce((s,r)=>s+r.importe,0);
+    return rows.length>0 ? (negSign?-tot:tot) : null;
+  }
+  const aaRevMes   = aaSum('4',true,null);
+  const aaCostoMes = aaSum('5',false,null);
+  const aaUBmes    = (aaRevMes!=null&&aaCostoMes!=null) ? aaRevMes-aaCostoMes : null;
+  const aaGVmes    = hasAA?(cxAAacum(null).filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0)||null):null;
+  const aaGImes    = hasAA?(cxAAacum(null).filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0)||null):null;
+  const aaMCmes    = (aaUBmes!=null&&aaGVmes!=null) ? aaUBmes-aaGVmes : null;
+  const aaOpMes    = (aaMCmes!=null&&aaGImes!=null) ? aaMCmes-aaGImes : null;
 
   let html = '';
   html += sepRow('📦 Volumen estimado');
