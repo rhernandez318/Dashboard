@@ -5808,51 +5808,68 @@ function buildBalanceRatios(){
 // ═══════════════════════════════════════════
 // FORECAST EDO — EXPORTAR MULTI-HOJA POR SEGMENTO
 // ═══════════════════════════════════════════
-function exportFcEdoMultiSheet(){
+async function exportFcEdoMultiSheet(){
   if(!window._fin){ alert('Genera el forecast primero.'); return; }
-  if(!window._fcEdoSheets || !Object.keys(window._fcEdoSheets).length){
-    alert('Genera el forecast primero — da clic en Calcular Forecast.'); return;
-  }
+  if(!(_fcCache||window._fcCache)){ alert('Genera el forecast primero.'); return; }
 
   const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const mes = +document.getElementById('fc-mes')?.value || 3;
-  const wb  = XLSX.utils.book_new();
+  const mes  = +document.getElementById('fc-mes')?.value || 3;
+  const btn  = document.querySelector('[onclick="exportFcEdoMultiSheet()"]');
+  if(btn){ btn.textContent='⏳ Generando…'; btn.disabled=true; }
 
-  // Helper: parse HTML table rows to array of arrays
-  function tableHtmlToAoa(theadHtml, tbodyHtml){
-    const wrap = document.createElement('table');
-    wrap.innerHTML = '<thead><tr>'+theadHtml+'</tr></thead><tbody>'+tbodyHtml+'</tbody>';
-    document.body.appendChild(wrap);
+  // Helper: parse rendered table to array of arrays
+  function tableToAoa(tableId){
+    const tbl = document.getElementById(tableId);
+    if(!tbl) return [];
     const aoa = [];
-    wrap.querySelectorAll('tr').forEach(tr=>{
+    tbl.querySelectorAll('tr').forEach(tr=>{
       const row = [];
       tr.querySelectorAll('th,td').forEach(cell=>{
-        // Get text only, skip colspans duplicate
         const txt = cell.innerText.trim();
         const span = +cell.getAttribute('colspan')||1;
-        row.push(txt);
+        // Try numeric
+        const num = txt.replace(/[$,%\s]/g,'').replace(/,/g,'');
+        const val = !isNaN(num)&&num!==''&&!txt.includes('%') ? +num : txt;
+        row.push(val);
         for(let i=1;i<span;i++) row.push('');
       });
-      if(row.some(v=>v)) aoa.push(row);
+      if(row.some(v=>v!=='')) aoa.push(row);
     });
-    document.body.removeChild(wrap);
     return aoa;
   }
 
-  // Sort: TOTAL first, then segments
-  const sheets = Object.values(window._fcEdoSheets);
-  const total  = sheets.find(s=>s.seg==='__TOTAL__');
-  const segs   = sheets.filter(s=>s.seg!=='__TOTAL__');
+  const origSeg = activeFcSeg;
+  const wb = XLSX.utils.book_new();
 
-  const all = total ? [total, ...segs] : segs;
+  // ── 1. TOTAL sheet — set no filter ──
+  activeFcSeg = null;
+  await runForecast(false);
+  await new Promise(r=>setTimeout(r,50));
+  const totAoa = tableToAoa('tbl-fc-edo');
+  if(totAoa.length){
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(totAoa), 'TOTAL');
+  }
 
-  all.forEach(({thead, tbody, seg})=>{
-    const aoa = tableHtmlToAoa(thead, tbody);
-    if(!aoa.length) return;
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const name = seg==='__TOTAL__' ? 'TOTAL' : seg.slice(0,31);
-    XLSX.utils.book_append_sheet(wb, ws, name);
-  });
+  // ── 2. Per-segment sheets ──
+  // Get available segments from the combo
+  const sel = document.getElementById('fc-seg-select');
+  const segOptions = sel ? [...sel.options].map(o=>o.value).filter(v=>v) : [];
+  for(const seg of segOptions){
+    activeFcSeg = seg;
+    await runForecast(false);
+    await new Promise(r=>setTimeout(r,50));
+    const aoa = tableToAoa('tbl-fc-edo');
+    if(aoa.length){
+      const name = seg.length>31?seg.slice(0,31):seg;
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+    }
+  }
+
+  // ── 3. Restore original filter ──
+  activeFcSeg = origSeg;
+  await runForecast(false);
+
+  if(btn){ btn.textContent='⬇ Excel (Todos los segmentos)'; btn.disabled=false; }
 
   if(!wb.SheetNames.length){ alert('No hay datos para exportar.'); return; }
   XLSX.writeFile(wb, `Forecast_EdoResultados_${NAMES[mes-1]}.xlsx`);
