@@ -303,7 +303,10 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 <header>
   <div class="hbrand">
     <div class="hicon">📊</div>
-    <h1>Dashboard <span>Ejecutivo</span></h1>
+    <div>
+      <h1 style="font-size:15px;letter-spacing:-.3px">Plataforma Central de <span>Reporteo Ejecutivo</span></h1>
+      <div style="font-size:9px;color:var(--text-muted);letter-spacing:1px;text-transform:uppercase;margin-top:1px">Distribuidoras Zapata · Camiones Guadalajara</div>
+    </div>
   </div>
   <div class="hright">
     <div id="filter-bar">
@@ -349,8 +352,9 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 <!-- LOGIN -->
 <div id="login-screen">
   <div class="lcard">
-    <div class="ltitle">Dashboard <span>Ejecutivo</span></div>
-    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:-8px">Ingresa tus credenciales para continuar</p>
+    <div class="ltitle" style="font-size:17px;line-height:1.3">Plataforma Central de <span>Reporteo Ejecutivo</span></div>
+    <div style="font-size:10px;color:var(--text-muted);text-align:center;margin-top:-4px;letter-spacing:.5px">Distribuidoras Zapata · Camiones Guadalajara</div>
+    <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:4px">Ingresa tus credenciales para continuar</p>
     <div class="lfield">
       <label>Usuario</label>
       <input id="l-user" type="text" placeholder="Nombre de usuario" onkeydown="if(event.key==='Enter')loginSubmit()">
