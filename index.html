@@ -4287,6 +4287,12 @@ async function runForecast(manual=false){
       &&(!fcSegFilter||r.seg===fcSegFilter)&&(!seg||r.seg===seg))
       .reduce((a,r)=>a+r.importe,0);
   }
+  console.log('[AA debug] cx25 length:', (cx25||[]).length,
+    'periodo sample:', (cx25||[]).slice(0,3).map(r=>r.periodo),
+    'ctaTipo sample:', [...new Set((cx25||[]).map(r=>r.ctaTipo))],
+    'hasAA:', hasAA, 'aaPers:', aaPers, 'fcSegFilter:', fcSegFilter);
+  console.log('[AA debug] tipo4 rows:', (cx25||[]).filter(r=>aaPers.includes(r.periodo)&&r.ctaTipo==='4').length);
+  console.log('[AA debug] tipo6 ADMIN rows:', (cx25||[]).filter(r=>aaPers.includes(r.periodo)&&r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN').length);
   const aaRevMes   = hasAA ? -sumCxAA('4',null) : null;
   const aaCostoMes = hasAA ?  sumCxAA('5',null) : null;
   const aaUBmes    = hasAA ? aaRevMes-aaCostoMes : null;
