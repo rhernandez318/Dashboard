@@ -4351,6 +4351,8 @@ async function runForecast(manual=false){
   }
 
 
+  console.log('[AA values] aaRevMes:', aaRevMes, 'aaCostoMes:', aaCostoMes, 'aaUBmes:', aaUBmes, 'aaGVmes:', aaGVmes, 'aaGImes:', aaGImes);
+  console.log('[AA values] sample aaTds output:', aaTds(grandTotRev, aaRevMes));
   document.querySelector('#tbl-fc-edo thead tr').innerHTML =
     `<th>Concepto</th><th style="text-align:right">Forecast ${NAMES[mes-1]}</th>`+
     (hasPpto?`<th style="text-align:right">Presupuesto</th><th style="text-align:right">Var $</th><th style="text-align:right">Var %</th>`
