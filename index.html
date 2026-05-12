@@ -4265,6 +4265,12 @@ async function runForecast(manual=false){
       <td colspan="2"></td></tr>`;
   }
 
+  // ── Año Anterior data ──
+  const cx25     = window._bdd25 ? fCx25() : null;
+  const hasAA    = !!cx25;
+  function cxAAmes(seg){  return (cx25||[]).filter(r=>r.periodo===mes&&(!fcSegFilter||r.seg===fcSegFilter)&&(!seg||r.seg===seg)); }
+  function cxAAacum(seg){ return (cx25||[]).filter(r=>r.periodo<=mes&&(!fcSegFilter||r.seg===fcSegFilter)&&(!seg||r.seg===seg)); }
+
   // ── AA totals for P&L comparison ──
   const aaRevMes   = hasAA ? -(cxAAmes(null)).filter(r=>r.ctaTipo==='4').reduce((s,r)=>s+r.importe,0)  : null;
   const aaCostoMes = hasAA ?  (cxAAmes(null)).filter(r=>r.ctaTipo==='5').reduce((s,r)=>s+r.importe,0)  : null;
