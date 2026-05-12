@@ -3961,7 +3961,7 @@ function buildFcSegCombo(){
       const sid = seg.replace(/[^a-zA-Z0-9]/g,'_');
       return `<div style="background:var(--surface2);border:1px solid ${isFc?'rgba(245,158,11,.35)':'var(--border)'};
                    border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
-        <div style="font-size:11px;font-weight:700;color:#fff;letter-spacing:.3px">${seg}</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text);letter-spacing:.3px">${seg}</div>
         <div style="display:flex;gap:8px">
           <label style="cursor:pointer;display:flex;align-items:center;gap:5px;flex:1;
                         background:${isFc?'rgba(245,158,11,.12)':'rgba(255,255,255,.03)'};
@@ -3970,7 +3970,7 @@ function buildFcSegCombo(){
             <input type="radio" name="fcsrc_${sid}" value="forecast"
               ${isFc?'checked':''} onchange="_fcConfig['${seg}']=this.value;buildFcSegCombo()"
               style="accent-color:#f59e0b;margin:0">
-            <span style="font-size:10px;font-weight:600;color:${isFc?'#f59e0b':'#475569'}">Forecast</span>
+            <span style="font-size:10px;font-weight:600;color:${isFc?'#f59e0b':'var(--text-muted)'}">Forecast</span>
           </label>
           <label style="cursor:pointer;display:flex;align-items:center;gap:5px;flex:1;
                         background:${!isFc?'rgba(148,163,184,.1)':'rgba(255,255,255,.03)'};
@@ -3979,7 +3979,7 @@ function buildFcSegCombo(){
             <input type="radio" name="fcsrc_${sid}" value="ppto"
               ${!isFc?'checked':''} onchange="_fcConfig['${seg}']=this.value;buildFcSegCombo()"
               style="accent-color:#94a3b8;margin:0">
-            <span style="font-size:10px;font-weight:600;color:${!isFc?'#e2e8f0':'#475569'}">Presupuesto</span>
+            <span style="font-size:10px;font-weight:600;color:${!isFc?'var(--text)':'var(--text-muted)'}">Presupuesto</span>
           </label>
         </div>
       </div>`;
@@ -5801,7 +5801,9 @@ function buildBalanceRatios(){
 // FORECAST EDO — EXPORTAR MULTI-HOJA POR SEGMENTO
 // ═══════════════════════════════════════════
 function exportFcEdoMultiSheet(){
-  if(!window._fin || !window._fcCache) { alert('Genera el forecast primero.'); return; }
+  if(!window._fin) { alert('Genera el forecast primero.'); return; }
+  const _fcData = _fcCache || window._fcCache;
+  if(!_fcData) { alert('Genera el forecast primero.'); return; }
   const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const mes   = +document.getElementById('fc-mes')?.value || 3;
   const tasa  = +document.getElementById('fc-tasa')?.value || 12.5;
@@ -5810,7 +5812,7 @@ function exportFcEdoMultiSheet(){
 
   // Use the same data pipeline as runForecast
   const cxP   = fCxPpto();
-  const fcVen  = window._fcCache.ventas||[];
+  const fcVen  = (_fcCache||window._fcCache||{}).ventas||[];
 
   // Build per-segment data (same logic as runForecast)
   const allSegs = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES',
