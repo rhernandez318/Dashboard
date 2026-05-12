@@ -4279,21 +4279,23 @@ async function runForecast(manual=false){
   function cxAAmes(seg){  return (cx25||[]).filter(r=>r.periodo===mes&&(!fcSegFilter||r.seg===fcSegFilter)&&(!seg||r.seg===seg)); }
   function cxAAacum(seg){ return (cx25||[]).filter(r=>r.periodo<=mes&&(!fcSegFilter||r.seg===fcSegFilter)&&(!seg||r.seg===seg)); }
 
-  // ── AA totals for P&L comparison ──
-  // Use acumulado data for reliability (not all months may have actual data in BDD25)
-  const nMesesAA = mes; // number of months in the acumulado period
-  function aaSum(tipo, negSign, segFilter){
-    const rows = cxAAacum(null).filter(r=>r.ctaTipo===tipo&&(!segFilter||r.seg===segFilter));
-    const tot  = rows.reduce((s,r)=>s+r.importe,0);
-    return rows.length>0 ? (negSign?-tot:tot) : null;
+  // ── AA totals — same logic as buildEdo uses with sumCx ──
+  // Use acumulado periods (same as the forecast covers Jan-mes)
+  const aaPers = Array.from({length:mes},(_,i)=>i+1);
+  function sumCxAA(tipo, seg){
+    return (cx25||[]).filter(r=>aaPers.includes(r.periodo)&&r.ctaTipo===tipo
+      &&(!fcSegFilter||r.seg===fcSegFilter)&&(!seg||r.seg===seg))
+      .reduce((a,r)=>a+r.importe,0);
   }
-  const aaRevMes   = aaSum('4',true,null);
-  const aaCostoMes = aaSum('5',false,null);
-  const aaUBmes    = (aaRevMes!=null&&aaCostoMes!=null) ? aaRevMes-aaCostoMes : null;
-  const aaGVmes    = hasAA?(cxAAacum(null).filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0)||null):null;
-  const aaGImes    = hasAA?(cxAAacum(null).filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0)||null):null;
-  const aaMCmes    = (aaUBmes!=null&&aaGVmes!=null) ? aaUBmes-aaGVmes : null;
-  const aaOpMes    = (aaMCmes!=null&&aaGImes!=null) ? aaMCmes-aaGImes : null;
+  const aaRevMes   = hasAA ? -sumCxAA('4',null) : null;
+  const aaCostoMes = hasAA ?  sumCxAA('5',null) : null;
+  const aaUBmes    = hasAA ? aaRevMes-aaCostoMes : null;
+  const aaGVSegs   = ['TRACTO','PASAJE','CARGA','SEMIREMOLQUES','REFACCIONES',
+    'TALLER','VEHICULOS SEMINUEVOS','FL360','VANES','COLLISION CENTER Y HYP'];
+  const aaGVmes    = hasAA ? aaGVSegs.reduce((s,sg)=>s+sumCxAA('6',sg),0) : null;
+  const aaGImes    = hasAA ?  sumCxAA('6','ADMINISTRACIÓN') : null;
+  const aaMCmes    = hasAA ? aaUBmes-aaGVmes : null;
+  const aaOpMes    = hasAA ? aaMCmes-aaGImes : null;
 
   let html = '';
   html += sepRow('📦 Volumen estimado');
