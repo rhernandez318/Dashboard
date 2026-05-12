@@ -4246,7 +4246,7 @@ async function runForecast(manual=false){
           +`<td style="text-align:right"><span class="pill ${d>=0?'pg':'pr'}">${pct!=null?pct.toFixed(1)+'%':'--'}</span></td>`;
   }
   function sepRow(label){
-    return `<tr style="background:rgba(245,158,11,.04)"><td colspan="5" style="padding:4px 12px;font-size:10px;color:#f59e0b;text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`;
+    return `<tr style="background:rgba(245,158,11,.04)"><td colspan="8" style="padding:4px 12px;font-size:10px;color:#f59e0b;text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`;
   }
   function totRow(label, fc, pp, opts={}, aa=null){
     const bg = fc>=0 ? 'background:rgba(0,212,170,.07);border-top:2px solid rgba(0,212,170,.2)'
@@ -4281,7 +4281,7 @@ async function runForecast(manual=false){
 
   // ── AA totals — same logic as buildEdo uses with sumCx ──
   // Use acumulado periods (same as the forecast covers Jan-mes)
-  const aaPers = Array.from({length:mes},(_,i)=>i+1);
+  const aaPers = [mes]; // Solo el mes del forecast
   function sumCxAA(tipo, seg){
     return (cx25||[]).filter(r=>aaPers.includes(r.periodo)&&r.ctaTipo===tipo
       &&(!fcSegFilter||r.seg===fcSegFilter)&&(!seg||r.seg===seg))
@@ -4348,7 +4348,10 @@ async function runForecast(manual=false){
   document.querySelector('#tbl-fc-edo thead tr').innerHTML =
     `<th>Concepto</th><th style="text-align:right">Forecast ${NAMES[mes-1]}</th>`+
     (hasPpto?`<th style="text-align:right">Presupuesto</th><th style="text-align:right">Var $</th><th style="text-align:right">Var %</th>`
-            :`<th colspan="3" style="color:#475569">Presupuesto — carga archivo</th>`);
+            :`<th colspan="3" style="color:#475569">Presupuesto — carga archivo</th>`)+
+    `<th style="text-align:right;color:${hasAA?'#8b5cf6':'#475569'}">${NAMES[mes-1]} AA</th>`+
+    `<th style="text-align:right;color:${hasAA?'var(--text)':'#475569'}">Var $ AA</th>`+
+    `<th style="text-align:right;color:${hasAA?'var(--text)':'#475569'}">Var % AA</th>`;
   document.querySelector('#tbl-fc-edo tbody').innerHTML = html;
   // Store for multi-sheet export
   if(!window._fcEdoSheets) window._fcEdoSheets = {};
