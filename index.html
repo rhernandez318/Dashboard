@@ -4240,7 +4240,7 @@ async function runForecast(manual=false){
   function sepRow(label){
     return `<tr style="background:rgba(245,158,11,.04)"><td colspan="5" style="padding:4px 12px;font-size:10px;color:#f59e0b;text-transform:uppercase;letter-spacing:.8px;border-top:1px solid var(--border)">${label}</td></tr>`;
   }
-  function totRow(label, fc, pp, opts={}){
+  function totRow(label, fc, pp, opts={}, aa=null){
     const bg = fc>=0 ? 'background:rgba(0,212,170,.07);border-top:2px solid rgba(0,212,170,.2)'
                      : 'background:rgba(239,68,68,.05);border-top:2px solid rgba(239,68,68,.2)';
     const col = fc>=0 ? '#00d4aa' : '#ef4444';
@@ -4255,7 +4255,7 @@ async function runForecast(manual=false){
     return `<tr style="${opts.style||''}">
       <td style="${opts.indent?'padding-left:22px;':''}color:${opts.color||'var(--text-dim)'}">${label}</td>
       <td style="color:${opts.color||'var(--text)'}">${fC(fc)}</td>
-      ${ppTd}${varTds(fc,pp)}</tr>`;
+      ${ppTd}${varTds(fc,pp)}${aaTds(fc,aa)}</tr>`;
   }
   function pctRow(label, num, den, ppNum, ppDen){
     const p=(v,d)=>d?`${(v/d*100).toFixed(1)}%`:'—';
@@ -4264,6 +4264,21 @@ async function runForecast(manual=false){
       <td style="font-size:10px;color:var(--text-muted)">${hasPpto?p(ppNum,ppDen):'—'}</td>
       <td colspan="2"></td></tr>`;
   }
+
+  // ── AA totals for P&L comparison ──
+  const aaRevMes   = hasAA ? -(cxAAmes(null)).filter(r=>r.ctaTipo==='4').reduce((s,r)=>s+r.importe,0)  : null;
+  const aaCostoMes = hasAA ?  (cxAAmes(null)).filter(r=>r.ctaTipo==='5').reduce((s,r)=>s+r.importe,0)  : null;
+  const aaUBmes    = hasAA ? aaRevMes - aaCostoMes : null;
+  const aaGVmes    = hasAA ?  (cxAAmes(null)).filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0) : null;
+  const aaGImes    = hasAA ?  (cxAAmes(null)).filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0) : null;
+  const aaMCmes    = hasAA ? aaUBmes - aaGVmes : null;
+  const aaOpMes    = hasAA ? aaMCmes - aaGImes : null;
+  const aaRevAcum  = hasAA ? -(cxAAacum(null)).filter(r=>r.ctaTipo==='4').reduce((s,r)=>s+r.importe,0) : null;
+  const aaCostoAcum= hasAA ?  (cxAAacum(null)).filter(r=>r.ctaTipo==='5').reduce((s,r)=>s+r.importe,0) : null;
+  const aaUBAcum   = hasAA ? aaRevAcum - aaCostoAcum : null;
+  const aaGVAcum   = hasAA ?  (cxAAacum(null)).filter(r=>r.ctaTipo==='6'&&r.seg!=='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0) : null;
+  const aaMCAcum   = hasAA ? aaUBAcum - aaGVAcum : null;
+  const aaOpAcum   = hasAA ? aaUBAcum - aaGVAcum - (hasAA?(cxAAacum(null)).filter(r=>r.ctaTipo==='6'&&r.seg==='ADMINISTRACIÓN').reduce((s,r)=>s+r.importe,0):0) : null;
 
   let html = '';
   html += sepRow('📦 Volumen estimado');
@@ -4280,17 +4295,17 @@ async function runForecast(manual=false){
     ${ppUndN!=null?`<td style="color:${totUnd>=ppUndN?'#00d4aa':'#ef4444'}">${totUnd>ppUndN?'+':''}${(totUnd-ppUndN).toLocaleString('es-MX')}</td><td>—</td>`:'<td colspan="2" style="color:#475569">—</td>'}</tr>`;
 
   html += sepRow('💰 Ingresos estimados');
-  html += totRow('TOTAL INGRESOS', grandTotRev, hasPpto?ppRev:null);
+  html += totRow('TOTAL INGRESOS', grandTotRev, hasPpto?ppRev:null, {}, aaRevMes);
 
   html += sepRow('📦 Costo de Ventas estimado');
-  html += totRow('TOTAL COSTO DE VENTAS', grandTotCosto, hasPpto?ppCost:null);
-  html += totRow('★ UTILIDAD BRUTA', grandTotUB, hasPpto?ppUB:null);
+  html += totRow('TOTAL COSTO DE VENTAS', grandTotCosto, hasPpto?ppCost:null, {}, aaCostoMes);
+  html += totRow('★ UTILIDAD BRUTA', grandTotUB, hasPpto?ppUB:null, {}, aaUBmes);
   html += pctRow('% Margen Bruto', grandTotUB, grandTotRev, ppUB, ppRev);
 
   const gvLabel = hayIPP ? '🏷️ Gastos de Venta (Ppto − Plan Piso + IPP Real)' : '🏷️ Gastos de Venta — del Presupuesto';
   html += sepRow(gvLabel);
-  html += totRow('TOTAL GASTOS DE VENTA', totGVreal, hasPpto?ppGV:null);
-  html += totRow('★ UTILIDAD CONTRIBUCIÓN', grandUtMC, hasPpto?ppMC:null);
+  html += totRow('TOTAL GASTOS DE VENTA', totGVreal, hasPpto?ppGV:null, {}, aaGVmes);
+  html += totRow('★ UTILIDAD CONTRIBUCIÓN', grandUtMC, hasPpto?ppMC:null, {}, aaMCmes);
   html += pctRow('% Margen Contribución', grandUtMC, grandTotRev, ppMC, ppRev);
 
   const ippLabel = hayIPP ? '🚗 Plan Piso — Intereses bancarios (real)' : '🚗 Plan Piso — del Presupuesto (referencia)';
@@ -4300,15 +4315,15 @@ async function runForecast(manual=false){
 
   if(!fcSegFilter){
     html += sepRow('🏢 Gastos Indirectos — del Presupuesto');
-    html += dataRow('Gastos Administración', totGI, hasPpto?ppGI:null, {indent:true, color:'#f59e0b'});
-    html += totRow('★ UTILIDAD OPERACIÓN', grandUtOp, hasPpto?ppOp:null);
+    html += dataRow('Gastos Administración', totGI, hasPpto?ppGI:null, {indent:true, color:'#f59e0b'}, aaGImes?-aaGImes:null);
+    html += totRow('★ UTILIDAD OPERACIÓN', grandUtOp, hasPpto?ppOp:null, {}, aaOpMes);
     html += pctRow('% Margen Operación', grandUtOp, grandTotRev, ppOp, ppRev);
 
     html += sepRow('📊 Otros Ingresos / Gastos — del Presupuesto');
     html += dataRow('Otros neto (intereses, FX, etc.)', ppOtros, hasPpto?ppOtros:null, {indent:true, color:'#94a3b8'});
     const utAIT    = grandUtOp - ppOtros;
     const ppUAITval = ppOp - ppOtros;
-    html += totRow('★ UTILIDAD ANTES DE IMPUESTOS', utAIT, hasPpto?ppUAITval:null);
+    html += totRow('★ UTILIDAD ANTES DE IMPUESTOS', utAIT, hasPpto?ppUAITval:null, {}, aaOpMes);
     html += pctRow('% UAIT', utAIT, grandTotRev, ppUAITval, ppRev);
   }
 
