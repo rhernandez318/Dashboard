@@ -3998,6 +3998,7 @@ function fcStatus(msg, color='var(--text-dim)'){
 }
 
 async function runForecast(manual=false){
+  window._fcEdoSheets={};
   buildFcSegCombo();
   const mes    = +document.getElementById('fc-mes').value || 3;
   const tasa   = +document.getElementById('fc-tasa').value || 12.5;
@@ -4313,6 +4314,13 @@ async function runForecast(manual=false){
     (hasPpto?`<th style="text-align:right">Presupuesto</th><th style="text-align:right">Var $</th><th style="text-align:right">Var %</th>`
             :`<th colspan="3" style="color:#475569">Presupuesto — carga archivo</th>`);
   document.querySelector('#tbl-fc-edo tbody').innerHTML = html;
+  // Store for multi-sheet export
+  if(!window._fcEdoSheets) window._fcEdoSheets = {};
+  window._fcEdoSheets[fcSegFilter||'__TOTAL__'] = {
+    thead: document.querySelector('#tbl-fc-edo thead tr').innerHTML,
+    tbody: html,
+    seg: fcSegFilter||'__TOTAL__'
+  };
 
   // ── 7. Margen por segmento (config-driven) ────────────────────────────────
   function colored(v){return`<span style="color:${v>=0?'var(--green)':'var(--red)'};font-weight:700">${fC(v)}</span>`;}
@@ -5801,82 +5809,53 @@ function buildBalanceRatios(){
 // FORECAST EDO — EXPORTAR MULTI-HOJA POR SEGMENTO
 // ═══════════════════════════════════════════
 function exportFcEdoMultiSheet(){
-  if(!window._fin) { alert('Genera el forecast primero.'); return; }
-  const _fcData = _fcCache || window._fcCache;
-  if(!_fcData) { alert('Genera el forecast primero.'); return; }
-  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const mes   = +document.getElementById('fc-mes')?.value || 3;
-  const tasa  = +document.getElementById('fc-tasa')?.value || 12.5;
-  const mesNom= NAMES[mes-1];
-  const hasPpto = !!window._ppto;
-
-  // Use the same data pipeline as runForecast
-  const cxP   = fCxPpto();
-  const fcVen  = (_fcCache||window._fcCache||{}).ventas||[];
-
-  // Build per-segment data (same logic as runForecast)
-  const allSegs = ['TRACTO','CARGA','FL360','VEHICULOS SEMINUEVOS','SEMIREMOLQUES',
-                   'PASAJE','REFACCIONES','TALLER','VANES','COLLISION CENTER Y HYP'];
-
-  function getFcRev(seg){ return fcVen.filter(r=>normSeg(r.segmento||r.Segmento||'')===normSeg(seg)).reduce((s,r)=>s+(+r.ingresos||0),0); }
-  function getFcCosto(seg){ return fcVen.filter(r=>normSeg(r.segmento||r.Segmento||'')===normSeg(seg)).reduce((s,r)=>s+(+r.costo||0),0); }
-  function getPptoRev(seg){ return -cxP.filter(r=>r.ctaTipo==='4'&&r.seg===seg&&r.periodo===mes).reduce((s,r)=>s+r.importe,0); }
-  function getPptoCosto(seg){ return cxP.filter(r=>r.ctaTipo==='5'&&r.seg===seg&&r.periodo===mes).reduce((s,r)=>s+r.importe,0); }
-  function getPptoGV(seg){ return cxP.filter(r=>r.ctaTipo==='6'&&r.seg===seg&&r.periodo===mes).reduce((s,r)=>s+r.importe,0); }
-
-  const HDR = ['Concepto', `Forecast ${mesNom}`, ...(hasPpto?['Presupuesto','Var $','Var %']:[])];
-
-  function buildRows(seg){
-    const rev   = seg ? getFcRev(seg)   : allSegs.reduce((s,g)=>s+getFcRev(g),0);
-    const costo = seg ? getFcCosto(seg) : allSegs.reduce((s,g)=>s+getFcCosto(g),0);
-    const ub    = rev - costo;
-    const pRev  = hasPpto ? (seg?getPptoRev(seg)  :allSegs.reduce((s,g)=>s+getPptoRev(g),0))  : null;
-    const pCost = hasPpto ? (seg?getPptoCosto(seg) :allSegs.reduce((s,g)=>s+getPptoCosto(g),0)): null;
-    const pUB   = hasPpto ? (pRev-pCost) : null;
-    const gv    = seg ? getPptoGV(seg) : allSegs.reduce((s,g)=>s+getPptoGV(g),0);
-    const pGV   = hasPpto ? (seg?getPptoGV(seg):allSegs.reduce((s,g)=>s+getPptoGV(g),0)) : null;
-    const mc    = ub - gv;
-    const pMC   = hasPpto ? (pUB - pGV) : null;
-    function row(label,real,pp){
-      const varD = pp!=null ? real-pp : null;
-      const varP = pp!=null&&pp!==0 ? ((real-pp)/Math.abs(pp)*100).toFixed(1)+'%' : null;
-      return hasPpto
-        ? [label, real, pp||'', varD!=null?varD:'', varP!=null?varP:'']
-        : [label, real];
-    }
-    return [
-      HDR,
-      row('Ingresos Netos',    rev,   pRev),
-      row('(-) Costo Ventas',  -costo,-pCost),
-      row('Utilidad Bruta',    ub,    pUB),
-      [hasPpto?`% Margen Bruto`:null, rev?((ub/rev)*100).toFixed(1)+'%':null, hasPpto&&pRev?(pUB/pRev*100).toFixed(1)+'%':null].filter(v=>v!=null),
-      row('(-) Gastos Venta',  -gv,   -pGV),
-      row('★ Utilidad Contribución', mc, pMC),
-      [hasPpto?`% Margen Contribución`:null, rev?((mc/rev)*100).toFixed(1)+'%':null, hasPpto&&pRev?(pMC/pRev*100).toFixed(1)+'%':null].filter(v=>v!=null),
-    ];
+  if(!window._fin){ alert('Genera el forecast primero.'); return; }
+  if(!window._fcEdoSheets || !Object.keys(window._fcEdoSheets).length){
+    alert('Genera el forecast primero — da clic en Calcular Forecast.'); return;
   }
 
-  // Build workbook with one sheet per segment + Total
-  const wb = XLSX.utils.book_new();
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mes = +document.getElementById('fc-mes')?.value || 3;
+  const wb  = XLSX.utils.book_new();
 
-  // Total sheet first
-  const totalRows = buildRows(null);
-  const wsTot = XLSX.utils.aoa_to_sheet(totalRows);
-  XLSX.utils.book_append_sheet(wb, wsTot, 'TOTAL');
+  // Helper: parse HTML table rows to array of arrays
+  function tableHtmlToAoa(theadHtml, tbodyHtml){
+    const wrap = document.createElement('table');
+    wrap.innerHTML = '<thead><tr>'+theadHtml+'</tr></thead><tbody>'+tbodyHtml+'</tbody>';
+    document.body.appendChild(wrap);
+    const aoa = [];
+    wrap.querySelectorAll('tr').forEach(tr=>{
+      const row = [];
+      tr.querySelectorAll('th,td').forEach(cell=>{
+        // Get text only, skip colspans duplicate
+        const txt = cell.innerText.trim();
+        const span = +cell.getAttribute('colspan')||1;
+        row.push(txt);
+        for(let i=1;i<span;i++) row.push('');
+      });
+      if(row.some(v=>v)) aoa.push(row);
+    });
+    document.body.removeChild(wrap);
+    return aoa;
+  }
 
-  // One sheet per segment
-  allSegs.forEach(seg=>{
-    const rows = buildRows(seg);
-    // Only add if has data
-    const hasData = rows.some((r,i)=>i>0&&r[1]&&r[1]!==0);
-    if(hasData){
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      const sheetName = seg.length>31?seg.slice(0,31):seg;
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    }
+  // Sort: TOTAL first, then segments
+  const sheets = Object.values(window._fcEdoSheets);
+  const total  = sheets.find(s=>s.seg==='__TOTAL__');
+  const segs   = sheets.filter(s=>s.seg!=='__TOTAL__');
+
+  const all = total ? [total, ...segs] : segs;
+
+  all.forEach(({thead, tbody, seg})=>{
+    const aoa = tableHtmlToAoa(thead, tbody);
+    if(!aoa.length) return;
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const name = seg==='__TOTAL__' ? 'TOTAL' : seg.slice(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, name);
   });
 
-  XLSX.writeFile(wb, `Forecast_EdoResultados_${mesNom}.xlsx`);
+  if(!wb.SheetNames.length){ alert('No hay datos para exportar.'); return; }
+  XLSX.writeFile(wb, `Forecast_EdoResultados_${NAMES[mes-1]}.xlsx`);
 }
 
 // ═══════════════════════════════════════════
