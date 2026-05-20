@@ -1202,6 +1202,28 @@ function parseBDD(data){
       };
     });
   // DEBUG
+  // ── Intercompany elimination: SEMINUEVOS div 4xxx ──
+  // For each period, net the cost into the first revenue row so only the margin appears as revenue
+  // Cost rows get importe=0 (effectively removed). GP preserved, intercompany flow eliminated.
+  {
+    const icRows = cuentas.filter(r=>r.seg==='VEHICULOS SEMINUEVOS'&&String(r.division||'').startsWith('4'));
+    const pers = [...new Set(icRows.map(r=>r.periodo))];
+    let icRevTotal=0, icCostTotal=0;
+    for(const per of pers){
+      const perRows = icRows.filter(r=>r.periodo===per);
+      const costs   = perRows.filter(r=>r.ctaTipo==='5');
+      const totalCost = costs.reduce((s,r)=>s+r.importe,0); // positive
+      const firstRev = perRows.find(r=>r.ctaTipo==='4');
+      if(firstRev && totalCost!==0){
+        icRevTotal += -firstRev.importe; // display revenue removed
+        icCostTotal+= totalCost;
+        firstRev.importe += totalCost; // less negative → reduces displayed revenue by cost amount
+        costs.forEach(r=>{r.importe=0;}); // remove cost
+      }
+    }
+    if(icRevTotal||icCostTotal) console.log('[parseBDD] IC SEMINUEVOS eliminado — rev:', icRevTotal.toLocaleString('es-MX'), 'cost:', icCostTotal.toLocaleString('es-MX'), '→ margen neto retenido como ingreso');
+  }
+
   console.log('[parseBDD] total rows:', cuentas.length);
   console.log('[parseBDD] hdrB:', hdrB);
   console.log('[parseBDD] allCtaIdx:', allCtaIdx, '→ iCtaTxt=',iCtaTxt,'iCtaNum=',iCtaNum,'iPer=',iPer,'iImp=',iImp,'iCebe=',iCebe);
