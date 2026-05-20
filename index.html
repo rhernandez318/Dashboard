@@ -910,7 +910,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 
     <!-- P&L Table -->
     <div class="tcard mt4">
-      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4><button onclick="exportFcEdoMultiSheet()" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel (Todos los segmentos)</button></div>
+      <div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="fc-edo-title">🔮 Estado de Resultados Estimado</h4><div style="display:flex;gap:6px"><button onclick="exportFcEdoMultiSheet()" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button><button onclick="exportFcEdoPDF()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444;font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">📄 PDF</button></div></div>
       <div class="tscroll"><table id="tbl-fc-edo">
         <thead><tr>
           <th>Concepto</th><th style="text-align:right">Forecast</th>
@@ -5966,28 +5966,36 @@ async function exportFcEdoMultiSheet(){
   const origSeg = activeFcSeg;
   const wb = XLSX.utils.book_new();
 
+  // Helper: prepend segment name row
+  function addSeg(name, aoa, sheetName){
+    if(!aoa.length) return;
+    const headerRow = [`${name} — Forecast ${NAMES[mes-1]}`];
+    // Pad header to span all columns
+    const numCols = aoa[0]?.length || 1;
+    for(let i=1;i<numCols;i++) headerRow.push('');
+    const sheetAoa = [headerRow, [], ...aoa]; // segment name, blank row, then data
+    const ws = XLSX.utils.aoa_to_sheet(sheetAoa);
+    // Merge cells for the title across all columns
+    ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:numCols-1}}];
+    // Style A1 with bold large font (basic SheetJS support)
+    if(ws['A1']) ws['A1'].s = {font:{bold:true,sz:14},alignment:{horizontal:'left'}};
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
   // ── 1. TOTAL sheet — set no filter ──
   activeFcSeg = null;
   await runForecast(false);
   await new Promise(r=>setTimeout(r,50));
-  const totAoa = tableToAoa('tbl-fc-edo');
-  if(totAoa.length){
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(totAoa), 'TOTAL');
-  }
+  addSeg('TOTAL CONSOLIDADO', tableToAoa('tbl-fc-edo'), 'TOTAL');
 
   // ── 2. Per-segment sheets ──
-  // Get available segments from the combo
   const sel = document.getElementById('fc-seg-select');
   const segOptions = sel ? [...sel.options].map(o=>o.value).filter(v=>v) : [];
   for(const seg of segOptions){
     activeFcSeg = seg;
     await runForecast(false);
     await new Promise(r=>setTimeout(r,50));
-    const aoa = tableToAoa('tbl-fc-edo');
-    if(aoa.length){
-      const name = seg.length>31?seg.slice(0,31):seg;
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
-    }
+    addSeg(seg, tableToAoa('tbl-fc-edo'), seg.slice(0,31));
   }
 
   // ── 3. Restore original filter ──
@@ -5998,6 +6006,118 @@ async function exportFcEdoMultiSheet(){
 
   if(!wb.SheetNames.length){ alert('No hay datos para exportar.'); return; }
   XLSX.writeFile(wb, `Forecast_EdoResultados_${NAMES[mes-1]}.xlsx`);
+}
+
+// ═══════════════════════════════════════════
+// FORECAST EDO — EXPORT PDF (todos los segmentos)
+// ═══════════════════════════════════════════
+async function exportFcEdoPDF(){
+  if(!window._fin){ alert('Genera el forecast primero.'); return; }
+  if(!(_fcCache||window._fcCache)){ alert('Genera el forecast primero.'); return; }
+
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mes = +document.getElementById('fc-mes')?.value || 3;
+  const btn = document.querySelector('[onclick="exportFcEdoPDF()"]');
+  if(btn){ btn.textContent='⏳ Generando…'; btn.disabled=true; }
+
+  const origSeg = activeFcSeg;
+  const sections = []; // [{seg, theadHtml, tbodyHtml}]
+
+  // ── TOTAL ──
+  activeFcSeg = null;
+  await runForecast(false);
+  await new Promise(r=>setTimeout(r,50));
+  sections.push({
+    seg: 'TOTAL CONSOLIDADO',
+    thead: document.querySelector('#tbl-fc-edo thead tr').innerHTML,
+    tbody: document.querySelector('#tbl-fc-edo tbody').innerHTML
+  });
+
+  // ── Por segmento ──
+  const sel = document.getElementById('fc-seg-select');
+  const segs = sel ? [...sel.options].map(o=>o.value).filter(v=>v) : [];
+  for(const seg of segs){
+    activeFcSeg = seg;
+    await runForecast(false);
+    await new Promise(r=>setTimeout(r,50));
+    sections.push({
+      seg,
+      thead: document.querySelector('#tbl-fc-edo thead tr').innerHTML,
+      tbody: document.querySelector('#tbl-fc-edo tbody').innerHTML
+    });
+  }
+
+  // Restore filter
+  activeFcSeg = origSeg;
+  await runForecast(false);
+
+  if(btn){ btn.textContent='📄 PDF'; btn.disabled=false; }
+
+  // Build PDF HTML
+  const fechaHoy = new Date().toLocaleDateString('es-MX', {day:'2-digit',month:'long',year:'numeric'});
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Forecast — Estado de Resultados Estimado ${NAMES[mes-1]}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:9.5px;color:#1a1a2e;background:#fff;padding:14mm 10mm 10mm}
+  @page{size:A4;margin:10mm 8mm}
+  .cover{text-align:center;padding:60px 20px;page-break-after:always}
+  .cover h1{font-size:32px;color:#1e3a5f;margin-bottom:10px;letter-spacing:-1px}
+  .cover h2{font-size:18px;color:#3b82f6;font-weight:500;margin-bottom:30px}
+  .cover .meta{font-size:11px;color:#64748b;margin-top:40px}
+  .seg-page{page-break-after:always;padding-bottom:20px}
+  .seg-page:last-child{page-break-after:auto}
+  .seg-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff;padding:14px 18px;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+  .seg-hdr h2{font-size:16px;font-weight:700;letter-spacing:.3px}
+  .seg-hdr .sub{font-size:10px;opacity:.85}
+  table{width:100%;border-collapse:collapse;font-size:9px}
+  thead tr{background:#1e3a5f;color:#fff}
+  th{padding:6px 8px;text-align:left;font-weight:600;font-size:9px}
+  th[style*="right"],th:nth-child(n+2){text-align:right}
+  tbody td{padding:4px 8px;border-bottom:1px solid #e2e8f0}
+  tbody tr:nth-child(even){background:#f8fafc}
+  .pill{display:inline-block;padding:1px 6px;border-radius:8px;font-size:8px;font-weight:600}
+  .pill.pg{background:rgba(0,212,170,.15);color:#00875a}
+  .pill.pr{background:rgba(239,68,68,.15);color:#cc0000}
+  .no-print{position:sticky;top:0;background:#fff;padding:8px;border-bottom:2px solid #1e3a5f;display:flex;gap:10px;z-index:10}
+  .no-print button{background:#1e3a5f;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px}
+  @media print{.no-print{display:none}}
+</style>
+</head><body>
+<div class="no-print">
+  <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:#64748b">✕ Cerrar</button>
+</div>
+
+<div class="cover">
+  <h1>Estado de Resultados Estimado</h1>
+  <h2>Forecast ${NAMES[mes-1]}</h2>
+  <div class="meta">
+    Distribuidoras Zapata · Camiones Guadalajara<br>
+    ${fechaHoy}<br>
+    ${sections.length} segmento${sections.length===1?'':'s'} incluido${sections.length===1?'':'s'}
+  </div>
+</div>
+
+${sections.map(s=>`
+  <div class="seg-page">
+    <div class="seg-hdr">
+      <h2>${s.seg}</h2>
+      <div class="sub">Forecast ${NAMES[mes-1]} · ${fechaHoy}</div>
+    </div>
+    <table>
+      <thead><tr>${s.thead}</tr></thead>
+      <tbody>${s.tbody}</tbody>
+    </table>
+  </div>
+`).join('')}
+
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ alert('Permite ventanas emergentes para descargar el PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
 }
 
 // ═══════════════════════════════════════════
