@@ -3048,7 +3048,9 @@ function buildEdo(p){
   const allUnidades = window._bdd?.unidades||[];
   function getUndEdo(src, seg){
     if(!src) return null;
-    const v = src.filter(r=>pers.includes(r.periodo)&&(!seg||r.segmento===seg))
+    const v = src.filter(r=>pers.includes(r.periodo)
+                          &&(!seg||r.segmento===seg)
+                          &&(!activeSoc||div2soc(r.division)===activeSoc))
                   .reduce((a,r)=>a+r.unidades,0);
     return v||null;
   }
