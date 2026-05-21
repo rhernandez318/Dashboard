@@ -648,6 +648,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
             <th>Segmento</th>
             <th style="text-align:right">Saldo</th>
             <th style="text-align:right">Antigüedad</th>
+            <th style="text-align:center">Vencimiento</th>
             <th>Fecha Doc.</th>
             <th style="min-width:160px">Cliente Final <span style="font-weight:400;color:var(--text-muted)">(se guarda automáticamente)</span></th>
             <th style="min-width:240px">Comentario <span style="font-weight:400;color:var(--text-muted)">(se guarda automáticamente)</span></th>
@@ -3991,6 +3992,7 @@ function renderRefPage(){
       <td>${sb(r.segmento,false)}</td>
       <td style="text-align:right;font-weight:600">${fmtC(r.saldo)}</td>
       <td style="text-align:right"><span style="color:${dColor};font-weight:600">${diasTxt}</span></td>
+      <td style="text-align:center;white-space:nowrap;color:${dColor};font-size:11px">${r.fechaVenc?fmtVenc(r.fechaVenc):'—'}</td>
       <td style="white-space:nowrap;color:var(--text-muted)">${fmtFecha(r.fechaDoc)}</td>
       <td><input type="text" value="${(_refClienteFinal[r.ref]||'').replace(/"/g,'&quot;')}"
         placeholder="Cliente final…"
