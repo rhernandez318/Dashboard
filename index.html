@@ -1819,10 +1819,25 @@ async function loadSnapshot(){
 function applySnapshotData(d){
   if(!d) return false;
   window._inv   = d.inv   || null;
-  window._ant   = (d.ant||null)?.map(r=>({
-    ...r,
-    fechaDoc: r.fechaDoc ? new Date(r.fechaDoc) : null
-  })) || null;
+  // Recompute diasVenc on snapshot load (TODAY is dynamic — snapshot has stale values)
+  window._ant   = (d.ant||null)?.map(r=>{
+    const fechaDoc  = r.fechaDoc ? new Date(r.fechaDoc) : null;
+    const fechaVenc = r.fechaVenc ? new Date(r.fechaVenc) : null;
+    let diasVenc = r.diasVenc;
+    let porVencer = r.porVencer;
+    let vencido = r.vencido;
+    let bucket = r.bucket;
+    if(fechaVenc && !isNaN(fechaVenc)){
+      const vMid = new Date(fechaVenc); vMid.setHours(0,0,0,0);
+      diasVenc = vMid < TODAY
+        ? Math.floor((TODAY - vMid)/86400000)
+        : -Math.floor((vMid - TODAY)/86400000);
+      porVencer = diasVenc<=0 ? r.saldo : 0;
+      vencido   = diasVenc>0  ? r.saldo : 0;
+      bucket    = bkt(diasVenc);
+    }
+    return {...r, fechaDoc, fechaVenc, diasVenc, porVencer, vencido, bucket};
+  }) || null;
   window._bdd   = d.bdd   || null;
   // ppto/bdd25 restored via loadAuxSnapshots(), not from main snapshot
   // window._bdd25 = d.bdd25 (deprecated)
@@ -3976,6 +3991,13 @@ function renderRefPage(){
     if(d<=30) return '#f59e0b';
     if(d<=60) return '#f97316';
     return 'var(--red)';
+  }
+  function fmtVenc(d){
+    if(!d) return '';
+    const dt = d instanceof Date ? d : new Date(d);
+    if(isNaN(dt)) return '';
+    const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    return `${dt.getDate()}-${meses[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;
   }
 
   document.getElementById('tbody-seg-ref').innerHTML = pageRows.map(r=>{
