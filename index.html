@@ -1114,8 +1114,19 @@ function parseAnt(data){
   const rawSheet=wb.Sheets[wb.SheetNames.find(s=>!s.startsWith('_'))];
   return rawRows.map(r=>{
     const vd=pd(r[cVenc]);
-    const dv=vd?Math.floor((TODAY-vd)/86400000):0;
-    const fechaVenc=vd||null;
+    let vdMidnight=null;
+    if(vd){
+      vdMidnight=new Date(vd);
+      vdMidnight.setHours(0,0,0,0);
+    }
+    // Per request: if vd<HOY → dv = HOY-vd (vencido +); if vd>=HOY → dv = -(vd-HOY) (por vencer, signed -)
+    // Keep signed so buckets and other logic continue working
+    const dv = vdMidnight
+      ? (vdMidnight < TODAY
+          ? Math.floor((TODAY - vdMidnight)/86400000)        // vencido (positivo)
+          : -Math.floor((vdMidnight - TODAY)/86400000))      // por vencer (negativo)
+      : 0;
+    const fechaVenc=vdMidnight||null;
     const saldo=+(r[cSaldo]||0);
     const ref=String(r[cRef]||'').trim();
     const fdRaw=r[cFechaDoc];
@@ -3952,16 +3963,10 @@ function renderRefPage(){
   document.getElementById('tbody-seg-ref').innerHTML = pageRows.map(r=>{
     const saved = _refComments[r.ref]?.comment||'';
     const dColor = diasColor(r.diasVenc);
-    const fmtVenc = (d)=>{
-      if(!d) return '';
-      const dt = d instanceof Date ? d : new Date(d);
-      if(isNaN(dt)) return '';
-      const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-      return `${dt.getDate()}-${meses[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;
-    };
-    const diasTxt = r.diasVenc<=0
-      ? (r.fechaVenc ? `Vence ${fmtVenc(r.fechaVenc)}` : `Por vencer ${Math.abs(r.diasVenc)}d`)
-      : `${r.diasVenc}d vencido`;
+    // Si Venc < HOY → diasVen = HOY - Venc (vencido, positivo)
+    // Si Venc ≥ HOY → diasVen = Venc - HOY (por vencer, positivo)
+    const diasAbs = Math.abs(r.diasVenc);
+    const diasTxt = r.diasVenc<=0 ? `${diasAbs}d por vencer` : `${diasAbs}d vencido`;
     return `<tr data-ref="${r.ref}" data-cliente="${r.cliente.toLowerCase()}">
       <td style="font-family:monospace;font-size:11px;color:var(--text-muted)">${r.ref}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:#60a5fa" title="Ver estado de cuenta de ${r.cliente}" onclick="irAEstadoCuenta('${r.cliente.replace(/'/g,"\\'")}')">
