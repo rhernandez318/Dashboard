@@ -425,7 +425,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     </div>
     <div class="g2">
       <div class="tcard"><div class="thead2"><h4>🏆 Top 10 Clientes por Cartera</h4></div><div class="tscroll"><table id="tbl-top"><thead><tr><th>Cliente</th><th>Saldo</th><th>Segmento</th><th>Estatus</th></tr></thead><tbody></tbody></table></div></div>
-      <div class="ccard"><h4>Cartera por Segmento<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-cart-s"></canvas></div></div>
+      <div class="ccard"><h4>Cartera por Segmento<span class="hint">· toca para filtrar</span></h4><div class="cwrap" style="height:240px;display:flex;align-items:center;justify-content:center"><canvas id="ch-cart-s"></canvas></div></div>
     </div>
   </div>
 
@@ -590,7 +590,10 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
         </div>
       </div>
     </div>
-    <div class="tcard" style="margin-top:14px"><div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="edo-title">📊 Estado de Resultados</h4><button onclick="exportTableExcel('tbl-edo','Estado_Resultados')" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="tcard" style="margin-top:14px"><div class="thead2" style="display:flex;align-items:center;justify-content:space-between"><h4 id="edo-title">📊 Estado de Resultados</h4><div style="display:flex;gap:6px">
+<button onclick="exportEdoMultiSheet()" style="background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">⬇ Excel</button>
+<button onclick="exportEdoPDF()" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:#ef4444;font-size:10px;font-weight:600;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'Inter',sans-serif;white-space:nowrap">📄 PDF</button>
+</div></div><div class="tscroll"><table id="tbl-edo"><thead><tr><th>Concepto</th><th>Real</th><th>Presupuesto</th><th>Var vs Ppto</th><th>% Var Ppto</th><th>Año Ant.</th><th>Var vs AA</th><th>% Var AA</th></tr></thead><tbody></tbody></table></div></div>
 
     <div class="tcard mt4" id="wrap-indicadores"><div class="thead2"><h4 id="ind-title">📊 Indicadores por Unidad<span class="hint" id="ind-seg-hint"></span></h4></div><div class="tscroll"><table id="tbl-indicadores"><thead><tr></tr></thead><tbody></tbody></table></div></div>
     <div class="tcard mt4" id="wrap-margen-seg">
@@ -617,7 +620,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <div class="crow" style="margin-bottom:18px">
       <div class="ccard"><h4>Por Vencer vs Vencida<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-venc-d"></canvas></div></div>
       <div class="ccard"><h4>Vencida por Bucket<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-buck-b"></canvas></div></div>
-      <div class="ccard"><h4>Cartera por Segmento<span class="hint">· toca para filtrar</span></h4><div class="cwrap"><canvas id="ch-cart-s2"></canvas></div></div>
+      <div class="ccard"><h4>Cartera por Segmento<span class="hint">· toca para filtrar</span></h4><div class="cwrap" style="height:240px;display:flex;align-items:center;justify-content:center"><canvas id="ch-cart-s2"></canvas></div></div>
     </div>
     <div class="g2">
       <div class="tcard"><div class="thead2"><h4>🏢 Cartera por Segmento<span class="hint">· toca para filtrar</span></h4></div><div class="tscroll"><table id="tbl-cart-s"><thead><tr><th>Segmento</th><th>Saldo</th><th>Por Vencer</th><th>Vencida</th><th>% Venc.</th></tr></thead><tbody></tbody></table></div></div>
@@ -2728,7 +2731,7 @@ function renderResumenCharts(ant,inv){
   const anames=Object.keys(abys).sort((a,b)=>sb2(abys[b],'saldo')-sb2(abys[a],'saldo')).slice(0,9);
   dch('ch-cart-s');
   const c4=new Chart(document.getElementById('ch-cart-s'),{
-    type:'doughnut',data:{labels:anames,datasets:[{data:anames.map(s=>sb2(abys[s],'saldo')),backgroundColor:anames.map(s=>activeSeg&&activeSeg!==s?sc(s,.2):sc(s)),borderWidth:0,borderRadius:3}]},options:dOpts()});
+    type:'doughnut',data:{labels:anames,datasets:[{data:anames.map(s=>sb2(abys[s],'saldo')),backgroundColor:anames.map(s=>activeSeg&&activeSeg!==s?sc(s,.2):sc(s)),borderWidth:0,borderRadius:3}]},options:{...dOpts(),cutout:'55%',layout:{padding:4},plugins:{...dOpts().plugins,legend:{position:'right',labels:{color:'var(--text-muted)',font:{size:9},padding:6,boxWidth:8,boxHeight:8}}}}});
   document.getElementById('ch-cart-s').onclick=e=>chartClick(c4,e,anames);
   CH['ch-cart-s']=c4;
 }
@@ -2801,7 +2804,7 @@ function renderCartCharts(ant){
   const cs2=new Chart(document.getElementById('ch-cart-s2'),{
     type:'doughnut',
     data:{labels:anames2,datasets:[{data:anames2.map(s=>sb2(abys2[s],'saldo')),backgroundColor:anames2.map(s=>activeSeg&&activeSeg!==s?sc(s,.2):sc(s)),borderWidth:0,borderRadius:3}]},
-    options:dOpts()});
+    options:{...dOpts(),cutout:'55%',layout:{padding:4},plugins:{...dOpts().plugins,legend:{position:'right',labels:{color:'var(--text-muted)',font:{size:9},padding:6,boxWidth:8,boxHeight:8}}}}});
   document.getElementById('ch-cart-s2').onclick=e=>chartClick(cs2,e,anames2);
   CH['ch-cart-s2']=cs2;
 }
@@ -6163,6 +6166,182 @@ ${sections.map(s=>`
     <div class="seg-hdr">
       <h2>${s.seg}</h2>
       <div class="sub">Forecast ${NAMES[mes-1]} · ${fechaHoy}</div>
+    </div>
+    <table>
+      <thead><tr>${s.thead}</tr></thead>
+      <tbody>${s.tbody}</tbody>
+    </table>
+  </div>
+`).join('')}
+
+</body></html>`;
+
+  const w = window.open('', '_blank');
+  if(!w){ alert('Permite ventanas emergentes para descargar el PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+// ═══════════════════════════════════════════
+// ESTADO DE RESULTADOS — EXPORT MULTI-HOJA + PDF
+// ═══════════════════════════════════════════
+async function exportEdoMultiSheet(){
+  if(!window._bdd){ alert('Carga el archivo BDD primero.'); return; }
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const f=window._fin;
+  const p=currentPer, isAccum=(edoMode==='acum'||p===0);
+  const perLabel = p===0 ? 'Acumulado' : (isAccum ? `Acum. Ene-${NAMES[p-1]}` : NAMES[p-1]);
+
+  const btn = document.querySelector('[onclick="exportEdoMultiSheet()"]');
+  if(btn){ btn.textContent='⏳ Generando…'; btn.disabled=true; }
+
+  function tableToAoa(tableId){
+    const tbl = document.getElementById(tableId);
+    if(!tbl) return [];
+    const aoa = [];
+    tbl.querySelectorAll('tr').forEach(tr=>{
+      const row = [];
+      tr.querySelectorAll('th,td').forEach(cell=>{
+        const txt = cell.innerText.trim();
+        const span = +cell.getAttribute('colspan')||1;
+        const num = txt.replace(/[$,%\s]/g,'').replace(/,/g,'');
+        const val = !isNaN(num)&&num!==''&&!txt.includes('%') ? +num : txt;
+        row.push(val);
+        for(let i=1;i<span;i++) row.push('');
+      });
+      if(row.some(v=>v!=='')) aoa.push(row);
+    });
+    return aoa;
+  }
+
+  const origSeg = activeEdoSeg;
+  const wb = XLSX.utils.book_new();
+
+  function addSheet(name, aoa, sheetName){
+    if(!aoa.length) return;
+    const headerRow = [`${name} — ${perLabel}`];
+    const numCols = aoa[0]?.length || 1;
+    for(let i=1;i<numCols;i++) headerRow.push('');
+    const sheetAoa = [headerRow, [], ...aoa];
+    const ws = XLSX.utils.aoa_to_sheet(sheetAoa);
+    ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:numCols-1}}];
+    if(ws['A1']) ws['A1'].s = {font:{bold:true,sz:14}};
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }
+
+  // TOTAL sheet
+  activeEdoSeg = null;
+  buildEdo(p);
+  await new Promise(r=>setTimeout(r,50));
+  addSheet('TOTAL CONSOLIDADO', tableToAoa('tbl-edo'), 'TOTAL');
+
+  // Per-segment sheets
+  const sel = document.getElementById('edo-seg-select');
+  const segOptions = sel ? [...sel.options].map(o=>o.value).filter(v=>v) : [];
+  for(const seg of segOptions){
+    activeEdoSeg = seg;
+    buildEdo(p);
+    await new Promise(r=>setTimeout(r,50));
+    addSheet(seg, tableToAoa('tbl-edo'), seg.slice(0,31));
+  }
+
+  // Restore
+  activeEdoSeg = origSeg;
+  buildEdo(p);
+
+  if(btn){ btn.textContent='⬇ Excel'; btn.disabled=false; }
+  if(!wb.SheetNames.length){ alert('No hay datos para exportar.'); return; }
+  XLSX.writeFile(wb, `Estado_Resultados_${perLabel.replace(/\s+/g,'_')}.xlsx`);
+}
+
+async function exportEdoPDF(){
+  if(!window._bdd){ alert('Carga el archivo BDD primero.'); return; }
+  const NAMES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const p=currentPer, isAccum=(edoMode==='acum'||p===0);
+  const perLabel = p===0 ? 'Acumulado' : (isAccum ? `Acum. Ene-${NAMES[p-1]}` : NAMES[p-1]);
+  const btn = document.querySelector('[onclick="exportEdoPDF()"]');
+  if(btn){ btn.textContent='⏳ Generando…'; btn.disabled=true; }
+
+  const origSeg = activeEdoSeg;
+  const sections = [];
+
+  // TOTAL
+  activeEdoSeg = null;
+  buildEdo(p);
+  await new Promise(r=>setTimeout(r,50));
+  sections.push({
+    seg: 'TOTAL CONSOLIDADO',
+    thead: document.querySelector('#tbl-edo thead tr').innerHTML,
+    tbody: document.querySelector('#tbl-edo tbody').innerHTML
+  });
+
+  const sel = document.getElementById('edo-seg-select');
+  const segs = sel ? [...sel.options].map(o=>o.value).filter(v=>v) : [];
+  for(const seg of segs){
+    activeEdoSeg = seg;
+    buildEdo(p);
+    await new Promise(r=>setTimeout(r,50));
+    sections.push({
+      seg,
+      thead: document.querySelector('#tbl-edo thead tr').innerHTML,
+      tbody: document.querySelector('#tbl-edo tbody').innerHTML
+    });
+  }
+
+  activeEdoSeg = origSeg;
+  buildEdo(p);
+  if(btn){ btn.textContent='📄 PDF'; btn.disabled=false; }
+
+  const fechaHoy = new Date().toLocaleDateString('es-MX', {day:'2-digit',month:'long',year:'numeric'});
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Estado de Resultados — ${perLabel}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:9.5px;color:#1a1a2e;background:#fff;padding:14mm 10mm 10mm}
+  @page{size:A4;margin:10mm 8mm}
+  .cover{text-align:center;padding:60px 20px;page-break-after:always}
+  .cover h1{font-size:32px;color:#1e3a5f;margin-bottom:10px;letter-spacing:-1px}
+  .cover h2{font-size:18px;color:#3b82f6;font-weight:500;margin-bottom:30px}
+  .cover .meta{font-size:11px;color:#64748b;margin-top:40px}
+  .seg-page{page-break-after:always;padding-bottom:20px}
+  .seg-page:last-child{page-break-after:auto}
+  .seg-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff;padding:14px 18px;border-radius:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+  .seg-hdr h2{font-size:16px;font-weight:700;letter-spacing:.3px}
+  .seg-hdr .sub{font-size:10px;opacity:.85}
+  table{width:100%;border-collapse:collapse;font-size:9px}
+  thead tr{background:#1e3a5f;color:#fff}
+  th{padding:6px 8px;text-align:left;font-weight:600;font-size:9px}
+  th[style*="right"],th:nth-child(n+2){text-align:right}
+  tbody td{padding:4px 8px;border-bottom:1px solid #e2e8f0}
+  tbody tr:nth-child(even){background:#f8fafc}
+  .pill{display:inline-block;padding:1px 6px;border-radius:8px;font-size:8px;font-weight:600}
+  .pill.pg{background:rgba(0,212,170,.15);color:#00875a}
+  .pill.pr{background:rgba(239,68,68,.15);color:#cc0000}
+  .no-print{position:sticky;top:0;background:#fff;padding:8px;border-bottom:2px solid #1e3a5f;display:flex;gap:10px;z-index:10}
+  .no-print button{background:#1e3a5f;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px}
+  @media print{.no-print{display:none}}
+</style>
+</head><body>
+<div class="no-print">
+  <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:#64748b">✕ Cerrar</button>
+</div>
+
+<div class="cover">
+  <h1>Estado de Resultados</h1>
+  <h2>${perLabel}</h2>
+  <div class="meta">
+    Distribuidoras Zapata · Camiones Guadalajara<br>
+    ${fechaHoy}<br>
+    ${sections.length} segmento${sections.length===1?'':'s'} incluido${sections.length===1?'':'s'}
+  </div>
+</div>
+
+${sections.map(s=>`
+  <div class="seg-page">
+    <div class="seg-hdr">
+      <h2>${s.seg}</h2>
+      <div class="sub">${perLabel} · ${fechaHoy}</div>
     </div>
     <table>
       <thead><tr>${s.thead}</tr></thead>
