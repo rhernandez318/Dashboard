@@ -999,7 +999,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
 const CHUNK_SIZE = 350000; // chars per Supabase snapshot chunk
 const F={inventario:null,antiguedad:null,bdd:null,balance:null,bdd25:null,ppto:null};
 const CH={};
-const TODAY=new Date(2026,2,4);
+const TODAY=(function(){const d=new Date();d.setHours(0,0,0,0);return d;})(); // siempre = hoy a medianoche
 let activeSeg=null, activeBucket=null, activeSoc=null, activeCartDiv=null, currentPer=1, edoMode='mes', activeEdoSeg=null, margenSegView='real', activeFcSeg=null;
 const DIAS_PERIODO=59; // Jan(31)+Feb(28)
 
