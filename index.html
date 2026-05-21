@@ -1116,7 +1116,19 @@ function parseAnt(data){
   console.log('[parseAnt] cVenc idx:', cVenc, 'sample val:', rawRows[0]?.[cVenc]);
   // Debug specific reference
   const debugRef = rawRows.find(r=>String(r[cRef]||'').trim()==='1170860928');
-  if(debugRef) console.log('[parseAnt] DEBUG 1170860928 → raw venc:', debugRef[cVenc], typeof debugRef[cVenc], '| raw fecha doc:', debugRef[cFecha]);
+  if(debugRef){
+    const vdRaw = debugRef[cVenc];
+    const vdParsed = pd(vdRaw);
+    const vdMid = vdParsed ? new Date(new Date(vdParsed).setHours(0,0,0,0)) : null;
+    const dvCalc = vdMid ? (vdMid < TODAY
+      ? Math.floor((TODAY-vdMid)/86400000)
+      : -Math.floor((vdMid-TODAY)/86400000)) : 0;
+    console.log('[parseAnt] DEBUG 1170860928',
+      '| raw venc:', vdRaw, typeof vdRaw,
+      '| parsed:', vdParsed?.toISOString?.()?.slice(0,10),
+      '| diasVenc:', dvCalc,
+      '| ALL refs for this ref:', rawRows.filter(r=>String(r[cRef]||'').trim()==='1170860928').map(r=>({venc:r[cVenc],fechaDoc:r[cFechaDoc]})));
+  }
   return rawRows.map(r=>{
     const vd=pd(r[cVenc]);
     let vdMidnight=null;
