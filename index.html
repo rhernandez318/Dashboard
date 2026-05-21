@@ -1112,6 +1112,11 @@ function parseAnt(data){
   const cUUID=findCol(keys,'UUID');
   // Get raw sheet for text-format cells (Nº documento may be stored as number)
   const rawSheet=wb.Sheets[wb.SheetNames.find(s=>!s.startsWith('_'))];
+  console.log('[parseAnt] cols:', keys.slice(0,12));
+  console.log('[parseAnt] cVenc idx:', cVenc, 'sample val:', rawRows[0]?.[cVenc]);
+  // Debug specific reference
+  const debugRef = rawRows.find(r=>String(r[cRef]||'').trim()==='1170860928');
+  if(debugRef) console.log('[parseAnt] DEBUG 1170860928 → raw venc:', debugRef[cVenc], typeof debugRef[cVenc], '| raw fecha doc:', debugRef[cFecha]);
   return rawRows.map(r=>{
     const vd=pd(r[cVenc]);
     let vdMidnight=null;
