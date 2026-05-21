@@ -1115,6 +1115,7 @@ function parseAnt(data){
   return rawRows.map(r=>{
     const vd=pd(r[cVenc]);
     const dv=vd?Math.floor((TODAY-vd)/86400000):0;
+    const fechaVenc=vd||null;
     const saldo=+(r[cSaldo]||0);
     const ref=String(r[cRef]||'').trim();
     const fdRaw=r[cFechaDoc];
@@ -1135,7 +1136,7 @@ function parseAnt(data){
     return{cliente:(r[cCliente]||'').trim(),segmento:(r[cSeg]||'').trim(),saldo,diasVenc:dv,
       porVencer:dv<=0?saldo:0,vencido:dv>0?saldo:0,bucket:bkt(dv),
       sociedad:div2soc(r[cDivAnt]),division:divRaw,
-      ref,ndoc,seriePAC,folioPAC,uuid,fechaDoc};
+      ref,ndoc,seriePAC,folioPAC,uuid,fechaDoc,fechaVenc};
   }).filter(r=>r.saldo!==0);
 }
 
@@ -3919,9 +3920,12 @@ async function buildRefTable(){
   rows.forEach(r=>{
     if(!r.ref) return;
     if(!byRef[r.ref]) byRef[r.ref]={ref:r.ref,cliente:r.cliente,segmento:r.segmento,
-      saldo:0,diasVenc:r.diasVenc,fechaDoc:r.fechaDoc};
+      saldo:0,diasVenc:r.diasVenc,fechaDoc:r.fechaDoc,fechaVenc:r.fechaVenc};
     byRef[r.ref].saldo += r.saldo;
-    if(r.diasVenc > byRef[r.ref].diasVenc) byRef[r.ref].diasVenc = r.diasVenc;
+    if(r.diasVenc > byRef[r.ref].diasVenc){
+      byRef[r.ref].diasVenc = r.diasVenc;
+      byRef[r.ref].fechaVenc = r.fechaVenc; // sync the date with the max diasVenc doc
+    }
   });
   _refAllRows = Object.values(byRef).sort((a,b)=>b.diasVenc-a.diasVenc||b.saldo-a.saldo);
   _refFiltered = _refAllRows;
@@ -3948,7 +3952,16 @@ function renderRefPage(){
   document.getElementById('tbody-seg-ref').innerHTML = pageRows.map(r=>{
     const saved = _refComments[r.ref]?.comment||'';
     const dColor = diasColor(r.diasVenc);
-    const diasTxt = r.diasVenc<=0 ? `Por vencer ${Math.abs(r.diasVenc)}d` : `${r.diasVenc}d vencido`;
+    const fmtVenc = (d)=>{
+      if(!d) return '';
+      const dt = d instanceof Date ? d : new Date(d);
+      if(isNaN(dt)) return '';
+      const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      return `${dt.getDate()}-${meses[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;
+    };
+    const diasTxt = r.diasVenc<=0
+      ? (r.fechaVenc ? `Vence ${fmtVenc(r.fechaVenc)}` : `Por vencer ${Math.abs(r.diasVenc)}d`)
+      : `${r.diasVenc}d vencido`;
     return `<tr data-ref="${r.ref}" data-cliente="${r.cliente.toLowerCase()}">
       <td style="font-family:monospace;font-size:11px;color:var(--text-muted)">${r.ref}</td>
       <td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;color:#60a5fa" title="Ver estado de cuenta de ${r.cliente}" onclick="irAEstadoCuenta('${r.cliente.replace(/'/g,"\\'")}')">
