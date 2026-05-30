@@ -1059,6 +1059,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
           <h4>🔗 Asignación Cliente → Usuario</h4>
           <div style="display:flex;gap:8px;align-items:center">
             <input id="cob-asig-search" placeholder="🔍 Buscar cliente..." oninput="cobFilterAsig()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;min-width:200px">
+            <select id="cob-asig-filter-div" onchange="cobFilterAsig()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px"><option value="">Todas las divisiones</option></select>
             <select id="cob-asig-filter-user" onchange="cobFilterAsig()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
               <option value="">Todos los usuarios</option>
             </select>
@@ -1068,7 +1069,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
         <div class="tscroll" style="max-height:600px">
           <table id="cob-asig-table">
             <thead>
-              <tr><th>Cliente</th><th style="text-align:right">Saldo Total</th><th style="text-align:center">Usuario Asignado</th></tr>
+              <tr><th>Cliente</th><th style="text-align:center">División</th><th style="text-align:right">Saldo Total</th><th style="text-align:center">Usuario Asignado</th></tr>
             </thead>
             <tbody id="cob-asig-tbody"></tbody>
           </table>
@@ -8253,82 +8254,101 @@ async function cobLoadAsignaciones(){
   if(!window.supabase){ return; }
   if(!window._ant || !window._ant.length){
     document.getElementById('cob-asig-tbody').innerHTML =
-      '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--text-muted)">Carga el archivo de antigüedad primero para ver la lista de clientes.</td></tr>';
+      '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted)">Carga el archivo de antigüedad primero para ver la lista de clientes.</td></tr>';
     return;
   }
   try{
     const { data, error } = await window.supabase.from('cobranza_asignaciones').select('*');
     if(error) throw error;
-    _cobAsig = {};
-    (data||[]).forEach(r=>{ _cobAsig[r.cliente] = r.usuario_id; });
+    _cobAsig = {};  // key = cliente|division
+    (data||[]).forEach(r=>{ _cobAsig[`${r.cliente}|${r.division}`] = r.usuario_id; });
+    // Populate division filter
+    const divs = [...new Set((window._ant||[]).map(r=>String(r.division||'').trim()).filter(Boolean))].sort();
+    const divSel = document.getElementById('cob-asig-filter-div');
+    if(divSel){
+      const cur = divSel.value;
+      divSel.innerHTML = '<option value="">Todas las divisiones</option>' +
+        divs.map(d=>`<option value="${d}">${d}</option>`).join('');
+      divSel.value = cur;
+    }
     cobRenderAsignaciones();
-    cobRenderUsersTable(); // refresh counts
+    cobRenderUsersTable();
   }catch(e){
     console.error('[cob] error cargando asignaciones:', e);
     document.getElementById('cob-asig-tbody').innerHTML =
-      `<tr><td colspan="3" style="padding:20px;text-align:center;color:#ef4444">Error: ${e.message}</td></tr>`;
+      `<tr><td colspan="4" style="padding:20px;text-align:center;color:#ef4444">Error: ${e.message}. ¿Ejecutaste el SQL de migración?</td></tr>`;
   }
 }
 
 function cobRenderAsignaciones(){
-  // Aggregate by cliente
-  const byClient = {};
+  // Aggregate by cliente + division
+  const byKey = {};
   (window._ant||[]).forEach(r=>{
     if(!r.cliente) return;
-    if(!byClient[r.cliente]) byClient[r.cliente] = {cliente:r.cliente, saldo:0};
-    byClient[r.cliente].saldo += r.saldo;
+    const div = String(r.division||'').trim();
+    if(!div) return;
+    const k = `${r.cliente}|${div}`;
+    if(!byKey[k]) byKey[k] = {cliente:r.cliente, division:div, saldo:0};
+    byKey[k].saldo += r.saldo;
   });
-  const rows = Object.values(byClient)
+  const rows = Object.values(byKey)
     .filter(r=>r.saldo>0)
     .sort((a,b)=>b.saldo-a.saldo);
 
   const search = (document.getElementById('cob-asig-search')?.value||'').toLowerCase();
   const filterUser = document.getElementById('cob-asig-filter-user')?.value||'';
+  const filterDiv  = document.getElementById('cob-asig-filter-div')?.value||'';
 
   const filtered = rows.filter(r=>{
     if(search && !r.cliente.toLowerCase().includes(search)) return false;
-    if(filterUser==='__none__' && _cobAsig[r.cliente]) return false;
-    if(filterUser && filterUser!=='__none__' && _cobAsig[r.cliente]!==filterUser) return false;
+    if(filterDiv && r.division!==filterDiv) return false;
+    const k = `${r.cliente}|${r.division}`;
+    if(filterUser==='__none__' && _cobAsig[k]) return false;
+    if(filterUser && filterUser!=='__none__' && _cobAsig[k]!==filterUser) return false;
     return true;
   });
 
   const tbody = document.getElementById('cob-asig-tbody');
   if(!filtered.length){
-    tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--text-muted)">Sin clientes que coincidan.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="padding:20px;text-align:center;color:var(--text-muted)">Sin clientes que coincidan.</td></tr>';
     return;
   }
   const userOptions = _cobUsers.filter(u=>u.activo).map(u=>`<option value="${u.id}">${u.nombre}</option>`).join('');
   tbody.innerHTML = filtered.slice(0,500).map(r=>{
     const escCliente = r.cliente.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    const curUid = _cobAsig[r.cliente]||'';
+    const k = `${r.cliente}|${r.division}`;
+    const curUid = _cobAsig[k]||'';
     return `<tr>
       <td style="font-weight:500">${r.cliente}</td>
+      <td style="text-align:center;color:var(--accent3);font-weight:600;font-family:monospace;font-size:11px">${r.division}</td>
       <td style="text-align:right;color:var(--accent2);font-weight:600">${fmtC(r.saldo)}</td>
       <td style="text-align:center">
-        <select onchange="cobSaveAsig('${escCliente}', this.value)" style="padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;min-width:180px">
+        <select onchange="cobSaveAsig('${escCliente}', '${r.division}', this.value)" style="padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;min-width:180px">
           <option value="">— Sin asignar —</option>
           ${userOptions.replace(`value="${curUid}"`, `value="${curUid}" selected`)}
         </select>
       </td>
     </tr>`;
-  }).join('') + (filtered.length>500 ? `<tr><td colspan="3" style="padding:10px;text-align:center;color:var(--text-muted);font-size:11px">Mostrando primeros 500 de ${filtered.length}. Usa el buscador para filtrar.</td></tr>` : '');
+  }).join('') + (filtered.length>500 ? `<tr><td colspan="4" style="padding:10px;text-align:center;color:var(--text-muted);font-size:11px">Mostrando primeros 500 de ${filtered.length}. Usa el buscador para filtrar.</td></tr>` : '');
 }
 
 function cobFilterAsig(){ cobRenderAsignaciones(); }
 
-async function cobSaveAsig(cliente, usuarioId){
+async function cobSaveAsig(cliente, division, usuarioId){
   try{
+    const k = `${cliente}|${division}`;
     if(usuarioId){
       const { error } = await window.supabase.from('cobranza_asignaciones')
-        .upsert({cliente, usuario_id:usuarioId, updated_at:new Date().toISOString()}, {onConflict:'cliente'});
+        .upsert({cliente, division, usuario_id:usuarioId, updated_at:new Date().toISOString()}, {onConflict:'cliente,division'});
       if(error) throw error;
-      _cobAsig[cliente] = usuarioId;
+      _cobAsig[k] = usuarioId;
     } else {
-      const { error } = await window.supabase.from('cobranza_asignaciones').delete().eq('cliente', cliente);
+      const { error } = await window.supabase.from('cobranza_asignaciones')
+        .delete().eq('cliente', cliente).eq('division', division);
       if(error) throw error;
-      delete _cobAsig[cliente];
+      delete _cobAsig[k];
     }
-    cobRenderUsersTable(); // refresh counts
+    cobRenderUsersTable();
   }catch(e){
     alert('Error al guardar asignación: ' + e.message);
   }
