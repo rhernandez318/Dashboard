@@ -389,6 +389,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <button class="tbtn" onclick="showTab('financiero',this)">💰 Resultados</button>
     <button class="tbtn" onclick="showTab('cartera',this)">📋 Cartera</button>
     <button class="tbtn" id="tab-btn-estados" onclick="showTab('estados',this)" style="color:#34d399">📄 Estados de Cuenta</button>
+    <button class="tbtn" id="tab-btn-cobranza" onclick="showTab('cobranza',this)" style="color:#f97316">📧 Cobranza</button>
     <button class="tbtn" id="tab-btn-usuarios" onclick="showTab('usuarios',this)" style="display:none">⚙️ Usuarios</button>
     <button class="tbtn" onclick="showTab('inventario',this)">🏭 Inventario</button>
     <button class="tbtn" onclick="showTab('forecast',this)" style="color:#f59e0b;border-bottom-color:transparent">🔮 Forecast</button>
@@ -3616,6 +3617,7 @@ function showTab(tab,btn){
   if(tab==='cartera'){ populateCartDivSelect(); if(cdw) cdw.style.display='flex'; }
   else { if(cdw) cdw.style.display='none'; activeCartDiv=null; }
   if(tab==='estados'){ populateEstadosFiltros(); renderEstados(); }
+  if(tab==='cobranza'){ cobLoadUsers(); }
 }
 function buildEdoSegCombo(){
   const sel=document.getElementById('edo-seg-select');
@@ -8003,6 +8005,333 @@ function exportOFIExcel(){
     document.getElementById('login-screen').style.display = 'flex';
   }
 })();
+
+// ═══════════════════════════════════════════════════════════
+// MÓDULO DE COBRANZA POR CLIENTE — Fase 1 MVP
+// ═══════════════════════════════════════════════════════════
+let _cobUsers = [];
+let _cobAsig  = {}; // cliente -> usuario_id
+
+function cobMostrarSeccion(sec){
+  ['usuarios','asignaciones','comparativa','reportes'].forEach(s=>{
+    document.getElementById('cob-sec-'+s).style.display = s===sec?'block':'none';
+    document.getElementById('cob-btn-'+s).classList.toggle('active', s===sec);
+  });
+  if(sec==='asignaciones') cobLoadAsignaciones();
+}
+
+async function cobLoadUsers(){
+  if(!window.supabase){ console.warn('[cob] supabase no disponible'); return; }
+  try{
+    const { data, error } = await window.supabase.from('cobranza_usuarios')
+      .select('*').order('nombre', {ascending:true});
+    if(error) throw error;
+    _cobUsers = data || [];
+    cobRenderUsersTable();
+    cobPopulateUserSelects();
+  }catch(e){
+    console.error('[cob] error cargando usuarios:', e);
+    document.getElementById('cob-users-tbody').innerHTML =
+      `<tr><td colspan="6" style="padding:20px;text-align:center;color:#ef4444">Error: ${e.message}. ¿Ejecutaste el SQL en Supabase?</td></tr>`;
+  }
+}
+
+function cobRenderUsersTable(){
+  const tbody = document.getElementById('cob-users-tbody');
+  if(!tbody) return;
+  if(!_cobUsers.length){
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text-muted)">Sin usuarios registrados. Haz clic en "+ Nuevo Usuario" para empezar.</td></tr>';
+    return;
+  }
+  // Count assigned clients per user
+  const counts = {};
+  Object.values(_cobAsig).forEach(uid=>{ if(uid) counts[uid]=(counts[uid]||0)+1; });
+  tbody.innerHTML = _cobUsers.map(u=>`
+    <tr>
+      <td style="font-weight:600">${u.nombre}</td>
+      <td style="color:var(--accent2)">${u.email}</td>
+      <td style="color:var(--text-muted)">${u.notas||'—'}</td>
+      <td style="text-align:center"><span class="cob-badge ${u.activo?'on':'off'}">${u.activo?'Activo':'Inactivo'}</span></td>
+      <td style="text-align:center;font-weight:600">${counts[u.id]||0}</td>
+      <td style="text-align:center">
+        <button onclick="cobEditUser('${u.id}')" style="background:transparent;border:1px solid var(--border);color:var(--accent2);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-right:3px">✏️</button>
+        <button onclick="cobDeleteUser('${u.id}','${u.nombre.replace(/'/g,"\\'")}')" style="background:transparent;border:1px solid var(--border);color:#ef4444;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function cobShowUserForm(){
+  document.getElementById('cob-user-form').style.display='block';
+  document.getElementById('cob-user-id').value='';
+  document.getElementById('cob-user-nombre').value='';
+  document.getElementById('cob-user-email').value='';
+  document.getElementById('cob-user-notas').value='';
+  document.getElementById('cob-user-activo').checked=true;
+}
+function cobHideUserForm(){
+  document.getElementById('cob-user-form').style.display='none';
+}
+function cobEditUser(id){
+  const u = _cobUsers.find(x=>x.id===id);
+  if(!u) return;
+  cobShowUserForm();
+  document.getElementById('cob-user-id').value=u.id;
+  document.getElementById('cob-user-nombre').value=u.nombre;
+  document.getElementById('cob-user-email').value=u.email;
+  document.getElementById('cob-user-notas').value=u.notas||'';
+  document.getElementById('cob-user-activo').checked=!!u.activo;
+}
+
+async function cobSaveUser(){
+  const id = document.getElementById('cob-user-id').value;
+  const nombre = document.getElementById('cob-user-nombre').value.trim();
+  const email  = document.getElementById('cob-user-email').value.trim();
+  const notas  = document.getElementById('cob-user-notas').value.trim();
+  const activo = document.getElementById('cob-user-activo').checked;
+  if(!nombre || !email){ alert('Nombre y email son obligatorios.'); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ alert('Email inválido.'); return; }
+  try{
+    if(id){
+      const { error } = await window.supabase.from('cobranza_usuarios')
+        .update({nombre,email,notas:notas||null,activo,updated_at:new Date().toISOString()})
+        .eq('id', id);
+      if(error) throw error;
+    } else {
+      const { error } = await window.supabase.from('cobranza_usuarios')
+        .insert({nombre,email,notas:notas||null,activo});
+      if(error) throw error;
+    }
+    cobHideUserForm();
+    await cobLoadUsers();
+  }catch(e){
+    alert('Error al guardar: ' + e.message);
+  }
+}
+
+async function cobDeleteUser(id, nombre){
+  if(!confirm(`¿Eliminar a "${nombre}"? Las asignaciones de clientes quedarán sin usuario.`)) return;
+  try{
+    const { error } = await window.supabase.from('cobranza_usuarios').delete().eq('id', id);
+    if(error) throw error;
+    await cobLoadUsers();
+  }catch(e){
+    alert('Error al eliminar: ' + e.message);
+  }
+}
+
+function cobPopulateUserSelects(){
+  const sel = document.getElementById('cob-asig-filter-user');
+  if(sel){
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todos los usuarios</option>' +
+      '<option value="__none__">Sin asignar</option>' +
+      _cobUsers.filter(u=>u.activo).map(u=>`<option value="${u.id}">${u.nombre}</option>`).join('');
+    sel.value = cur;
+  }
+}
+
+async function cobLoadAsignaciones(){
+  if(!window.supabase){ return; }
+  if(!window._ant || !window._ant.length){
+    document.getElementById('cob-asig-tbody').innerHTML =
+      '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--text-muted)">Carga el archivo de antigüedad primero para ver la lista de clientes.</td></tr>';
+    return;
+  }
+  try{
+    const { data, error } = await window.supabase.from('cobranza_asignaciones').select('*');
+    if(error) throw error;
+    _cobAsig = {};
+    (data||[]).forEach(r=>{ _cobAsig[r.cliente] = r.usuario_id; });
+    cobRenderAsignaciones();
+    cobRenderUsersTable(); // refresh counts
+  }catch(e){
+    console.error('[cob] error cargando asignaciones:', e);
+    document.getElementById('cob-asig-tbody').innerHTML =
+      `<tr><td colspan="3" style="padding:20px;text-align:center;color:#ef4444">Error: ${e.message}</td></tr>`;
+  }
+}
+
+function cobRenderAsignaciones(){
+  // Aggregate by cliente
+  const byClient = {};
+  (window._ant||[]).forEach(r=>{
+    if(!r.cliente) return;
+    if(!byClient[r.cliente]) byClient[r.cliente] = {cliente:r.cliente, saldo:0};
+    byClient[r.cliente].saldo += r.saldo;
+  });
+  const rows = Object.values(byClient)
+    .filter(r=>r.saldo>0)
+    .sort((a,b)=>b.saldo-a.saldo);
+
+  const search = (document.getElementById('cob-asig-search')?.value||'').toLowerCase();
+  const filterUser = document.getElementById('cob-asig-filter-user')?.value||'';
+
+  const filtered = rows.filter(r=>{
+    if(search && !r.cliente.toLowerCase().includes(search)) return false;
+    if(filterUser==='__none__' && _cobAsig[r.cliente]) return false;
+    if(filterUser && filterUser!=='__none__' && _cobAsig[r.cliente]!==filterUser) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('cob-asig-tbody');
+  if(!filtered.length){
+    tbody.innerHTML = '<tr><td colspan="3" style="padding:20px;text-align:center;color:var(--text-muted)">Sin clientes que coincidan.</td></tr>';
+    return;
+  }
+  const userOptions = _cobUsers.filter(u=>u.activo).map(u=>`<option value="${u.id}">${u.nombre}</option>`).join('');
+  tbody.innerHTML = filtered.slice(0,500).map(r=>{
+    const escCliente = r.cliente.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    const curUid = _cobAsig[r.cliente]||'';
+    return `<tr>
+      <td style="font-weight:500">${r.cliente}</td>
+      <td style="text-align:right;color:var(--accent2);font-weight:600">${fmtC(r.saldo)}</td>
+      <td style="text-align:center">
+        <select onchange="cobSaveAsig('${escCliente}', this.value)" style="padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;min-width:180px">
+          <option value="">— Sin asignar —</option>
+          ${userOptions.replace(`value="${curUid}"`, `value="${curUid}" selected`)}
+        </select>
+      </td>
+    </tr>`;
+  }).join('') + (filtered.length>500 ? `<tr><td colspan="3" style="padding:10px;text-align:center;color:var(--text-muted);font-size:11px">Mostrando primeros 500 de ${filtered.length}. Usa el buscador para filtrar.</td></tr>` : '');
+}
+
+function cobFilterAsig(){ cobRenderAsignaciones(); }
+
+async function cobSaveAsig(cliente, usuarioId){
+  try{
+    if(usuarioId){
+      const { error } = await window.supabase.from('cobranza_asignaciones')
+        .upsert({cliente, usuario_id:usuarioId, updated_at:new Date().toISOString()}, {onConflict:'cliente'});
+      if(error) throw error;
+      _cobAsig[cliente] = usuarioId;
+    } else {
+      const { error } = await window.supabase.from('cobranza_asignaciones').delete().eq('cliente', cliente);
+      if(error) throw error;
+      delete _cobAsig[cliente];
+    }
+    cobRenderUsersTable(); // refresh counts
+  }catch(e){
+    alert('Error al guardar asignación: ' + e.message);
+  }
+}
+
 </script>
+
+<!-- ═══ TAB COBRANZA ═══ -->
+<div class="tcontent" id="tab-cobranza" style="display:none">
+  <div class="page">
+    <div class="thead2" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="font-size:18px;color:var(--accent3)">📧 Módulo de Cobranza por Cliente</h2>
+      <div style="display:flex;gap:6px">
+        <button onclick="cobMostrarSeccion('usuarios')" id="cob-btn-usuarios" class="cob-tab-btn active">👥 Usuarios</button>
+        <button onclick="cobMostrarSeccion('asignaciones')" id="cob-btn-asignaciones" class="cob-tab-btn">🔗 Asignaciones</button>
+        <button onclick="cobMostrarSeccion('comparativa')" id="cob-btn-comparativa" class="cob-tab-btn">📊 Comparativa Semanal</button>
+        <button onclick="cobMostrarSeccion('reportes')" id="cob-btn-reportes" class="cob-tab-btn">📄 Generar Reportes</button>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN USUARIOS ── -->
+    <div id="cob-sec-usuarios" class="cob-sec">
+      <div class="tcard" style="margin-bottom:14px">
+        <div class="thead2" style="display:flex;align-items:center;justify-content:space-between">
+          <h4>👥 Usuarios Destinatarios de Reportes</h4>
+          <button onclick="cobShowUserForm()" style="background:rgba(0,212,170,.15);border:1px solid rgba(0,212,170,.3);color:var(--accent);font-size:11px;font-weight:600;padding:6px 14px;border-radius:6px;cursor:pointer">+ Nuevo Usuario</button>
+        </div>
+
+        <div id="cob-user-form" style="display:none;padding:14px;background:var(--surface2);border-radius:8px;margin:12px 0">
+          <input type="hidden" id="cob-user-id">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div>
+              <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px">Nombre completo</label>
+              <input id="cob-user-nombre" placeholder="Ej. Juan Pérez" style="width:100%;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text)">
+            </div>
+            <div>
+              <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px">Email</label>
+              <input id="cob-user-email" type="email" placeholder="juan.perez@zapata.mx" style="width:100%;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text)">
+            </div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label style="display:block;font-size:11px;color:var(--text-muted);margin-bottom:4px">Notas (opcional)</label>
+            <input id="cob-user-notas" placeholder="Ej. Gerente de cobranza zona norte" style="width:100%;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text)">
+          </div>
+          <div style="margin-bottom:14px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text)">
+              <input type="checkbox" id="cob-user-activo" checked> Activo
+            </label>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button onclick="cobSaveUser()" style="background:var(--accent);color:#fff;border:none;padding:7px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">💾 Guardar</button>
+            <button onclick="cobHideUserForm()" style="background:var(--surface);color:var(--text-muted);border:1px solid var(--border);padding:7px 16px;border-radius:6px;cursor:pointer;font-size:12px">Cancelar</button>
+          </div>
+        </div>
+
+        <div class="tscroll">
+          <table id="cob-users-table">
+            <thead>
+              <tr><th>Nombre</th><th>Email</th><th>Notas</th><th style="text-align:center">Estado</th><th style="text-align:center">Clientes Asignados</th><th style="text-align:center">Acciones</th></tr>
+            </thead>
+            <tbody id="cob-users-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN ASIGNACIONES ── -->
+    <div id="cob-sec-asignaciones" class="cob-sec" style="display:none">
+      <div class="tcard">
+        <div class="thead2" style="display:flex;align-items:center;justify-content:space-between">
+          <h4>🔗 Asignación Cliente → Usuario</h4>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input id="cob-asig-search" placeholder="🔍 Buscar cliente..." oninput="cobFilterAsig()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;min-width:200px">
+            <select id="cob-asig-filter-user" onchange="cobFilterAsig()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+              <option value="">Todos los usuarios</option>
+            </select>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);padding:6px 0">Los cambios se guardan automáticamente al cambiar la asignación.</div>
+        <div class="tscroll" style="max-height:600px">
+          <table id="cob-asig-table">
+            <thead>
+              <tr><th>Cliente</th><th style="text-align:right">Saldo Total</th><th style="text-align:center">Usuario Asignado</th></tr>
+            </thead>
+            <tbody id="cob-asig-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN COMPARATIVA SEMANAL ── -->
+    <div id="cob-sec-comparativa" class="cob-sec" style="display:none">
+      <div class="tcard">
+        <div class="thead2"><h4>📊 Comparativa Semana Actual vs Semana Anterior</h4></div>
+        <div id="cob-comp-content" style="padding:20px;text-align:center;color:var(--text-muted)">
+          Pendiente — se implementa en el siguiente paso.
+        </div>
+      </div>
+    </div>
+
+    <!-- ── SECCIÓN GENERAR REPORTES ── -->
+    <div id="cob-sec-reportes" class="cob-sec" style="display:none">
+      <div class="tcard">
+        <div class="thead2"><h4>📄 Generar Reportes PDF</h4></div>
+        <div id="cob-rep-content" style="padding:20px;text-align:center;color:var(--text-muted)">
+          Pendiente — se implementa en el siguiente paso.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.cob-tab-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-muted);font-size:11px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;transition:all .15s}
+.cob-tab-btn:hover{color:var(--text);border-color:var(--accent3)}
+.cob-tab-btn.active{background:var(--accent3);color:#fff;border-color:var(--accent3)}
+#cob-users-table th,#cob-asig-table th{font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600;letter-spacing:.4px;padding:7px 10px;border-bottom:1px solid var(--border)}
+#cob-users-table td,#cob-asig-table td{padding:8px 10px;border-bottom:1px solid var(--border);font-size:12px}
+.cob-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}
+.cob-badge.on{background:rgba(0,212,170,.15);color:var(--green)}
+.cob-badge.off{background:rgba(239,68,68,.12);color:#ef4444}
+</style>
 </body>
 </html>
