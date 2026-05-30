@@ -2339,6 +2339,8 @@ function procesarDatos(){
     try{
       window._inv=parseInv(F.inventario);
       window._ant=parseAnt(F.antiguedad);
+      // Auto-guardar snapshot de cobranza (fire-and-forget)
+      if(window._ant && window._ant.length) cobSaveSnapshot().catch(e=>console.warn('[cob] snapshot save:',e.message));
       window._bdd=parseBDD(F.bdd);
       window._bal=F.balance?parseBalance(F.balance):null;
       console.log('[procesarDatos] _bal:', window._bal?'✓ loaded, rows:'+window._bal.rows.length:'null');
@@ -8137,12 +8139,18 @@ function cobMostrarSeccion(sec){
     document.getElementById('cob-btn-'+s).classList.toggle('active', s===sec);
   });
   if(sec==='asignaciones') cobLoadAsignaciones();
+  if(sec==='comparativa')  cobLoadComparativa();
+  if(sec==='reportes')     cobLoadReportes();
 }
 
 async function cobLoadUsers(){
   try{
     const data = await supaGet('cobranza_usuarios','select=*&order=nombre.asc');
     _cobUsers = data || [];
+    // También cargar mapa de asignaciones para tener disponibles
+    const asigs = await supaGet('cobranza_asignaciones','select=*');
+    _cobAsig = {};
+    (asigs||[]).forEach(r=>{ _cobAsig[`${r.cliente}|${r.division}`] = r.usuario_id; });
     cobRenderUsersTable();
     cobPopulateUserSelects();
   }catch(e){
@@ -8354,6 +8362,437 @@ async function cobSaveAsig(cliente, division, usuarioId){
     alert('Error al guardar asignación: ' + e.message);
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// SNAPSHOT SEMANAL DE COBRANZA
+// ─────────────────────────────────────────────────────────────
+async function cobSaveSnapshot(){
+  if(!window._ant || !window._ant.length) return;
+  const hoy = new Date();
+  const fecha = `${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,'0')}-${String(hoy.getDate()).padStart(2,'0')}`;
+
+  // Agregar por (cliente, division, segmento)
+  const agg = {};
+  window._ant.forEach(r=>{
+    const cliente = (r.cliente||'').trim();
+    const division = String(r.division||'').trim();
+    const segmento = (r.segmento||'').trim() || 'SIN SEGMENTO';
+    if(!cliente || !division) return;
+    const k = `${cliente}||${division}||${segmento}`;
+    if(!agg[k]) agg[k] = {
+      fecha_snapshot: fecha, cliente, division, segmento,
+      sociedad: r.sociedad||null,
+      saldo:0, por_vencer:0, vencido:0,
+      bk_1_30:0, bk_31_60:0, bk_61_90:0, bk_91_120:0, bk_120plus:0
+    };
+    const a = agg[k];
+    a.saldo      += r.saldo||0;
+    a.por_vencer += r.porVencer||0;
+    a.vencido    += r.vencido||0;
+    const b = r.bucket||'';
+    if(b==='1-30 días')   a.bk_1_30    += r.saldo||0;
+    else if(b==='31-60 días')  a.bk_31_60   += r.saldo||0;
+    else if(b==='61-90 días')  a.bk_61_90   += r.saldo||0;
+    else if(b==='91-120 días') a.bk_91_120  += r.saldo||0;
+    else if(b==='+120 días')   a.bk_120plus += r.saldo||0;
+  });
+
+  const rows = Object.values(agg).filter(r=>r.saldo!==0);
+  if(!rows.length){ console.log('[cob] snapshot: sin filas'); return; }
+
+  // Borrar snapshot del mismo día (si ya existe) y reinsertar
+  try{
+    await supaDel('cobranza_snapshots', `fecha_snapshot=eq.${fecha}`);
+    // Insertar en chunks de 200
+    const chunkSize = 200;
+    for(let i=0;i<rows.length;i+=chunkSize){
+      const chunk = rows.slice(i, i+chunkSize);
+      const r = await supaFetch(`${SUPA_URL}/rest/v1/cobranza_snapshots`,{
+        method:'POST',
+        headers:{...SUPA_HDR,'Prefer':'return=minimal'},
+        body: JSON.stringify(chunk)
+      });
+      if(!r.ok){ const t=await r.text(); throw new Error('Supabase '+r.status+': '+t); }
+    }
+    console.log(`[cob] snapshot ${fecha}: ${rows.length} filas guardadas`);
+  }catch(e){
+    console.error('[cob] error guardando snapshot:', e);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// COMPARATIVA SEMANAL
+// ─────────────────────────────────────────────────────────────
+let _cobSnapActual = null;   // fecha YYYY-MM-DD
+let _cobSnapAnterior = null; // fecha YYYY-MM-DD
+let _cobCompData = [];       // [{cliente, division, segmento, usuario_id, saldoAct, saldoAnt, ...}]
+
+async function cobLoadComparativa(){
+  const cont = document.getElementById('cob-comp-content');
+  cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">⏳ Cargando snapshots...</div>';
+  try{
+    // Obtener las 2 fechas más recientes
+    const fechas = await supaGet('cobranza_snapshots','select=fecha_snapshot&order=fecha_snapshot.desc&limit=200');
+    const unicas = [...new Set((fechas||[]).map(r=>r.fecha_snapshot))].sort((a,b)=>b.localeCompare(a));
+    if(unicas.length===0){
+      cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">No hay snapshots guardados. Carga el archivo de antigüedad para generar el primero.</div>';
+      return;
+    }
+    if(unicas.length===1){
+      cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-muted)">Solo hay 1 snapshot guardado (${unicas[0]}). Sube otro archivo de antigüedad en una fecha distinta para comparar.</div>`;
+      return;
+    }
+    _cobSnapActual   = unicas[0];
+    _cobSnapAnterior = unicas[1];
+
+    // Cargar ambos snapshots
+    const [snapAct, snapAnt] = await Promise.all([
+      supaGet('cobranza_snapshots',`select=*&fecha_snapshot=eq.${_cobSnapActual}`),
+      supaGet('cobranza_snapshots',`select=*&fecha_snapshot=eq.${_cobSnapAnterior}`)
+    ]);
+
+    // Agregar por (cliente, division) - sumando todos los segmentos
+    function agruparClienteDiv(rows){
+      const m = {};
+      (rows||[]).forEach(r=>{
+        const k = `${r.cliente}||${r.division}`;
+        if(!m[k]) m[k] = {cliente:r.cliente, division:r.division, saldo:0, vencido:0, por_vencer:0};
+        m[k].saldo += +r.saldo||0;
+        m[k].vencido += +r.vencido||0;
+        m[k].por_vencer += +r.por_vencer||0;
+      });
+      return m;
+    }
+    const mapAct = agruparClienteDiv(snapAct);
+    const mapAnt = agruparClienteDiv(snapAnt);
+
+    // Universe: keys en cualquiera de los dos
+    const todasKeys = new Set([...Object.keys(mapAct), ...Object.keys(mapAnt)]);
+    _cobCompData = [...todasKeys].map(k=>{
+      const [cliente, division] = k.split('||');
+      const a = mapAct[k]||{saldo:0,vencido:0,por_vencer:0};
+      const p = mapAnt[k]||{saldo:0,vencido:0,por_vencer:0};
+      const usuarioId = _cobAsig[`${cliente}|${division}`] || null;
+      return {
+        cliente, division, usuarioId,
+        saldoAct: a.saldo, saldoAnt: p.saldo,
+        vencidoAct: a.vencido, vencidoAnt: p.vencido,
+        porVencerAct: a.por_vencer,
+        delta: a.saldo - p.saldo,
+        deltaPct: p.saldo!==0 ? ((a.saldo-p.saldo)/Math.abs(p.saldo))*100 : null,
+        cobrado: Math.max(0, p.saldo - a.saldo)  // si bajó el saldo, eso es cobranza
+      };
+    }).filter(r=>r.saldoAct!==0 || r.saldoAnt!==0)
+      .sort((x,y)=>y.saldoAct-x.saldoAct);
+
+    cobRenderComparativa();
+  }catch(e){
+    console.error('[cob] error en comparativa:', e);
+    cont.innerHTML = `<div style="padding:30px;text-align:center;color:#ef4444">Error: ${e.message}</div>`;
+  }
+}
+
+function cobRenderComparativa(){
+  const cont = document.getElementById('cob-comp-content');
+  const search = (document.getElementById('cob-comp-search')?.value||'').toLowerCase();
+  const filterUser = document.getElementById('cob-comp-filter-user')?.value||'';
+  const filterDiv  = document.getElementById('cob-comp-filter-div')?.value||'';
+
+  const filtered = _cobCompData.filter(r=>{
+    if(search && !r.cliente.toLowerCase().includes(search)) return false;
+    if(filterDiv && r.division!==filterDiv) return false;
+    if(filterUser==='__none__' && r.usuarioId) return false;
+    if(filterUser && filterUser!=='__none__' && r.usuarioId!==filterUser) return false;
+    return true;
+  });
+
+  const totSaldoAct = filtered.reduce((s,r)=>s+r.saldoAct,0);
+  const totSaldoAnt = filtered.reduce((s,r)=>s+r.saldoAnt,0);
+  const totCobrado  = filtered.reduce((s,r)=>s+r.cobrado,0);
+  const totVencido  = filtered.reduce((s,r)=>s+r.vencidoAct,0);
+
+  const usersMap = {};
+  _cobUsers.forEach(u=>{ usersMap[u.id]=u.nombre; });
+  const divs = [...new Set(_cobCompData.map(r=>r.division))].sort();
+
+  cont.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+      <div class="kpi-mini"><span class="lbl">Saldo Semana Actual</span><span class="val" style="color:var(--accent2)">${fmtC(totSaldoAct)}</span><span class="sub">${_cobSnapActual}</span></div>
+      <div class="kpi-mini"><span class="lbl">Saldo Semana Anterior</span><span class="val" style="color:var(--text-muted)">${fmtC(totSaldoAnt)}</span><span class="sub">${_cobSnapAnterior}</span></div>
+      <div class="kpi-mini"><span class="lbl">Cobrado en el Periodo</span><span class="val" style="color:var(--green)">${fmtC(totCobrado)}</span><span class="sub">↓ del saldo</span></div>
+      <div class="kpi-mini"><span class="lbl">Total Vencido Actual</span><span class="val" style="color:#ef4444">${fmtC(totVencido)}</span><span class="sub">cartera vencida</span></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+      <input id="cob-comp-search" placeholder="🔍 Buscar cliente..." oninput="cobRenderComparativa()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;min-width:180px">
+      <select id="cob-comp-filter-div" onchange="cobRenderComparativa()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+        <option value="">Todas las divisiones</option>
+        ${divs.map(d=>`<option value="${d}">${d}</option>`).join('')}
+      </select>
+      <select id="cob-comp-filter-user" onchange="cobRenderComparativa()" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px">
+        <option value="">Todos los vendedores</option>
+        <option value="__none__">Sin asignar</option>
+        ${_cobUsers.filter(u=>u.activo).map(u=>`<option value="${u.id}">${u.nombre}</option>`).join('')}
+      </select>
+      <span style="color:var(--text-muted);font-size:11px">${filtered.length} clientes</span>
+    </div>
+
+    <div class="tscroll" style="max-height:600px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead style="position:sticky;top:0;background:var(--surface);z-index:2">
+          <tr>
+            <th style="text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Cliente</th>
+            <th style="text-align:center;padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Div</th>
+            <th style="text-align:left;padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Vendedor</th>
+            <th style="text-align:right;padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Sem. Anterior</th>
+            <th style="text-align:right;padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Sem. Actual</th>
+            <th style="text-align:right;padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Δ $</th>
+            <th style="text-align:right;padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Δ %</th>
+            <th style="text-align:right;padding:7px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted);font-weight:600">Vencido</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.slice(0,500).map(r=>{
+            const dColor = r.delta<0?'var(--green)':(r.delta>0?'#ef4444':'var(--text-muted)');
+            const arrow = r.delta<0?'↓':(r.delta>0?'↑':'=');
+            const pctTxt = r.deltaPct===null?'—':(r.deltaPct>0?'+':'')+r.deltaPct.toFixed(1)+'%';
+            return `<tr>
+              <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;font-weight:500">${r.cliente}</td>
+              <td style="text-align:center;padding:6px 10px;border-bottom:1px solid var(--border);color:var(--accent3);font-family:monospace;font-size:11px">${r.division}</td>
+              <td style="padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;color:${r.usuarioId?'var(--accent2)':'var(--text-muted)'}">${r.usuarioId?usersMap[r.usuarioId]||'?':'— Sin asignar —'}</td>
+              <td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-muted)">${fmtC(r.saldoAnt)}</td>
+              <td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600">${fmtC(r.saldoAct)}</td>
+              <td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;color:${dColor};font-weight:600">${arrow} ${fmtC(Math.abs(r.delta))}</td>
+              <td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border);font-size:11px;color:${dColor}">${pctTxt}</td>
+              <td style="text-align:right;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;color:${r.vencidoAct>0?'#ef4444':'var(--text-muted)'}">${r.vencidoAct>0?fmtC(r.vencidoAct):'—'}</td>
+            </tr>`;
+          }).join('')}
+          ${filtered.length>500?`<tr><td colspan="8" style="padding:10px;text-align:center;color:var(--text-muted);font-size:11px">Mostrando primeros 500 de ${filtered.length}. Usa filtros.</td></tr>`:''}
+        </tbody>
+      </table>
+    </div>
+    <style>
+      .kpi-mini{background:var(--surface2);padding:10px 14px;border-radius:8px;border:1px solid var(--border);display:flex;flex-direction:column}
+      .kpi-mini .lbl{font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px}
+      .kpi-mini .val{font-size:18px;font-weight:700}
+      .kpi-mini .sub{font-size:9px;color:var(--text-muted);margin-top:2px;font-family:monospace}
+    </style>
+  `;
+  // Restore filter values (innerHTML reseteó los inputs)
+  if(search) document.getElementById('cob-comp-search').value = search;
+  if(filterUser) document.getElementById('cob-comp-filter-user').value = filterUser;
+  if(filterDiv)  document.getElementById('cob-comp-filter-div').value = filterDiv;
+}
+
+// ─────────────────────────────────────────────────────────────
+// GENERADOR DE REPORTES PDF
+// ─────────────────────────────────────────────────────────────
+async function cobLoadReportes(){
+  const cont = document.getElementById('cob-rep-content');
+  if(!_cobCompData.length){
+    await cobLoadComparativa(); // asegurar que tenemos datos
+  }
+  const activos = _cobUsers.filter(u=>u.activo);
+  if(!activos.length){
+    cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">No hay usuarios activos. Crea al menos uno en la sección Usuarios.</div>';
+    return;
+  }
+
+  // Conteo por usuario
+  const stats = {};
+  activos.forEach(u=>{ stats[u.id] = {clientes:0, saldoTotal:0, vencido:0, cobrado:0}; });
+  _cobCompData.forEach(r=>{
+    if(!r.usuarioId || !stats[r.usuarioId]) return;
+    stats[r.usuarioId].clientes++;
+    stats[r.usuarioId].saldoTotal += r.saldoAct;
+    stats[r.usuarioId].vencido    += r.vencidoAct;
+    stats[r.usuarioId].cobrado    += r.cobrado;
+  });
+
+  cont.innerHTML = `
+    <div style="text-align:left;padding:14px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="color:var(--text-muted);font-size:12px">
+          Comparativa: <b style="color:var(--text)">${_cobSnapActual||'—'}</b> vs <b style="color:var(--text)">${_cobSnapAnterior||'—'}</b>
+        </div>
+        <button onclick="cobGenerarTodosPDF()" style="background:var(--accent3);color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px">📦 Generar TODOS los PDFs</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted)">Vendedor</th>
+            <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted)">Email</th>
+            <th style="text-align:center;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted)">Clientes</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted)">Saldo Total</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted)">Vencido</th>
+            <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted)">Cobrado Sem</th>
+            <th style="text-align:center;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--text-muted)">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${activos.map(u=>{
+            const s = stats[u.id]||{clientes:0,saldoTotal:0,vencido:0,cobrado:0};
+            const disabled = s.clientes===0;
+            return `<tr>
+              <td style="padding:9px 10px;border-bottom:1px solid var(--border);font-weight:600">${u.nombre}</td>
+              <td style="padding:9px 10px;border-bottom:1px solid var(--border);color:var(--accent2);font-size:11px">${u.email}</td>
+              <td style="text-align:center;padding:9px 10px;border-bottom:1px solid var(--border);font-weight:600">${s.clientes}</td>
+              <td style="text-align:right;padding:9px 10px;border-bottom:1px solid var(--border);font-weight:600">${fmtC(s.saldoTotal)}</td>
+              <td style="text-align:right;padding:9px 10px;border-bottom:1px solid var(--border);color:${s.vencido>0?'#ef4444':'var(--text-muted)'}">${s.vencido>0?fmtC(s.vencido):'—'}</td>
+              <td style="text-align:right;padding:9px 10px;border-bottom:1px solid var(--border);color:${s.cobrado>0?'var(--green)':'var(--text-muted)'}">${s.cobrado>0?fmtC(s.cobrado):'—'}</td>
+              <td style="text-align:center;padding:9px 10px;border-bottom:1px solid var(--border)">
+                <button onclick="cobGenerarPDFUsuario('${u.id}')" ${disabled?'disabled':''} style="background:${disabled?'var(--surface2)':'var(--accent3)'};color:${disabled?'var(--text-muted)':'#fff'};border:none;padding:5px 12px;border-radius:5px;cursor:${disabled?'not-allowed':'pointer'};font-weight:600;font-size:11px">📄 Generar PDF</button>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function cobGenerarPDFUsuario(usuarioId){
+  const u = _cobUsers.find(x=>x.id===usuarioId);
+  if(!u){ alert('Usuario no encontrado'); return; }
+  const clientes = _cobCompData.filter(r=>r.usuarioId===usuarioId)
+    .sort((a,b)=>b.saldoAct-a.saldoAct);
+  if(!clientes.length){ alert('Este usuario no tiene clientes asignados con saldo.'); return; }
+
+  const totSaldo = clientes.reduce((s,r)=>s+r.saldoAct,0);
+  const totVencido = clientes.reduce((s,r)=>s+r.vencidoAct,0);
+  const totCobrado = clientes.reduce((s,r)=>s+r.cobrado,0);
+  const totPorVencer = clientes.reduce((s,r)=>s+r.porVencerAct,0);
+
+  const fechaHoy = new Date().toLocaleDateString('es-MX',{day:'2-digit',month:'long',year:'numeric'});
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Reporte Cobranza — ${u.nombre}</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:9.5px;color:#1a1a2e;background:#fff;padding:14mm 10mm 10mm}
+  @page{size:A4;margin:10mm 8mm}
+  .cover{text-align:center;padding:50px 20px;page-break-after:always}
+  .cover h1{font-size:28px;color:#1e3a5f;margin-bottom:8px;letter-spacing:-0.5px}
+  .cover h2{font-size:16px;color:#3b82f6;font-weight:500;margin-bottom:30px}
+  .cover .vendedor-card{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff;padding:30px 40px;border-radius:12px;display:inline-block;margin:30px 0}
+  .cover .vendedor-card h3{font-size:22px;margin-bottom:6px}
+  .cover .vendedor-card p{font-size:12px;opacity:.9}
+  .cover .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:800px;margin:30px auto;text-align:left}
+  .cover .stat{background:#f1f5f9;padding:14px;border-radius:8px;border-left:4px solid #2563eb}
+  .cover .stat .lbl{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+  .cover .stat .val{font-size:18px;font-weight:700;color:#1e3a5f}
+  .cover .meta{font-size:11px;color:#64748b;margin-top:30px}
+  .seg-hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff;padding:12px 16px;border-radius:8px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+  .seg-hdr h2{font-size:14px}
+  .seg-hdr .sub{font-size:10px;opacity:.85}
+  table{width:100%;border-collapse:collapse;font-size:9px}
+  thead tr{background:#1e3a5f;color:#fff}
+  th{padding:6px 8px;font-weight:600;font-size:9px;text-align:left}
+  th.right{text-align:right}
+  tbody td{padding:4px 8px;border-bottom:1px solid #e2e8f0}
+  tbody td.right{text-align:right}
+  tbody td.mono{font-family:monospace;text-align:center;color:#d97706}
+  tbody tr:nth-child(even){background:#f8fafc}
+  .green{color:#16a34a;font-weight:600}
+  .red{color:#dc2626;font-weight:600}
+  .gray{color:#64748b}
+  .arrow{font-weight:700}
+  .no-print{position:sticky;top:0;background:#fff;padding:8px;border-bottom:2px solid #1e3a5f;display:flex;gap:10px;z-index:10}
+  .no-print button{background:#1e3a5f;color:#fff;border:none;padding:8px 18px;border-radius:6px;cursor:pointer;font-weight:600;font-size:12px}
+  @media print{.no-print{display:none}}
+  tr.totals{background:#1e3a5f !important;color:#fff;font-weight:700}
+  tr.totals td{border-bottom:none;color:#fff}
+</style>
+</head><body>
+<div class="no-print">
+  <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+  <button onclick="window.close()" style="background:#64748b">✕ Cerrar</button>
+</div>
+
+<div class="cover">
+  <h1>Reporte de Cobranza</h1>
+  <h2>Distribuidoras Zapata · Camiones Guadalajara</h2>
+  <div class="vendedor-card">
+    <h3>${u.nombre}</h3>
+    <p>${u.email}</p>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="lbl">Clientes Asignados</div><div class="val">${clientes.length}</div></div>
+    <div class="stat"><div class="lbl">Saldo Total</div><div class="val">${fmtC(totSaldo)}</div></div>
+    <div class="stat"><div class="lbl">Vencido</div><div class="val" style="color:#dc2626">${fmtC(totVencido)}</div></div>
+    <div class="stat"><div class="lbl">Cobrado Semana</div><div class="val" style="color:#16a34a">${fmtC(totCobrado)}</div></div>
+  </div>
+  <div class="meta">
+    Comparativa: ${_cobSnapActual} vs ${_cobSnapAnterior}<br>
+    Generado: ${fechaHoy}
+  </div>
+</div>
+
+<div class="seg-hdr">
+  <h2>Cartera por Cliente</h2>
+  <div class="sub">${clientes.length} clientes · ${fechaHoy}</div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Cliente</th>
+      <th style="text-align:center">Div</th>
+      <th class="right">Sem. Anterior</th>
+      <th class="right">Sem. Actual</th>
+      <th class="right">Δ $</th>
+      <th class="right">Δ %</th>
+      <th class="right">Vencido</th>
+      <th class="right">Por Vencer</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${clientes.map(r=>{
+      const dCls = r.delta<0?'green':(r.delta>0?'red':'gray');
+      const arrow = r.delta<0?'↓':(r.delta>0?'↑':'=');
+      const pctTxt = r.deltaPct===null?'—':(r.deltaPct>0?'+':'')+r.deltaPct.toFixed(1)+'%';
+      return `<tr>
+        <td>${r.cliente}</td>
+        <td class="mono">${r.division}</td>
+        <td class="right gray">${fmtC(r.saldoAnt)}</td>
+        <td class="right" style="font-weight:600">${fmtC(r.saldoAct)}</td>
+        <td class="right ${dCls}"><span class="arrow">${arrow}</span> ${fmtC(Math.abs(r.delta))}</td>
+        <td class="right ${dCls}">${pctTxt}</td>
+        <td class="right" style="color:${r.vencidoAct>0?'#dc2626':'#64748b'}">${r.vencidoAct>0?fmtC(r.vencidoAct):'—'}</td>
+        <td class="right gray">${r.porVencerAct>0?fmtC(r.porVencerAct):'—'}</td>
+      </tr>`;
+    }).join('')}
+    <tr class="totals">
+      <td colspan="2">TOTAL</td>
+      <td class="right">${fmtC(clientes.reduce((s,r)=>s+r.saldoAnt,0))}</td>
+      <td class="right">${fmtC(totSaldo)}</td>
+      <td class="right">${fmtC(clientes.reduce((s,r)=>s+r.delta,0))}</td>
+      <td class="right">—</td>
+      <td class="right">${fmtC(totVencido)}</td>
+      <td class="right">${fmtC(totPorVencer)}</td>
+    </tr>
+  </tbody>
+</table>
+
+</body></html>`;
+
+  const w = window.open('','_blank');
+  if(!w){ alert('Permite ventanas emergentes para descargar el PDF.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+async function cobGenerarTodosPDF(){
+  const activos = _cobUsers.filter(u=>u.activo);
+  const conClientes = activos.filter(u=>_cobCompData.some(r=>r.usuarioId===u.id));
+  if(!conClientes.length){ alert('Ningún vendedor tiene clientes asignados con saldo.'); return; }
+  if(!confirm(`Se abrirán ${conClientes.length} ventanas emergentes (una por vendedor). ¿Continuar?`)) return;
+  for(const u of conClientes){
+    cobGenerarPDFUsuario(u.id);
+    await new Promise(r=>setTimeout(r,250));
+  }
+}
+
 
 </script>
 
