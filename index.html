@@ -8392,11 +8392,30 @@ async function cobSaveAsig(cliente, division, segmento, usuarioId){
   try{
     const seg = segmento || '*';
     const k = `${cliente}|${division}|${seg}`;
+    console.log('[cobSaveAsig] →', {cliente, division, segmento:seg, usuarioId, key:k});
     if(usuarioId){
-      await supaUpsert('cobranza_asignaciones', {
-        cliente, division, segmento:seg, usuario_id:usuarioId, updated_at:new Date().toISOString()
+      const payload = {cliente, division, segmento:seg, usuario_id:usuarioId, updated_at:new Date().toISOString()};
+      // Use upsert with explicit on_conflict to specify composite key
+      const r = await supaFetch(`${SUPA_URL}/rest/v1/cobranza_asignaciones?on_conflict=cliente,division,segmento`, {
+        method:'POST',
+        headers:{...SUPA_HDR,'Prefer':'resolution=merge-duplicates,return=representation'},
+        body: JSON.stringify(payload)
       });
+      const respText = await r.text();
+      console.log('[cobSaveAsig] response:', r.status, respText);
+      if(!r.ok){
+        throw new Error(`Supabase ${r.status}: ${respText}`);
+      }
+      // Verify by re-reading
       _cobAsig[k] = usuarioId;
+      const qCli = encodeURIComponent(cliente);
+      const qDiv = encodeURIComponent(division);
+      const qSeg = encodeURIComponent(seg);
+      const verifyData = await supaGet('cobranza_asignaciones',`select=*&cliente=eq.${qCli}&division=eq.${qDiv}&segmento=eq.${qSeg}`);
+      console.log('[cobSaveAsig] verificación post-save:', verifyData);
+      if(!verifyData?.length){
+        alert('⚠️ ATENCIÓN: La asignación parece NO haberse persistido en Supabase. Status:'+r.status+' Body:'+respText+'\n\nVerifica que el SQL de migración se ejecutó correctamente (tabla cobranza_asignaciones debe tener columna segmento).');
+      }
     } else {
       const qCli = encodeURIComponent(cliente);
       const qDiv = encodeURIComponent(division);
@@ -8405,8 +8424,9 @@ async function cobSaveAsig(cliente, division, segmento, usuarioId){
       delete _cobAsig[k];
     }
     cobRenderUsersTable();
-    cobRenderAsignaciones(); // refresh to update inheritance display
+    cobRenderAsignaciones();
   }catch(e){
+    console.error('[cobSaveAsig] error:', e);
     alert('Error al guardar asignación: ' + e.message);
   }
 }
