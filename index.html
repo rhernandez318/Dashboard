@@ -8263,7 +8263,8 @@ function cobDeleteUserById(btn){
 }
 
 async function cobDeleteUser(id, nombre){
-  if(!confirm(`¿Eliminar a "${nombre}"? Las asignaciones de clientes quedarán sin usuario.`)){
+  const ok = await cobConfirm(`¿Eliminar a "${nombre}"?`, 'Las asignaciones de clientes quedarán sin usuario asignado.');
+  if(!ok){
     console.log('[cobDeleteUser] cancelado por usuario');
     return;
   }
@@ -8470,7 +8471,8 @@ async function cobSaveAsig(cliente, division, segmento, usuarioId){
 async function cobAplicarTodosSegs(cliente, division, usuarioId){
   if(!usuarioId){ alert('Primero asigna un vendedor en alguna fila para poder propagarlo.'); return; }
   const userName = _cobUsers.find(u=>u.id===usuarioId)?.nombre||'?';
-  if(!confirm(`Asignar a "${userName}" como vendedor de TODOS los segmentos de "${cliente}" división ${division}?\n\nEsto crea una asignación wildcard '*' que aplica a todos los segmentos no asignados individualmente.`)) return;
+  const ok = await cobConfirm(`Aplicar a TODOS los segmentos`, `Asignar a "${userName}" como vendedor de TODOS los segmentos de "${cliente}" división ${division}? Esto crea una asignación wildcard que aplica a todos los segmentos no asignados individualmente.`);
+  if(!ok) return;
   try{
     // Borrar todas las asignaciones específicas de este (cliente, division) y crear el wildcard
     const qCli = encodeURIComponent(cliente);
@@ -8555,7 +8557,29 @@ async function cobSaveSnapshot(){
 let _cobSnapActual = null;   // fecha YYYY-MM-DD
 let _cobSnapAnterior = null; // fecha YYYY-MM-DD
 let _cobCompData = [];
-let _cobCompSort = {key:'saldoAct', dir:'desc'};       // [{cliente, division, segmento, usuario_id, saldoAct, saldoAnt, ...}]
+let _cobCompSort = {key:'saldoAct', dir:'desc'};
+
+// Custom confirm dialog (replaces native confirm which can be blocked by browser)
+function cobConfirm(title, msg){
+  return new Promise(resolve=>{
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.65);z-index:99999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)';
+    overlay.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:440px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+        <h3 style="margin:0 0 12px;color:var(--text);font-size:15px;font-weight:600">${title}</h3>
+        <p style="margin:0 0 20px;color:var(--text-muted);font-size:13px;line-height:1.5">${msg}</p>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="cob-confirm-cancel" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Cancelar</button>
+          <button id="cob-confirm-ok" style="background:#ef4444;border:none;color:#fff;padding:8px 18px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Sí, continuar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#cob-confirm-ok').onclick = ()=>{ overlay.remove(); resolve(true); };
+    overlay.querySelector('#cob-confirm-cancel').onclick = ()=>{ overlay.remove(); resolve(false); };
+    overlay.onclick = e=>{ if(e.target===overlay){ overlay.remove(); resolve(false); } };
+  });
+}       // [{cliente, division, segmento, usuario_id, saldoAct, saldoAnt, ...}]
 
 async function cobLoadComparativa(){
   const cont = document.getElementById('cob-comp-content');
