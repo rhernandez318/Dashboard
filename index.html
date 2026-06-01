@@ -1847,6 +1847,7 @@ async function saveSnapshot(){
   const payload = {
     inv:   window._inv   || null,
     ant:   window._ant   || null,
+    antAnt: window._antAnt || null,
     bdd:   window._bdd   || null,
     bal:   window._bal ? {rows: window._bal.rows, maxBalPer: window._bal.maxBalPer, isNewFormat: window._bal.isNewFormat||false,
              OTROS_ING: window._bal.OTROS_ING, OTROS_GTO: window._bal.OTROS_GTO,
@@ -1941,24 +1942,29 @@ function applySnapshotData(d){
   if(!d) return false;
   window._inv   = d.inv   || null;
   // Recompute diasVenc on snapshot load (TODAY is dynamic — snapshot has stale values)
-  window._ant   = (d.ant||null)?.map(r=>{
-    const fechaDoc  = r.fechaDoc ? new Date(r.fechaDoc) : null;
-    const fechaVenc = r.fechaVenc ? new Date(r.fechaVenc) : null;
-    let diasVenc = r.diasVenc;
-    let porVencer = r.porVencer;
-    let vencido = r.vencido;
-    let bucket = r.bucket;
-    if(fechaVenc && !isNaN(fechaVenc)){
-      const vMid = new Date(fechaVenc); vMid.setHours(0,0,0,0);
-      diasVenc = vMid < TODAY
-        ? Math.floor((TODAY - vMid)/86400000)
-        : -Math.floor((vMid - TODAY)/86400000);
-      porVencer = diasVenc<=0 ? r.saldo : 0;
-      vencido   = diasVenc>0  ? r.saldo : 0;
-      bucket    = bkt(diasVenc);
-    }
-    return {...r, fechaDoc, fechaVenc, diasVenc, porVencer, vencido, bucket};
-  }) || null;
+  function restoreAntRows(arr){
+    return (arr||null)?.map(r=>{
+      const fechaDoc  = r.fechaDoc ? new Date(r.fechaDoc) : null;
+      const fechaVenc = r.fechaVenc ? new Date(r.fechaVenc) : null;
+      let diasVenc = r.diasVenc;
+      let porVencer = r.porVencer;
+      let vencido = r.vencido;
+      let bucket = r.bucket;
+      if(fechaVenc && !isNaN(fechaVenc)){
+        const vMid = new Date(fechaVenc); vMid.setHours(0,0,0,0);
+        diasVenc = vMid < TODAY
+          ? Math.floor((TODAY - vMid)/86400000)
+          : -Math.floor((vMid - TODAY)/86400000);
+        porVencer = diasVenc<=0 ? r.saldo : 0;
+        vencido   = diasVenc>0  ? r.saldo : 0;
+        bucket    = bkt(diasVenc);
+      }
+      return {...r, fechaDoc, fechaVenc, diasVenc, porVencer, vencido, bucket};
+    }) || null;
+  }
+  window._ant    = restoreAntRows(d.ant);
+  window._antAnt = restoreAntRows(d.antAnt);
+  if(window._antAnt) console.log('[snapshot] _antAnt restaurado:', window._antAnt.length, 'filas');
   window._bdd   = d.bdd   || null;
   // ppto/bdd25 restored via loadAuxSnapshots(), not from main snapshot
   // window._bdd25 = d.bdd25 (deprecated)
@@ -8157,7 +8163,8 @@ async function cobLoadUsers(){
     // También cargar mapa de asignaciones para tener disponibles
     const asigs = await supaGet('cobranza_asignaciones','select=*');
     _cobAsig = {};
-    (asigs||[]).forEach(r=>{ _cobAsig[`${r.cliente}|${r.division}`] = r.usuario_id; });
+    (asigs||[]).forEach(r=>{ _cobAsig[`${r.cliente}|${r.division}|${r.segmento||'*'}`] = r.usuario_id; });
+    console.log('[cobLoadUsers] asignaciones cargadas:', Object.keys(_cobAsig).length, 'sample keys:', Object.keys(_cobAsig).slice(0,3));
     cobRenderUsersTable();
     cobPopulateUserSelects();
   }catch(e){
@@ -8604,6 +8611,7 @@ async function cobLoadComparativa(){
       };
     }).filter(r=>r.saldoAct!==0 || r.saldoAnt!==0)
       .sort((x,y)=>y.saldoAct-x.saldoAct);
+    console.log('[cobLoadComparativa] _cobCompData rows:', _cobCompData.length, 'sample:', _cobCompData.slice(0,2));
 
     cobRenderComparativa();
   }catch(e){
