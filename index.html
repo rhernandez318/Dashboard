@@ -377,6 +377,7 @@ tbody td:not(:first-child){text-align:right;font-family:'IBM Plex Mono',monospac
     <div class="ucard optional" id="card-bal"><input type="file" accept=".xlsx,.xls" onchange="handleFile('balance',this)"><span class="ico">⚖️</span><div class="uopt-label">Opcional</div><h3>BDD Balance</h3><p>Balance general con cuentas de activo y pasivo</p><div class="ust" id="status-bal">Opcional — mejora razones</div></div>
     <div class="ucard optional" id="card-bdd25"><input type="file" accept=".xlsx,.xls" onchange="handleFile('bdd25',this)"><span class="ico">📅</span><div class="uopt-label">Opcional</div><h3>BDD 2025</h3><p>Resultados año anterior para comparativo</p><div class="ust" id="status-bdd25">Opcional — habilita vs 2025</div></div>
     <div class="ucard optional" id="card-ppto"><input type="file" accept=".xlsx,.xls" onchange="handleFile('ppto',this)"><span class="ico">🎯</span><div class="uopt-label">Opcional</div><h3>Presupuesto 2026</h3><p>Plan mensual para comparativo vs real</p><div class="ust" id="status-ppto">Opcional — habilita vs Ppto</div></div>
+    <div class="ucard optional" id="card-antant"><input type="file" accept=".xlsx,.xls" onchange="handleFile('antiguedad_ant',this)"><span class="ico">📋</span><div class="uopt-label">Opcional</div><h3>Antigüedad Semana Anterior</h3><p>Para comparativa semanal de cobranza</p><div class="ust" id="status-antant">Opcional — habilita comparativa</div></div>
   </div>
   <button class="bprocess" id="btn-process" onclick="procesarDatos()">⚡ Generar Dashboard</button>
 </div>
@@ -1137,7 +1138,7 @@ function sb(s,clickable=false){
 // ═══════════════════════════════════════════
 function handleFile(type,input){
   const file=input.files[0];if(!file)return;
-  const cid={'inventario':'inv','antiguedad':'ant','bdd':'bdd','balance':'bal','bdd25':'bdd25','ppto':'ppto'}[type];
+  const cid={'inventario':'inv','antiguedad':'ant','bdd':'bdd','balance':'bal','bdd25':'bdd25','ppto':'ppto','antiguedad_ant':'antant'}[type];
   const reader=new FileReader();
   reader.onload=e=>{
     F[type]=e.target.result;
@@ -2339,7 +2340,12 @@ function procesarDatos(){
     try{
       window._inv=parseInv(F.inventario);
       window._ant=parseAnt(F.antiguedad);
-      // Auto-guardar snapshot de cobranza (fire-and-forget)
+      // Antigüedad semana anterior (opcional)
+      if(F.antiguedad_ant){
+        try{ window._antAnt = parseAnt(F.antiguedad_ant); console.log('[cob] antiguedad ANT cargada:', window._antAnt?.length||0, 'filas'); }
+        catch(e){ console.warn('[cob] error parseando antiguedad_ant:', e.message); }
+      }
+      // Auto-guardar snapshot de cobranza (fire-and-forget) — para histórico
       if(window._ant && window._ant.length) cobSaveSnapshot().catch(e=>console.warn('[cob] snapshot save:',e.message));
       window._bdd=parseBDD(F.bdd);
       window._bal=F.balance?parseBalance(F.balance):null;
@@ -8429,42 +8435,64 @@ let _cobCompData = [];       // [{cliente, division, segmento, usuario_id, saldo
 
 async function cobLoadComparativa(){
   const cont = document.getElementById('cob-comp-content');
-  cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">⏳ Cargando snapshots...</div>';
+  cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">⏳ Cargando comparativa...</div>';
   try{
-    // Obtener las 2 fechas más recientes
-    const fechas = await supaGet('cobranza_snapshots','select=fecha_snapshot&order=fecha_snapshot.desc&limit=200');
-    const unicas = [...new Set((fechas||[]).map(r=>r.fecha_snapshot))].sort((a,b)=>b.localeCompare(a));
-    if(unicas.length===0){
-      cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">No hay snapshots guardados. Carga el archivo de antigüedad para generar el primero.</div>';
-      return;
-    }
-    if(unicas.length===1){
-      cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-muted)">Solo hay 1 snapshot guardado (${unicas[0]}). Sube otro archivo de antigüedad en una fecha distinta para comparar.</div>`;
-      return;
-    }
-    _cobSnapActual   = unicas[0];
-    _cobSnapAnterior = unicas[1];
+    let mapAct, mapAnt;
 
-    // Cargar ambos snapshots
-    const [snapAct, snapAnt] = await Promise.all([
-      supaGet('cobranza_snapshots',`select=*&fecha_snapshot=eq.${_cobSnapActual}`),
-      supaGet('cobranza_snapshots',`select=*&fecha_snapshot=eq.${_cobSnapAnterior}`)
-    ]);
+    // PRIORIDAD 1: si hay 2 archivos cargados (actual y anterior) en memoria
+    if(window._ant?.length && window._antAnt?.length){
+      _cobSnapActual   = 'Archivo actual';
+      _cobSnapAnterior = 'Archivo anterior';
+      function aggAntRows(rows){
+        const m = {};
+        rows.forEach(r=>{
+          const cliente=(r.cliente||'').trim();
+          const division=String(r.division||'').trim();
+          if(!cliente||!division) return;
+          const k = `${cliente}||${division}`;
+          if(!m[k]) m[k] = {cliente, division, saldo:0, vencido:0, por_vencer:0};
+          m[k].saldo += +r.saldo||0;
+          m[k].vencido += +r.vencido||0;
+          m[k].por_vencer += +r.porVencer||0;
+        });
+        return m;
+      }
+      mapAct = aggAntRows(window._ant);
+      mapAnt = aggAntRows(window._antAnt);
+    } else {
+      // PRIORIDAD 2: snapshots de Supabase (las 2 fechas más recientes)
+      const fechas = await supaGet('cobranza_snapshots','select=fecha_snapshot&order=fecha_snapshot.desc&limit=200');
+      const unicas = [...new Set((fechas||[]).map(r=>r.fecha_snapshot))].sort((a,b)=>b.localeCompare(a));
+      if(unicas.length===0){
+        cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-muted)">No hay datos para comparar. Sube el archivo de Antigüedad Semana Anterior junto con el actual.</div>';
+        return;
+      }
+      if(unicas.length===1){
+        cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-muted)">Solo hay 1 snapshot histórico (${unicas[0]}).<br>Sube el archivo de <b>Antigüedad Semana Anterior</b> en la carga de archivos para comparar contra el actual.</div>`;
+        return;
+      }
+      _cobSnapActual   = unicas[0];
+      _cobSnapAnterior = unicas[1];
 
-    // Agregar por (cliente, division) - sumando todos los segmentos
-    function agruparClienteDiv(rows){
-      const m = {};
-      (rows||[]).forEach(r=>{
-        const k = `${r.cliente}||${r.division}`;
-        if(!m[k]) m[k] = {cliente:r.cliente, division:r.division, saldo:0, vencido:0, por_vencer:0};
-        m[k].saldo += +r.saldo||0;
-        m[k].vencido += +r.vencido||0;
-        m[k].por_vencer += +r.por_vencer||0;
-      });
-      return m;
+      const [snapAct, snapAnt] = await Promise.all([
+        supaGet('cobranza_snapshots',`select=*&fecha_snapshot=eq.${_cobSnapActual}`),
+        supaGet('cobranza_snapshots',`select=*&fecha_snapshot=eq.${_cobSnapAnterior}`)
+      ]);
+
+      function aggSnapRows(rows){
+        const m = {};
+        (rows||[]).forEach(r=>{
+          const k = `${r.cliente}||${r.division}`;
+          if(!m[k]) m[k] = {cliente:r.cliente, division:r.division, saldo:0, vencido:0, por_vencer:0};
+          m[k].saldo += +r.saldo||0;
+          m[k].vencido += +r.vencido||0;
+          m[k].por_vencer += +r.por_vencer||0;
+        });
+        return m;
+      }
+      mapAct = aggSnapRows(snapAct);
+      mapAnt = aggSnapRows(snapAnt);
     }
-    const mapAct = agruparClienteDiv(snapAct);
-    const mapAnt = agruparClienteDiv(snapAnt);
 
     // Universe: keys en cualquiera de los dos
     const todasKeys = new Set([...Object.keys(mapAct), ...Object.keys(mapAnt)]);
