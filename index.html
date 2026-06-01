@@ -8193,7 +8193,7 @@ function cobRenderUsersTable(){
       <td style="text-align:center;font-weight:600">${counts[u.id]||0}</td>
       <td style="text-align:center">
         <button onclick="cobEditUser('${u.id}')" style="background:transparent;border:1px solid var(--border);color:var(--accent2);padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-right:3px">✏️</button>
-        <button onclick="cobDeleteUser('${u.id}','${u.nombre.replace(/'/g,"\\'")}')" style="background:transparent;border:1px solid var(--border);color:#ef4444;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button>
+        <button data-uid="${u.id}" onclick="cobDeleteUserById(this)" style="background:transparent;border:1px solid var(--border);color:#ef4444;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px">🗑</button>
       </td>
     </tr>
   `).join('');
@@ -8253,8 +8253,20 @@ async function cobSaveUser(){
   }
 }
 
+function cobDeleteUserById(btn){
+  console.log('[cobDeleteUserById] click registrado');
+  const id = btn.getAttribute('data-uid');
+  const u = _cobUsers.find(x=>x.id===id);
+  const nombre = u?.nombre || '(desconocido)';
+  console.log('[cobDeleteUserById] id:', id, 'nombre:', nombre);
+  cobDeleteUser(id, nombre);
+}
+
 async function cobDeleteUser(id, nombre){
-  if(!confirm(`¿Eliminar a "${nombre}"? Las asignaciones de clientes quedarán sin usuario.`)) return;
+  if(!confirm(`¿Eliminar a "${nombre}"? Las asignaciones de clientes quedarán sin usuario.`)){
+    console.log('[cobDeleteUser] cancelado por usuario');
+    return;
+  }
   console.log('[cobDeleteUser] →', id, nombre);
   try{
     const r = await supaFetch(`${SUPA_URL}/rest/v1/cobranza_usuarios?id=eq.${id}`, {
