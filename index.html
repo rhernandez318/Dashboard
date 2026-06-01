@@ -8255,10 +8255,27 @@ async function cobSaveUser(){
 
 async function cobDeleteUser(id, nombre){
   if(!confirm(`¿Eliminar a "${nombre}"? Las asignaciones de clientes quedarán sin usuario.`)) return;
+  console.log('[cobDeleteUser] →', id, nombre);
   try{
-    await supaDel('cobranza_usuarios', `id=eq.${id}`);
+    const r = await supaFetch(`${SUPA_URL}/rest/v1/cobranza_usuarios?id=eq.${id}`, {
+      method:'DELETE',
+      headers:{...SUPA_HDR,'Prefer':'return=representation'}
+    });
+    const respText = await r.text();
+    console.log('[cobDeleteUser] response:', r.status, respText);
+    if(!r.ok){
+      throw new Error(`Supabase ${r.status}: ${respText}`);
+    }
+    // Verify deletion
+    const verifyData = await supaGet('cobranza_usuarios',`select=id&id=eq.${id}`);
+    console.log('[cobDeleteUser] verificación:', verifyData);
+    if(verifyData?.length>0){
+      alert('⚠️ El usuario NO se eliminó. Status:'+r.status+'. Esto puede ocurrir si las RLS policies no permiten DELETE. Revisa el SQL.');
+      return;
+    }
     await cobLoadUsers();
   }catch(e){
+    console.error('[cobDeleteUser] error:', e);
     alert('Error al eliminar: ' + e.message);
   }
 }
