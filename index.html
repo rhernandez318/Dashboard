@@ -7441,7 +7441,17 @@ function _renderEstadoReport(rows){
     }).join('');
     const docsHtml=cl.docs.sort((a,b)=>b.diasVenc-a.diasVenc).map(d=>{
       const dc=d.diasVenc<=0?'#10b981':d.diasVenc<=30?'#3b82f6':d.diasVenc<=60?'#f59e0b':d.diasVenc<=90?'#f97316':d.diasVenc<=120?'#ef4444':'#7c3aed';
-      const dt=d.diasVenc<=0?`Por vencer ${Math.abs(d.diasVenc)}d`:`${d.diasVenc}d vencido`;
+      // Misma fórmula que en cartera: vence=hoy → 0 días, "Vence FECHA" para por vencer; "Nd vencido" si vencido
+      const fmtVencEstado=(v)=>{
+        if(!v) return '';
+        const dt=v instanceof Date?v:new Date(v);
+        if(isNaN(dt)) return '';
+        const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+        return `${dt.getDate()}-${meses[dt.getMonth()]}-${String(dt.getFullYear()).slice(-2)}`;
+      };
+      const dt = d.diasVenc<=0
+        ? (d.fechaVenc ? `Vence ${fmtVencEstado(d.fechaVenc)}` : `Por vencer ${Math.abs(d.diasVenc)}d`)
+        : `${d.diasVenc}d vencido`;
       return `<tr>
         <td style="padding:5px 10px;font-family:monospace;font-size:11px;color:#94a3b8">${d.ndoc||'—'}</td>
         <td style="padding:5px 10px;font-family:monospace;font-size:11px;color:var(--text-muted)">${d.ref||'—'}</td>
