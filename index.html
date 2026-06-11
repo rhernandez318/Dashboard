@@ -1170,7 +1170,7 @@ function findCol(keys,target){return keys.find(k=>normKey(k)===normKey(target))|
 function pd(v){
   if(!v&&v!==0)return null;
   if(v instanceof Date)return isNaN(v)?null:v;
-  if(typeof v==='number'){const d=new Date(Math.round((v-25569)*86400*1000));return isNaN(d)?null:d;}
+  if(typeof v==='number'){const d=new Date(Math.round((v-25569)*86400*1000));if(isNaN(d))return null;return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());}
   if(typeof v==='string'){let d=new Date(v);if(!isNaN(d))return d;const p=v.split('/');if(p.length===3){d=new Date(+p[2],+p[1]-1,+p[0]);return isNaN(d)?null:d;}}
   return null;
 }
@@ -1260,10 +1260,12 @@ function parseAnt(data){
     }
     // Per request: if vd<HOY → dv = HOY-vd (vencido +); if vd>=HOY → dv = -(vd-HOY) (por vencer, signed -)
     // Keep signed so buckets and other logic continue working
+    // Fórmula: vd > HOY → por vencer (negativo); vd <= HOY → vencido (positivo; vd=HOY da 0)
+    // bkt(0) y display(0) ya tratan 0 como 'Por Vencer' / 'Vence ...'
     const dv = vdMidnight
-      ? (vdMidnight < TODAY
-          ? Math.floor((TODAY - vdMidnight)/86400000)        // vencido (positivo)
-          : -Math.floor((vdMidnight - TODAY)/86400000))      // por vencer (negativo)
+      ? (vdMidnight > TODAY
+          ? -Math.floor((vdMidnight - TODAY)/86400000)       // por vencer (negativo)
+          : Math.floor((TODAY - vdMidnight)/86400000))       // vencido (0 si mismo día)
       : 0;
     const fechaVenc=vdMidnight||null;
     const saldo=+(r[cSaldo]||0);
@@ -1952,9 +1954,10 @@ function applySnapshotData(d){
       let bucket = r.bucket;
       if(fechaVenc && !isNaN(fechaVenc)){
         const vMid = new Date(fechaVenc); vMid.setHours(0,0,0,0);
-        diasVenc = vMid < TODAY
-          ? Math.floor((TODAY - vMid)/86400000)
-          : -Math.floor((vMid - TODAY)/86400000);
+        // vd > HOY = por vencer (negativo); vd <= HOY = vencido (positivo; vd=HOY da 0)
+        diasVenc = vMid > TODAY
+          ? -Math.floor((vMid - TODAY)/86400000)
+          : Math.floor((TODAY - vMid)/86400000);
         porVencer = diasVenc<=0 ? r.saldo : 0;
         vencido   = diasVenc>0  ? r.saldo : 0;
         bucket    = bkt(diasVenc);
